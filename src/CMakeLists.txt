@@ -158,6 +158,8 @@ add_subdirectory(utl)
 add_subdirectory(dst)
 add_subdirectory(pdn)
 
+add_subdirectory(ftx)
+
 ################################################################
 
 add_executable(openroad
@@ -208,6 +210,7 @@ target_link_libraries(openroad
   par
   utl
   pdn
+  ftx
   ${TCL_LIBRARY}
   ${CMAKE_THREAD_LIBS_INIT}
 )

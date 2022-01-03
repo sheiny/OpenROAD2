@@ -216,6 +216,13 @@ getSteinerTreeBuilder()
   return openroad->getSteinerTreeBuilder();
 }
 
+ftx::FeatureExtractor*
+getFeatureExtractor()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getFeatureExtractor();
+}
+
 } // namespace ord
 
 namespace sta {

@@ -140,6 +140,10 @@ namespace stt {
 class SteinerTreeBuilder;
 }
 
+namespace ftx {
+class FeatureExtractor;
+}
+
 namespace ord {
 
 using std::string;
@@ -183,6 +187,7 @@ public:
   pdn::PdnGen *getPdnGen() { return pdngen_; }
   dst::Distributed *getDistributed() { return distributer_; }
   stt::SteinerTreeBuilder *getSteinerTreeBuilder() { return stt_builder_; }
+  ftx::FeatureExtractor* getFeatureExtractor() { return featureExtractor_; }
 
   // Return the bounding box of the db rows.
   odb::Rect getCore();
@@ -277,6 +282,7 @@ private:
   pdn::PdnGen *pdngen_;
   dst::Distributed *distributer_;
   stt::SteinerTreeBuilder *stt_builder_;
+  ftx::FeatureExtractor *featureExtractor_;
 
   std::set<Observer *> observers_;
 
