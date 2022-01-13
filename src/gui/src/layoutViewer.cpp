@@ -223,6 +223,13 @@ class GuiPainter : public Painter
     painter_->drawEllipse(QPoint(x, y), r, r);
   }
 
+  void drawX(int x, int y, int size) override
+  {
+    const int o = size / 2;
+    painter_->drawLine(x - o, y - o, x + o, y + o);
+    painter_->drawLine(x - o, y + o, x + o, y - o);
+  }
+
   const odb::Point determineStringOrigin(int x, int y, Anchor anchor, const QString& text)
   {
     const QRect text_bbox = painter_->fontMetrics().boundingRect(text);
@@ -1961,6 +1968,9 @@ void LayoutViewer::drawBlock(QPainter* painter,
   drawInstanceNames(painter, insts);
 
   drawRows(painter, bounds);
+  if (options_->areAccessPointsVisible()) {
+    drawAccessPoints(gui_painter);
+  }
 
   if (options_->arePinMarkersVisible()) {
     drawPinMarkers(gui_painter, bounds);
@@ -1970,6 +1980,43 @@ void LayoutViewer::drawBlock(QPainter* painter,
     gui_painter.saveState();
     renderer->drawObjects(gui_painter);
     gui_painter.restoreState();
+  }
+}
+
+void LayoutViewer::drawAccessPoints(Painter& painter)
+{
+  const int shape_limit = shapeSizeLimit();
+  const int shape_size = 100;
+  if (shape_limit > shape_size)
+    return;
+  for (auto term : block_->getITerms()) {
+    for (auto ap : term->getPrefAccessPoints()) {
+      if (options_->isVisible(ap->getLayer())) {
+        auto color = ap->hasAccess() ? gui::Painter::green : gui::Painter::red;
+        painter.setPen(color, /* cosmetic */ true);
+        Point pt = ap->getPoint();
+        odb::dbTransform xform;
+        int x, y;
+        term->getInst()->getLocation(x, y);
+        xform.setOffset({x, y});
+        xform.setOrient(odb::dbOrientType(odb::dbOrientType::R0));
+        xform.apply(pt);
+        painter.drawX(pt.x(), pt.y(), shape_size);
+      }
+    }
+  }
+  for (auto term : block_->getBTerms()) {
+    for (auto pin : term->getBPins()) {
+      for (auto ap : pin->getAccessPoints()) {
+        if (ap != nullptr && options_->isVisible(ap->getLayer())) {
+          auto color
+              = ap->hasAccess() ? gui::Painter::green : gui::Painter::red;
+          painter.setPen(color, /* cosmetic */ true);
+          Point pt = ap->getPoint();
+          painter.drawX(pt.x(), pt.y(), shape_size);
+        }
+      }
+    }
   }
 }
 
@@ -2255,6 +2302,7 @@ void LayoutViewer::paintEvent(QPaintEvent* event)
     painter.drawRect(rubber_band_.normalized());
   }
 
+  painter.end();
   // painting is done, okay to update outputs again
   output_widget_->bufferOutputs(false);
 }
@@ -2687,7 +2735,7 @@ void LayoutViewer::restoreTclCommands(std::vector<std::string>& cmds)
   if (block_ != nullptr) {
     const double dbu_per_micron = block_->getDbUnitsPerMicron();
 
-    cmds.push_back(fmt::format("gui::set_center {} {}", center_.x() / dbu_per_micron, center_.y() / dbu_per_micron));
+    cmds.push_back(fmt::format("gui::center_at {} {}", center_.x() / dbu_per_micron, center_.y() / dbu_per_micron));
   }
 }
 
