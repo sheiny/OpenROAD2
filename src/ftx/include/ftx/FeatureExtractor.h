@@ -19,6 +19,7 @@ namespace odb {
 namespace ftx {
 class DRVRenderer;
 class GridGraph;
+class GridRender;
 class Node;
 class NodePainter;
 
@@ -51,6 +52,8 @@ class FeatureExtractor {
 
     void drawDRVs();
 
+    void drawGrid();
+
     void paintNodes(std::string file_path);
   private:
     void extractInstFeatures(odb::dbInst* inst);
@@ -70,6 +73,7 @@ class FeatureExtractor {
     odb::dbDatabase* db_;
     ftx::GridGraph * gridGraph_;
     std::unique_ptr<DRVRenderer> drvRenderer_;
+    std::unique_ptr<GridRender> gridRenderer_;
     std::unique_ptr<NodePainter> nodePainter_;
   };
 }

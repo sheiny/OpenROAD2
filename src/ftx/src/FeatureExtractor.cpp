@@ -155,11 +155,10 @@ FeatureExtractor::calculateDensity()
 void
 FeatureExtractor::calculateABU()
 {
-  odb::Rect rows_bbox;
-  db_->getChip()->getBlock()->getCoreArea(rows_bbox);
   std::vector<double> densities;
-  for(auto node_ptr : gridGraph_->intersectingNodes(rows_bbox))
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
+    auto node_ptr = gridGraph_->node(node_id);
     auto node_area = node_ptr->rect().area();
     auto macro_area = node_ptr->getFeatureArea(FeatureArea::macro);
     if(macro_area == node_area)
@@ -263,10 +262,9 @@ FeatureExtractor::writeCSV(std::string file_path)
   //count global routing neighbor features
      <<"HasDetailedRoutingViolation"<<std::endl;
 
-  odb::Rect rows_bbox;
-  db_->getChip()->getBlock()->getCoreArea(rows_bbox);
-  for(auto node_ptr : gridGraph_->intersectingNodes(rows_bbox))
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
+    auto node_ptr = gridGraph_->node(node_id);
     ofs<<*node_ptr;
     ofs<<", "<<gridGraph_->neighborhoodFeatures(node_ptr);
     ofs<<", "<<node_ptr->hasViolation()<<std::endl;
@@ -307,10 +305,9 @@ DRVRenderer::drawObjects(gui::Painter &painter)
 {
   if (gridGraph_ && db_)
   {
-    odb::Rect rows_bbox;
-    db_->getChip()->getBlock()->getCoreArea(rows_bbox);
-    for (auto node_ptr : gridGraph_->intersectingNodes(rows_bbox))
+    for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
     {
+      auto node_ptr = gridGraph_->node(node_id);
       if (node_ptr->hasViolation())
       {
         odb::Rect node_rect = node_ptr->rect();
@@ -329,6 +326,51 @@ FeatureExtractor::drawDRVs()
     gui::Gui* gui = gui::Gui::get();
     drvRenderer_ = std::make_unique<DRVRenderer>(db_, gridGraph_);
     gui->registerRenderer(drvRenderer_.get());
+    gui->redraw();
+  }
+}
+
+class GridRender : public gui::Renderer
+{
+public:
+  GridRender(odb::dbDatabase* db,
+             ftx::GridGraph * gridGraph) :
+    db_(db),
+    gridGraph_(gridGraph)
+  {
+  }
+
+  virtual void drawObjects(gui::Painter& /* painter */) override;
+
+private:
+  ftx::GridGraph * gridGraph_;
+  odb::dbDatabase* db_;
+};
+
+void
+GridRender::drawObjects(gui::Painter &painter)
+{
+  if (gridGraph_ && db_)
+  {
+    for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+    {
+      auto node_ptr = gridGraph_->node(node_id);
+      odb::Rect node_rect = node_ptr->rect();
+      painter.setBrush(gui::Painter::transparent);
+      painter.setPen(gui::Painter::yellow, false, 50);
+      painter.drawRect(node_rect);
+    }
+  }
+}
+
+void
+FeatureExtractor::drawGrid()
+{
+  if (drvRenderer_ == nullptr)
+  {
+    gui::Gui* gui = gui::Gui::get();
+    gridRenderer_ = std::make_unique<GridRender>(db_, gridGraph_);
+    gui->registerRenderer(gridRenderer_.get());
     gui->redraw();
   }
 }

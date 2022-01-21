@@ -1,63 +1,68 @@
 namespace eval ftx {
 
-sta::define_cmd_args "feature_extract_init" {}
-proc feature_extract_init {} {
-  feature_extract_init_cmd
+sta::define_cmd_args "init" {}
+proc init {} {
+  init_cmd
 }
 
-sta::define_cmd_args "feature_extract_init_graph" {}
-proc feature_extract_init_graph {} {
-  feature_extract_init_graph_cmd
+sta::define_cmd_args "init_graph" {}
+proc init_graph {} {
+  init_graph_cmd
 }
 
-sta::define_cmd_args "feature_extract_init_graph_from_GCells" {}
-proc feature_extract_init_graph_from_GCells {} {
-  feature_extract_init_graph_from_GCells_cmd
+sta::define_cmd_args "init_graph_from_GCells" {}
+proc init_graph_from_GCells {} {
+  init_graph_from_GCells_cmd
 }
 
-sta::define_cmd_args "feature_extract_read_congestion" { file_name }
-proc feature_extract_read_congestion { arg } {
+sta::define_cmd_args "read_congestion" { file_name }
+proc read_congestion { arg } {
   set file_name $arg
-  feature_extract_read_congestion_cmd $file_name
+  read_congestion_cmd $file_name
 }
 
-sta::define_cmd_args "feature_extract_run" {}
-proc feature_extract_run {} {
-  feature_extract_run_cmd
+sta::define_cmd_args "run" {}
+proc run {} {
+  run_cmd
 }
 
-sta::define_cmd_args "feature_extract_write_csv" { file_name }
-proc feature_extract_write_csv { arg } {
+sta::define_cmd_args "write_csv" { file_name }
+proc write_csv { arg } {
   set file_name $arg
-  feature_extract_write_csv_cmd $file_name
+  write_csv_cmd $file_name
 }
 
-sta::define_cmd_args "feature_extract_read_rpt" { file_name }
-proc feature_extract_read_rpt { arg } {
+sta::define_cmd_args "read_rpt" { file_name }
+proc read_rpt { arg } {
   set file_name $arg
-  feature_extract_read_rpt_cmd $file_name 0
+  read_rpt_cmd $file_name 0
 }
 
-sta::define_cmd_args "feature_extract_read_rpt_triton" { file_name }
-proc feature_extract_read_rpt_triton { arg } {
+sta::define_cmd_args "read_rpt_triton" { file_name }
+proc read_rpt_triton { arg } {
   set file_name $arg
-  feature_extract_read_rpt_cmd $file_name 1
+  read_rpt_cmd $file_name 1
 }
 
-sta::define_cmd_args "feature_extract_calculate_ABU" {}
-proc feature_extract_calculate_ABU {} {
-  feature_extract_calculate_ABU_cmd
+sta::define_cmd_args "calculate_ABU" {}
+proc calculate_ABU {} {
+  calculate_ABU_cmd
 }
 
-sta::define_cmd_args "feature_extract_Draw_DRVs" {}
-proc feature_extract_Draw_DRVs {} {
-  feature_extract_Draw_DRVs_cmd
+sta::define_cmd_args "Draw_DRVs" {}
+proc Draw_DRVs {} {
+  Draw_DRVs_cmd
 }
 
-sta::define_cmd_args "feature_extract_Paint_Nodes" { file_name }
-proc feature_extract_Paint_Nodes { arg } {
+sta::define_cmd_args "Draw_Grid" {}
+proc Draw_Grid {} {
+  Draw_Grid_cmd
+}
+
+sta::define_cmd_args "Paint_Nodes" { file_name }
+proc Paint_Nodes { arg } {
   set file_name $arg
-  feature_extract_Paint_Nodes_cmd $file_name
+  Paint_Nodes_cmd $file_name
 }
 
 # ftx namespace end

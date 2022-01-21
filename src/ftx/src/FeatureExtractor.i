@@ -22,7 +22,7 @@ using ftx::FeatureExtractor;
 namespace ftx {
 
 void
-feature_extract_init_cmd()
+init_cmd()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
@@ -30,7 +30,7 @@ feature_extract_init_cmd()
 }
 
 void
-feature_extract_init_graph_cmd()
+init_graph_cmd()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
@@ -38,7 +38,7 @@ feature_extract_init_graph_cmd()
 }
 
 void
-feature_extract_init_graph_from_GCells_cmd()
+init_graph_from_GCells_cmd()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
@@ -46,28 +46,28 @@ feature_extract_init_graph_from_GCells_cmd()
 }
 
 void
-feature_extract_read_congestion_cmd(char* fileName)
+read_congestion_cmd(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->readCongestion(fileName);
 }
 
 void
-feature_extract_run_cmd()
+run_cmd()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->extractFeatures();
 }
 
 void
-feature_extract_write_csv_cmd(char* fileName)
+write_csv_cmd(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->writeCSV(fileName);
 }
 
 void
-feature_extract_read_rpt_cmd(char* fileName, bool triton)
+read_rpt_cmd(char* fileName, bool triton)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
@@ -77,21 +77,28 @@ feature_extract_read_rpt_cmd(char* fileName, bool triton)
 }
 
 void
-feature_extract_calculate_ABU_cmd()
+calculate_ABU_cmd()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->calculateABU();
 }
 
 void
-feature_extract_Draw_DRVs_cmd()
+Draw_DRVs_cmd()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->drawDRVs();
 }
 
 void
-feature_extract_Paint_Nodes_cmd(char* fileName)
+Draw_Grid_cmd()
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->drawGrid();
+}
+
+void
+Paint_Nodes_cmd(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->paintNodes(fileName);

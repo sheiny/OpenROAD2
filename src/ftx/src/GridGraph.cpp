@@ -81,19 +81,19 @@ GridGraph::initGridUsingDimensions(odb::dbDatabase* db,
 {
   db_ = db;
   odb::dbBlock* block = db_->getChip()->getBlock();
-  odb::Rect die_area;
-  block->getDieArea(die_area);
+  odb::Rect core_area;
+  block->getCoreArea(core_area);
   std::vector<Utils::DBU> xTicks, yTicks;
 
-  auto x_steps = 1 + ((die_area.dx()-1)/width);// if die_area.dx() != 0
+  auto x_steps = 1 + ((core_area.dx()-1)/width);// if core_area.dx() != 0
   xTicks.reserve(x_steps);
   for(auto i = 0; i <= x_steps; i++)
-    xTicks.push_back(std::min(die_area.xMin()+i*width, die_area.xMax()));
+    xTicks.push_back(std::min(core_area.xMin()+i*width, core_area.xMax()));
 
-  auto y_steps = 1 + ((die_area.dy()-1)/height);// if die_area.dy() != 0
+  auto y_steps = 1 + ((core_area.dy()-1)/height);// if core_area.dy() != 0
   yTicks.reserve(y_steps);
   for(auto i = 0; i <= y_steps; i++)
-    yTicks.push_back(std::min(die_area.yMin()+i*height, die_area.yMax()));
+    yTicks.push_back(std::min(core_area.yMin()+i*height, core_area.yMax()));
 
   xGrid_ = xTicks;
   yGrid_ = yTicks;
