@@ -25,12 +25,12 @@ class NodePainter;
 
 class FeatureExtractor {
   public:
-    FeatureExtractor();
+    FeatureExtractor(odb::dbDatabase *db);
     ~FeatureExtractor();
 
-    void initGraph(odb::dbDatabase* db);
+    void initGraph();
 
-    void initGraphFromDef(odb::dbDatabase* db);
+    void initGraphFromDef();
 
     void readRPT(std::string file_path,
                  odb::dbLib* lib,
@@ -39,7 +39,6 @@ class FeatureExtractor {
     void readCongestion(std::string file_path);
     void readCongestion(std::istream & isstream);
 
-    void init(odb::dbDatabase* db, GridGraph* graph);
     void clear();
     void extractFeatures();
 

@@ -15,59 +15,47 @@ using ftx::FeatureExtractor;
 
 %}
 
-%include "../../Exception.i"
-
 %inline %{
 
 namespace ftx {
 
 void
-init_cmd()
+init_graph()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  ord::OpenRoad *openroad = ord::getOpenRoad();
-  featureExt->init(openroad->getDb(), nullptr);
+  featureExt->initGraph();
 }
 
 void
-init_graph_cmd()
+init_graph_from_GCells()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  ord::OpenRoad *openroad = ord::getOpenRoad();
-  featureExt->initGraph(openroad->getDb());
+  featureExt->initGraphFromDef();
 }
 
 void
-init_graph_from_GCells_cmd()
-{
-  FeatureExtractor* featureExt = getFeatureExtractor();
-  ord::OpenRoad *openroad = ord::getOpenRoad();
-  featureExt->initGraphFromDef(openroad->getDb());
-}
-
-void
-read_congestion_cmd(char* fileName)
+read_congestion(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->readCongestion(fileName);
 }
 
 void
-run_cmd()
+run()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->extractFeatures();
 }
 
 void
-write_csv_cmd(char* fileName)
+write_csv(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->writeCSV(fileName);
 }
 
 void
-read_rpt_cmd(char* fileName, bool triton)
+read_rpt(char* fileName, bool triton)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
@@ -77,28 +65,28 @@ read_rpt_cmd(char* fileName, bool triton)
 }
 
 void
-calculate_ABU_cmd()
+calculate_ABU()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->calculateABU();
 }
 
 void
-Draw_DRVs_cmd()
+Draw_DRVs()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->drawDRVs();
 }
 
 void
-Draw_Grid_cmd()
+Draw_Grid()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->drawGrid();
 }
 
 void
-Paint_Nodes_cmd(char* fileName)
+Paint_Nodes(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->paintNodes(fileName);

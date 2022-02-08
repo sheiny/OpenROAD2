@@ -14,8 +14,8 @@
 
 namespace ftx {
 
-FeatureExtractor::FeatureExtractor() :
-  db_(nullptr),
+FeatureExtractor::FeatureExtractor(odb::dbDatabase *db) :
+  db_(db),
   gridGraph_(nullptr)
 {
 }
@@ -26,9 +26,8 @@ FeatureExtractor::~FeatureExtractor()
 }
 
 void
-FeatureExtractor::initGraph(odb::dbDatabase* db)
+FeatureExtractor::initGraph()
 {
-  db_ = db;
   gridGraph_ = new ftx::GridGraph();
   auto block = db_->getChip()->getBlock();
   auto row = block->getRows().begin();
@@ -39,10 +38,9 @@ FeatureExtractor::initGraph(odb::dbDatabase* db)
 }
 
 void
-FeatureExtractor::initGraphFromDef(odb::dbDatabase* db)
+FeatureExtractor::initGraphFromDef()
 {
   std::cout<<"FeatureExtractor::initGraphFromDef called."<<std::endl;
-  db_ = db;
   gridGraph_ = new ftx::GridGraph();
   gridGraph_->initGridFromDEFGCells(db_);
 }
@@ -111,17 +109,10 @@ FeatureExtractor::readCongestion(std::istream & isstream)
 }
 
 void
-FeatureExtractor::init(odb::dbDatabase* db, GridGraph* graph)
-{
-  db_ = db;
-  gridGraph_ = graph;
-}
-
-void
 FeatureExtractor::clear()
 {
   db_ = nullptr;
-  gridGraph_ = nullptr;
+  delete gridGraph_;
 }
 
 void

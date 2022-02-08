@@ -31,3 +31,6 @@ cmake-build-debug/
 
 coverage-output
 messages.txt
+
+Session.vim
+TODO
