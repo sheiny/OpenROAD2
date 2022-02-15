@@ -1,4 +1,4 @@
-#include "GridGraph.h"
+#include "ftx/GridGraph.h"
 
 #include "odb/db.h"
 

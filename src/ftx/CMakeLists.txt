@@ -22,11 +22,6 @@ target_sources(ftx
 target_include_directories(ftx
   PUBLIC
     include
-
-  PRIVATE
-    src
-    ${ODB_HOME}/include
-    ${OPENROAD_HOME}/include
 )
 
 target_link_libraries(ftx
