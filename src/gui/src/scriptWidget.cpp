@@ -39,6 +39,7 @@
 #include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QThread>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -62,6 +63,7 @@ ScriptWidget::ScriptWidget(QWidget* parent)
       paused_(false),
       logger_(nullptr),
       buffer_outputs_(false),
+      is_interactive_(true),
       sink_(nullptr)
 {
   setObjectName("scripting");  // for settings
@@ -116,14 +118,22 @@ int ScriptWidget::tclExitHandler(ClientData instance_data,
                                  int argc,
                                  const char **argv) {
   ScriptWidget* widget = (ScriptWidget*) instance_data;
+
+  // exit was called, so ensure continue after close is cleared
+  Gui::get()->clearContinueAfterClose();
+
   // announces exit to Qt
   emit widget->tclExiting();
 
   return TCL_OK;
 }
 
-void ScriptWidget::setupTcl(Tcl_Interp* interp, bool do_init_openroad)
+void ScriptWidget::setupTcl(Tcl_Interp* interp,
+                            bool interactive,
+                            bool do_init_openroad,
+                            const std::function<void(void)>& post_or_init)
 {
+  is_interactive_ = interactive;
   interp_ = interp;
 
   // Overwrite exit to allow Qt to handle exit
@@ -135,11 +145,13 @@ void ScriptWidget::setupTcl(Tcl_Interp* interp, bool do_init_openroad)
     pauser_->setText("Running");
     pauser_->setStyleSheet("background-color: red");
     int setup_tcl_result = ord::tclAppInit(interp_);
+    post_or_init();
     pauser_->setText("Idle");
     pauser_->setStyleSheet("");
 
     addTclResultToOutput(setup_tcl_result);
   } else {
+    post_or_init();
     Gui::get()->load_design();
   }
 
@@ -225,8 +237,11 @@ void ScriptWidget::addTclResultToOutput(int return_code)
     } else {
       try {
         logger_->error(utl::GUI, 70, result);
-      } catch (const std::runtime_error& /* e */) {
-        // do nothing
+      } catch (const std::runtime_error& e) {
+        if (!is_interactive_) {
+          // rethrow error
+          throw e;
+        }
       }
     }
   }
@@ -440,7 +455,9 @@ class ScriptWidget::GuiSink : public spdlog::sinks::base_sink<Mutex>
     }
 
     // process widget event queue, if main thread will process new text, otherwise there is nothing to process from this thread.
-    QCoreApplication::sendPostedEvents(widget_);
+    if (QThread::currentThread() == widget_->thread()) {
+      QCoreApplication::sendPostedEvents(widget_);
+    }
   }
 
   void flush_() override {}

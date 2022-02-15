@@ -116,7 +116,9 @@ class DbMasterDescriptor : public Descriptor
 class DbNetDescriptor : public Descriptor
 {
  public:
-  DbNetDescriptor(odb::dbDatabase* db);
+  DbNetDescriptor(odb::dbDatabase* db,
+                  sta::dbSta* sta,
+                  const std::set<odb::dbNet*>& focus_nets);
 
   std::string getName(std::any object) const override;
   std::string getTypeName() const override;
@@ -131,6 +133,7 @@ class DbNetDescriptor : public Descriptor
 
   Properties getProperties(std::any object) const override;
   Editors getEditors(std::any object) const override;
+  Actions getActions(std::any object) const override;
   Selected makeSelected(std::any object, void* additional_data) const override;
   bool lessThan(std::any l, std::any r) const override;
 
@@ -138,6 +141,7 @@ class DbNetDescriptor : public Descriptor
 
  private:
   odb::dbDatabase* db_;
+  sta::dbSta* sta_;
 
   using Node = odb::dbWireGraph::Node;
   using NodeList = std::set<const Node*>;
@@ -160,6 +164,8 @@ class DbNetDescriptor : public Descriptor
                 std::vector<odb::Point>& path) const;
 
   void buildNodeMap(odb::dbWireGraph* graph, NodeMap& node_map) const;
+
+  const std::set<odb::dbNet*>& focus_nets_;
 
   static const int max_iterms_ = 10000;
 };

@@ -36,8 +36,10 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -88,6 +90,7 @@ class SteinerTree;
 class RoutePt;
 class GrouteRenderer;
 class GlobalRouter;
+class RoutingCongestionDataSource;
 
 struct RegionAdjustment
 {
@@ -162,7 +165,7 @@ class GlobalRouter
   void printGrid();
 
   // flow functions
-  void readGuides(const char* file_name); // just for display
+  void readGuides(const char* file_name);  // just for display
   void writeGuides(const char* file_name);
   std::vector<Net*> initFastRoute(int min_routing_layer, int max_routing_layer);
   void initFastRouteIncr(std::vector<Net*>& nets);
@@ -171,6 +174,8 @@ class GlobalRouter
   void globalRoute();
   NetRouteMap& getRoutes() { return routes_; }
   bool haveRoutes() const { return !routes_.empty(); }
+  Net* getNet(odb::dbNet* db_net);
+  int getTileSize() const;
 
   // repair antenna public functions
   void repairAntennas(sta::LibertyPort* diode_port, int iterations);
@@ -203,13 +208,24 @@ class GlobalRouter
   void setDebugTree3D(bool tree3D);
 
   // Highlight route in the gui.
-  void highlightRoute(const odb::dbNet* net);
+  void highlightRoute(odb::dbNet* net, bool show_pin_locations);
 
   // Clear routes in the gui
   void clearRouteGui();
   // Report the wire length on each layer.
+  void reportNetLayerWirelengths(odb::dbNet* db_net, std::ofstream& out);
   void reportLayerWireLengths();
   odb::Rect globalRoutingToBox(const GSegment& route);
+  GSegment boxToGlobalRouting(const odb::Rect& route_bds, int layer);
+
+  // Report wire length
+  void reportNetWireLength(odb::dbNet* net,
+                           bool global_route,
+                           bool detailed_route,
+                           bool verbose,
+                           const char* file_name);
+  void reportNetDetailedRouteWL(odb::dbWire* wire, std::ofstream& out);
+  void createWLReportFile(const char* file_name, bool verbose);
 
  private:
   // Net functions
@@ -236,6 +252,7 @@ class GlobalRouter
                                 float reduction_percentage);
   void applyObstructionAdjustment(const odb::Rect& obstruction,
                                   odb::dbTechLayer* tech_layer);
+  int computeNetWirelength(odb::dbNet* db_net);
   void computeWirelength();
   std::vector<Pin*> getAllPorts();
   int computeTrackConsumption(const Net* net,
@@ -309,10 +326,16 @@ class GlobalRouter
   void computeCapacities(int max_layer);
   void computeSpacingsAndMinWidth(int max_layer);
   std::vector<Net*> initNetlist();
-  Net* getNet(odb::dbNet* db_net);
   void computeObstructionsAdjustments();
   void findLayerExtensions(std::vector<int>& layer_extensions);
   int findObstructions(odb::Rect& die_area);
+  bool layerIsBlocked(int layer,
+                    odb::dbTechLayerDir& direction,
+                    const std::unordered_map<int, odb::Rect>& macro_obs_per_layer,
+                    odb::Rect& extended_obs);
+  void extendObstructions(std::unordered_map<int, odb::Rect>& macro_obs_per_layer,
+                        int bottom_layer,
+                        int top_layer);
   int findInstancesObstructions(odb::Rect& die_area,
                                 const std::vector<int>& layer_extensions);
   void findNetsObstructions(odb::Rect& die_area);
@@ -323,6 +346,7 @@ class GlobalRouter
   void initClockNets();
   bool isClkTerm(odb::dbITerm* iterm, sta::dbNetwork* network);
   bool isNonLeafClock(odb::dbNet* db_net);
+  int trackSpacing();
 
   ord::OpenRoad* openroad_;
   utl::Logger* logger_;
@@ -375,6 +399,8 @@ class GlobalRouter
   odb::dbBlock* block_;
 
   std::set<odb::dbNet*> dirty_nets_;
+
+  std::unique_ptr<RoutingCongestionDataSource> heatmap_;
 
   friend class IncrementalGRoute;
   friend class GRouteDbCbk;

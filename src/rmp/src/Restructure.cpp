@@ -65,10 +65,11 @@
 #include "utl/Logger.h"
 
 using utl::RMP;
+using namespace abc;
 
 namespace rmp {
 
-  
+
 
 void Restructure::init(ord::OpenRoad* openroad)
 {

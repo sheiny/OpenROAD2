@@ -706,6 +706,7 @@ class FlexDRWorker
   void initMazeCost_terms(const std::set<frBlockObject*>& objs,
                           bool isAddPathCost,
                           bool isSkipVia = false);
+  void modBlockedEdgesForMacroPin(frInstTerm* instTerm, dbTransform& xForm, bool isAddCost);
   void initMazeCost_ap();  // disable maze edge
   void initMazeCost_marker_route_queue(const frMarker& marker);
   void initMazeCost_marker_route_queue_addHistoryCost(const frMarker& marker);
@@ -728,6 +729,8 @@ class FlexDRWorker
   // route_queue
   void route_queue();
   void route_queue_main(std::queue<RouteQueueEntry>& rerouteQueue);
+  void addMinAreaPatches_poly(gcNet* drcNet, drNet* net);
+  void cleanUnneededPatches_poly(gcNet* drcNet, drNet* net);
   void modEolCosts_poly(gcNet* net, ModCostType modType);
   void modEolCosts_poly(gcPin* shape, frLayer* layer, ModCostType modType);
   void modEolCost(frCoord low,

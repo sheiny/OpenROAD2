@@ -104,6 +104,19 @@ Options description:
 - ``fanout``: (optional) display the fanout timing cone.
 - ``off``: (optional) remove the timing cone.
 
+### Limit drawing to specific nets
+
+```
+focus_net net
+          [-remove]
+          [-clear]
+```
+
+Options description:
+- ``pin``: name of the net.
+- ``remove``: (optional) removes the net from from the focus.
+- ``clear``: (optional) clears all nets from focus.
+
 ## TCL functions
 
 ### Support
@@ -364,6 +377,13 @@ gui::clear_rulers
 
 ### Heat Maps
 
+The currently availble heat maps are:
+
+- ``Power``
+- ``Routing``
+- ``Placement``
+- ``IRDrop``
+
 To control the settings in the heat maps:
 
 ```
@@ -371,12 +391,23 @@ gui::set_heatmap name option
 gui::set_heatmap name option value
 ```
 
-Options description: 
-- ``name`` is the name of the heatmap. ``Power``, ``Routing`` or ``Placement``
+Options description:
+- ``name`` is the name of the heatmap.
 - ``option`` is the name of the option to modify. If option is ``rebuild`` the map will be destroyed and rebuilt.
 - ``value`` is the new value for the specified option. This is not used when rebuilding map.
 
 These options can also be modified in the GUI by double-clicking the underlined display control for the heat map.
+
+
+To save the raw data from the heat maps ins a comma separated value (CSV) format:
+
+```
+gui::dump_heatmap name filename
+```
+
+Options description: 
+- ``name`` is the name of the heatmap.
+- ``filename`` path to the file to write the data to.
 
 ### GUI Display Controls
 
@@ -406,7 +437,7 @@ When performing a batch operation changing the display controls settings, the fo
 
 ```
 gui::save_display_controls
-gui::restroe_display_controls
+gui::restore_display_controls
 ```
 
 ### GUI Controls
