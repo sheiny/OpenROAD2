@@ -369,16 +369,21 @@ class NodePainter : public gui::Renderer
 {
 public:
   NodePainter(ftx::GridGraph * gridGraph,
-              std::vector<int> nodeIds) :
+              std::unordered_set<int> nodeIds) :
     gridGraph_(gridGraph),
     nodeIds_(nodeIds)
   {
   }
 
+  void addNode(int id)
+  {
+    nodeIds_.insert(id);
+  };
+
   virtual void drawObjects(gui::Painter& /* painter */) override;
 
 private:
-  std::vector<int> nodeIds_;
+  std::unordered_set<int> nodeIds_;
   ftx::GridGraph * gridGraph_;
 };
 
@@ -400,11 +405,11 @@ NodePainter::drawObjects(gui::Painter &painter)
 void FeatureExtractor::paintNodes(std::string file_path)
 {
   std::ifstream infile(file_path);
-  std::vector<int> nodeIds;
+  std::unordered_set<int> nodeIds;
   int nodeId;
   while (infile >> nodeId)
   {
-    nodeIds.emplace_back(nodeId);
+    nodeIds.insert(nodeId);
   }
 
   if (nodePainter_ == nullptr)
@@ -414,6 +419,28 @@ void FeatureExtractor::paintNodes(std::string file_path)
     gui->registerRenderer(nodePainter_.get());
     gui->redraw();
   }
+}
+
+void
+FeatureExtractor::paintNode(unsigned int id)
+{
+  gui::Gui* gui = gui::Gui::get();
+  if (nodePainter_ == nullptr)
+  {
+    std::unordered_set<int> nodeIds;
+    nodePainter_ = std::make_unique<NodePainter>(gridGraph_, nodeIds);
+    gui->registerRenderer(nodePainter_.get());
+  }
+  nodePainter_->addNode(id);
+  gui->redraw();
+}
+
+void
+FeatureExtractor::printNodeDebugInfo(unsigned int id)
+{
+  ftx::Node *node_ptr = gridGraph_->node(id);
+  std::cout<<"PrintNodeDebugInfo for node id: "<<id<<std::endl
+           <<node_ptr->debugInfo()<<std::endl;
 }
 
 void

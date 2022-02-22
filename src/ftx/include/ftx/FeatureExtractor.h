@@ -54,6 +54,9 @@ class FeatureExtractor {
 
     void paintNodes(std::string file_path);
 
+    void paintNode(unsigned int id);
+
+    void printNodeDebugInfo(unsigned int id);
   private:
     void extractInstFeatures(odb::dbInst* inst);
     void extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,

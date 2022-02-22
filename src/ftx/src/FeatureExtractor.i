@@ -92,6 +92,14 @@ Paint_Nodes(char* fileName)
   featureExt->paintNodes(fileName);
 }
 
+void
+debug_node(int id)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->printNodeDebugInfo(id);
+  featureExt->paintNode(id);
+}
+
 } // namespace
 
 %} // inline
