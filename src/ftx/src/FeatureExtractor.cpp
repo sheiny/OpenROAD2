@@ -47,8 +47,7 @@ FeatureExtractor::initGraphFromDef()
 
 void
 FeatureExtractor::readRPT(std::string file_path,
-                          odb::dbLib* lib,
-                          bool triton)
+                          odb::dbLib* lib)
 {
   std::cout<<"FeatureExtractor::readRPT called."<<std::endl;
   ftx::RPTParser parser;
@@ -59,11 +58,11 @@ FeatureExtractor::readRPT(std::string file_path,
     auto nodes = gridGraph_->intersectingNodes(drv.first);
     for(auto node_ptr : nodes)
     {
-      auto intersection = node_ptr->rect().intersect(drv.first);
+      auto intersection = node_ptr->rect.intersect(drv.first);
       if(intersection.area() > 0)
       {
-        node_ptr->setViolation(true);
-        node_ptr->insertDRVType(drv.second);
+        node_ptr->violation = true;
+        node_ptr->drvs.insert(drv.second);
       }
     }
   }
@@ -89,7 +88,7 @@ FeatureExtractor::readCongestion(std::istream & isstream)
     ftx::Node * n;
     for(auto node_ptr : nodes)
     {
-      auto intersection = node_ptr ->rect().intersect(c.rect);
+      auto intersection = node_ptr->rect.intersect(c.rect);
       if(intersection.area() > 0)
       {
         n = node_ptr;
@@ -98,12 +97,12 @@ FeatureExtractor::readCongestion(std::istream & isstream)
     }
     if(i == 1)// There is a misalignment between congest and GCells
     {
-      n->insertFeatureCount(FeatureCount::vOverflow, c.v_overflow);
-      n->insertFeatureCount(FeatureCount::vRemain, c.v_remain);
-      n->insertFeatureCount(FeatureCount::vTracks, c.v_tracks);
-      n->insertFeatureCount(FeatureCount::hOverflow, c.h_overflow);
-      n->insertFeatureCount(FeatureCount::hRemain, c.h_remain);
-      n->insertFeatureCount(FeatureCount::hTracks, c.h_tracks);
+      n->vertical_overflow += c.v_overflow;
+      n->vertical_remain += c.v_remain;
+      n->vertical_tracks += c.v_tracks;
+      n->horizontal_overflow += c.h_overflow;
+      n->horizontal_remain += c.h_remain;
+      n->horizontal_tracks += c.h_tracks;
     }
   }
 }
@@ -132,9 +131,9 @@ FeatureExtractor::calculateDensity()
   Utils::AreaDBU total_area = 0.0;
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
-    auto node_ptr = gridGraph_->node(node_id);
-    auto macro_area = node_ptr->getFeatureArea(FeatureArea::macro);
-    auto cell_area = node_ptr->getFeatureArea(FeatureArea::cell);
+    ftx::Node *node_ptr = gridGraph_->node(node_id);
+    Utils::AreaDBU macro_area = node_ptr->macroArea;
+    Utils::AreaDBU cell_area = node_ptr->cellArea;
     total_area += (macro_area+cell_area);
   }
   odb::Rect dieRect;
@@ -149,13 +148,13 @@ FeatureExtractor::calculateABU()
   std::vector<double> densities;
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
-    auto node_ptr = gridGraph_->node(node_id);
-    auto node_area = node_ptr->rect().area();
-    auto macro_area = node_ptr->getFeatureArea(FeatureArea::macro);
+    ftx::Node *node_ptr = gridGraph_->node(node_id);
+    auto node_area = node_ptr->rect.area();
+    Utils::AreaDBU macro_area = node_ptr->macroArea;
     if(macro_area == node_area)
       continue;
 
-    auto cell_area = node_ptr->getFeatureArea(FeatureArea::cell);
+    Utils::AreaDBU cell_area = node_ptr->cellArea;
     double density = (macro_area+cell_area)/node_area;
     densities.push_back(density);
   }
@@ -255,10 +254,10 @@ FeatureExtractor::writeCSV(std::string file_path)
 
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
-    auto node_ptr = gridGraph_->node(node_id);
+    ftx::Node *node_ptr = gridGraph_->node(node_id);
     ofs<<*node_ptr;
     ofs<<", "<<gridGraph_->neighborhoodFeatures(node_ptr);
-    ofs<<", "<<node_ptr->hasViolation()<<std::endl;
+    ofs<<", "<<node_ptr->violation<<std::endl;
   }
 
   ofs.close();
@@ -270,7 +269,7 @@ isValid(ftx::Node* node,
 {
   if(node == nullptr)
     return false;
-  auto node_rect = node->rect();
+  odb::Rect node_rect = node->rect;
   return node_rect.intersects(rows_bbox);
 }
 
@@ -299,9 +298,9 @@ DRVRenderer::drawObjects(gui::Painter &painter)
     for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
     {
       auto node_ptr = gridGraph_->node(node_id);
-      if (node_ptr->hasViolation())
+      if (node_ptr->violation)
       {
-        odb::Rect node_rect = node_ptr->rect();
+        odb::Rect node_rect = node_ptr->rect;
         painter.setBrush(gui::Painter::dark_red);
         painter.drawRect(node_rect);
       }
@@ -345,8 +344,8 @@ GridRender::drawObjects(gui::Painter &painter)
   {
     for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
     {
-      auto node_ptr = gridGraph_->node(node_id);
-      odb::Rect node_rect = node_ptr->rect();
+      ftx::Node *node_ptr = gridGraph_->node(node_id);
+      odb::Rect node_rect = node_ptr->rect;
       painter.setBrush(gui::Painter::transparent);
       painter.setPen(gui::Painter::yellow, false, 50);
       painter.drawRect(node_rect);
@@ -379,7 +378,7 @@ public:
   virtual void drawObjects(gui::Painter& /* painter */) override;
 
 private:
-  const std::vector<int> nodeIds_;
+  std::vector<int> nodeIds_;
   ftx::GridGraph * gridGraph_;
 };
 
@@ -390,8 +389,8 @@ NodePainter::drawObjects(gui::Painter &painter)
   {
     for (auto node_id : nodeIds_)
     {
-      auto node_ptr = gridGraph_->node(node_id);
-      odb::Rect node_rect = node_ptr->rect();
+      ftx::Node *node_ptr = gridGraph_->node(node_id);
+      odb::Rect node_rect = node_ptr->rect;
       painter.setBrush(gui::Painter::dark_blue);
       painter.drawRect(node_rect);
     }
@@ -420,17 +419,17 @@ void FeatureExtractor::paintNodes(std::string file_path)
 void
 FeatureExtractor::extractInstFeatures(odb::dbInst* inst)
 {
-  auto box = inst->getBBox();
+  odb::dbBox *box = inst->getBBox();
   odb::Rect bbox_inst;
   box->getBox(bbox_inst);
-  auto nodes = gridGraph_->intersectingNodes(bbox_inst);
+  std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
   odb::dbTransform transform;
   inst->getTransform(transform);
-  auto master = inst->getMaster();
+  odb::dbMaster *master = inst->getMaster();
 
   for(auto node : nodes)
   {
-    auto node_rect = node->rect();
+    odb::Rect node_rect = node->rect;
     if(inst->isCore())
       extractCellFeatures(inst, bbox_inst, master, node, transform);
     else
@@ -443,13 +442,13 @@ FeatureExtractor::extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,
                                       odb::dbMaster* master, Node* node,
                                       odb::dbTransform transform)
 {
-  auto node_rect = node->rect();
+  odb::Rect node_rect = node->rect;
   odb::Rect intersection;
   node_rect.intersection(bbox_inst, intersection);
   auto area = intersection.area();
-  node->insertFeatureArea(FeatureArea::cell, area);
+  node->cellArea += area;
   if(area > 0)
-    node->insertFeatureCount(FeatureCount::cell, 1);
+    node->numCells += 1;
 
   extractCellBlockages(master, node, transform);
   extractCellPins(master, node, transform);
@@ -459,43 +458,41 @@ void
 FeatureExtractor::extractCellBlockages(odb::dbMaster* master, Node* node,
                                        odb::dbTransform transform)
 {
-  auto node_rect = node->rect();
-  auto boxes = master->getObstructions();
-  auto l1Rects = Utils::rectsFromRoutingLevel(1, boxes);
-  auto l2Rects = Utils::rectsFromRoutingLevel(2, boxes);
+  odb::Rect node_rect = node->rect;
+  odb::dbSet<odb::dbBox> boxes = master->getObstructions();
+  std::vector<odb::Rect> l1Rects = Utils::rectsFromRoutingLevel(1, boxes);
+  std::vector<odb::Rect> l2Rects = Utils::rectsFromRoutingLevel(2, boxes);
   for(auto& rect : l1Rects)
     transform.apply(rect);
   for(auto& rect : l2Rects)
     transform.apply(rect);
-  auto areal1 = Utils::nonOverlappingIntersectingArea(node_rect, l1Rects);
-  auto areal2 = Utils::nonOverlappingIntersectingArea(node_rect, l2Rects);
-  node->insertFeatureArea(FeatureArea::l1Blockage, areal1);
-  node->insertFeatureArea(FeatureArea::l2Blockage, areal2);
+  Utils::AreaDBU areal1 = Utils::nonOverlappingIntersectingArea(node_rect, l1Rects);
+  Utils::AreaDBU areal2 = Utils::nonOverlappingIntersectingArea(node_rect, l2Rects);
+  node->l1BlockageArea += areal1;
+  node->l2BlockageArea += areal2;
 }
 
 void
 FeatureExtractor::extractCellPins(odb::dbMaster* master, Node* node,
                                   odb::dbTransform transform)
 {
-  auto node_rect = node->rect();
+  odb::Rect node_rect = node->rect;
   for(auto term : master->getMTerms())
     for(auto pin : term->getMPins())
     {
-      auto boxes = pin->getGeometry();
-      auto l1Rects = Utils::rectsFromRoutingLevel(1, boxes);
-      auto l2Rects = Utils::rectsFromRoutingLevel(2, boxes);
+      odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
+      std::vector<odb::Rect> l1Rects = Utils::rectsFromRoutingLevel(1, boxes);
+      std::vector<odb::Rect> l2Rects = Utils::rectsFromRoutingLevel(2, boxes);
       for(auto& rect : l1Rects)
         transform.apply(rect);
       for(auto& rect : l2Rects)
         transform.apply(rect);
-      auto areal1 = Utils::nonOverlappingIntersectingArea(node_rect,
-                                                          l1Rects);
-      auto areal2 = Utils::nonOverlappingIntersectingArea(node_rect,
-                                                          l2Rects);
-      node->insertFeatureArea(FeatureArea::l1Pin, areal1);
-      node->insertFeatureArea(FeatureArea::l2Pin, areal2);
+      Utils::AreaDBU areal1 = Utils::nonOverlappingIntersectingArea(node_rect, l1Rects);
+      Utils::AreaDBU areal2 = Utils::nonOverlappingIntersectingArea(node_rect, l2Rects);
+      node->l1PinArea += areal1;
+      node->l2PinArea += areal2;
       if(areal1 + areal2 > 0)
-        node->insertFeatureCount(FeatureCount::pin, 1);
+        node->numCellPins += 1;
     }
 }
 
@@ -505,13 +502,13 @@ FeatureExtractor::extractMacroFeatures(odb::dbInst* inst,
                                        Node* node,
                                        odb::dbTransform transform)
 {
-  auto node_rect = node->rect();
-  auto obs = master->getObstructions();
-  auto obs_rects = Utils::getTransformedRects(transform, obs);
-  auto area = Utils::nonOverlappingIntersectingArea(node_rect, obs_rects);
-  node->insertFeatureArea(FeatureArea::macro, area);
+  odb::Rect node_rect = node->rect;
+  odb::dbSet<odb::dbBox> obs = master->getObstructions();
+  std::vector<odb::Rect> obs_rects = Utils::getTransformedRects(transform, obs);
+  Utils::AreaDBU area = Utils::nonOverlappingIntersectingArea(node_rect, obs_rects);
+  node->macroArea += area;
   if(area > 0)
-    node->insertFeatureCount(FeatureCount::macro, 1);
+    node->numMacros += 1;
 
   extractMacroPins(master, node, transform);
 }
@@ -520,27 +517,26 @@ void
 FeatureExtractor::extractMacroPins(odb::dbMaster* master, Node* node,
                                    odb::dbTransform transform)
 {
-  auto node_rect = node->rect();
+  odb::Rect node_rect = node->rect;
   for(auto term : master->getMTerms())
     for(auto pin : term->getMPins())
     {
-      auto boxes = pin->getGeometry();
-      auto block_rects = Utils::getTransformedRects(transform, boxes);
-      auto area = Utils::nonOverlappingIntersectingArea(node_rect,
-                                                        block_rects);
-      node->insertFeatureArea(FeatureArea::macroPin, area);
+      odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
+      std::vector<odb::Rect> block_rects = Utils::getTransformedRects(transform, boxes);
+      Utils::AreaDBU area = Utils::nonOverlappingIntersectingArea(node_rect, block_rects);
+      node->macroPinArea += area;
       if(area > 0)
-        node->insertFeatureCount(FeatureCount::macroPin, 1);
+        node->numMacroPins += 1;
     }
 }
 
 void
 FeatureExtractor::extractPassingNets(odb::dbNet* net)
 {
-  auto net_bbox = Utils::netBoudingBox(net);
-  auto nodes = gridGraph_->intersectingNodes(net_bbox);
+  odb::Rect net_bbox = Utils::netBoudingBox(net);
+  std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(net_bbox);
   for(auto node : nodes)
-    node->insertFeatureCount(FeatureCount::passingNets, 1);
+    node->numPassingNets += 1;
 }
 
 }

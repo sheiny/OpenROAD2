@@ -21,10 +21,6 @@ typedef bgi::rtree<treeElement, bgi::rstar<16>> RTree;
 // Define a 2D Grid Graph with no wrapping.
 typedef boost::grid_graph<2> Graph;
 
-
-typedef ftx::FeatureArea FAType;
-typedef ftx::FeatureCount FCType;
-
 namespace ftx {
 
 enum Axis { x = 0, y = 1 };
@@ -156,20 +152,20 @@ GridGraph::neighborhood(vertexIndex node_index)
   auto up_ptr = upNode(node_index);
   if(up_ptr != nullptr)
   {
-    auto left = leftNode(up_ptr->id());
+    auto left = leftNode(up_ptr->nodeID);
     if(left != nullptr)
       result.push_back(left);
-    auto right = rightNode(up_ptr->id());
+    auto right = rightNode(up_ptr->nodeID);
     if(right != nullptr)
       result.push_back(right);
   }
   auto down_ptr = downNode(node_index);
   if(down_ptr != nullptr)
   {
-    auto left = leftNode(down_ptr->id());
+    auto left = leftNode(down_ptr->nodeID);
     if(left != nullptr)
       result.push_back(left);
-    auto right = rightNode(down_ptr->id());
+    auto right = rightNode(down_ptr->nodeID);
     if(right != nullptr)
       result.push_back(right);
   }
@@ -179,7 +175,7 @@ GridGraph::neighborhood(vertexIndex node_index)
 std::string
 GridGraph::neighborhoodFeatures(Node* node)
 {
-  auto neighborhoodNodes = neighborhood(node->id());
+  auto neighborhoodNodes = neighborhood(node->nodeID);
   Utils::AreaDBU totalTileArea = 0;
   Utils::AreaDBU totalCellArea = 0;
   Utils::AreaDBU totalL1PinArea = 0;
@@ -203,26 +199,26 @@ GridGraph::neighborhoodFeatures(Node* node)
 
   for(auto node : neighborhoodNodes)
   {
-    totalTileArea += node->rect().area();
-    totalCellArea += node->getFeatureArea(FAType::cell);
-    totalL1PinArea += node->getFeatureArea(FAType::l1Pin);
-    totalL2PinArea += node->getFeatureArea(FAType::l2Pin);
-    totalL1BlkgArea += node->getFeatureArea(FAType::l1Blockage);
-    totalL2BlkgArea += node->getFeatureArea(FAType::l2Blockage);
-    totalMacroArea += node->getFeatureArea(FAType::macro);
-    totalMacroPinArea += node->getFeatureArea(FAType::macroPin);
+    totalTileArea += node->rect.area();
+    totalCellArea += node->cellArea;
+    totalL1PinArea += node->l1PinArea;
+    totalL2PinArea += node->l2PinArea;
+    totalL1BlkgArea += node->l1BlockageArea;
+    totalL2BlkgArea += node->l2BlockageArea;
+    totalMacroArea += node->macroArea;
+    totalMacroPinArea += node->macroPinArea;
 
-    totalNumCells += node->getFeatureCount(FCType::cell);
-    totalNumCellPins += node->getFeatureCount(FCType::pin);
-    totalNumMacros += node->getFeatureCount(FCType::macro);
-    totalNumMacroPins += node->getFeatureCount(FCType::macroPin);
-    totalNumPassingNets += node->getFeatureCount(FCType::passingNets);
-    totalVerticalOverflow += node->getFeatureCount(FCType::vOverflow);
-    totalVerticalRemain += node->getFeatureCount(FCType::vRemain);
-    totalVerticalTracks += node->getFeatureCount(FCType::vTracks);
-    totalHorizontalOverflow += node->getFeatureCount(FCType::hOverflow);
-    totalHorizontalRemain += node->getFeatureCount(FCType::hRemain);
-    totalHorizontalTracks += node->getFeatureCount(FCType::hTracks);
+    totalNumCells += node->numCells;
+    totalNumCellPins += node->numCellPins;
+    totalNumMacros += node->numMacros;
+    totalNumMacroPins += node->numMacroPins;
+    totalNumPassingNets += node->numPassingNets;
+    totalVerticalOverflow += node->vertical_overflow;
+    totalVerticalRemain += node->vertical_remain;
+    totalVerticalTracks += node->vertical_tracks;
+    totalHorizontalOverflow += node->horizontal_overflow;
+    totalHorizontalRemain += node->horizontal_remain;
+    totalHorizontalTracks += node->horizontal_tracks;
   }
 
   std::string result = "";
@@ -278,7 +274,7 @@ GridGraph::adjacentNode(vertexIndex node_index,
                        unsigned int axis,
                        bool next)
 {
-  Graph* graph = (Graph*) graph_;
+  Graph *graph = (Graph*) graph_;
   auto v = vertex(node_index, *graph);
   auto adj = next ? graph->next(v, axis) : graph->previous(v, axis);
   auto adj_id = get(boost::vertex_index, *graph, adj);
@@ -294,14 +290,14 @@ GridGraph::node(vertexIndex node_index)
 long unsigned int
 GridGraph::XLength() const
 {
-  Graph* graph = (Graph*) graph_;
+  Graph *graph = (Graph*) graph_;
   return graph->length(Axis::x);
 }
 
 long unsigned int
 GridGraph::YLength() const
 {
-  Graph* graph = (Graph*) graph_;
+  Graph *graph = (Graph*) graph_;
   return graph->length(Axis::y);
 }
 
@@ -317,7 +313,7 @@ GridGraph::buildGraph()
   boost::array<std::size_t, 2> lengths = {{xGrid_.size()-1, yGrid_.size()-1}};
   boost::array<bool, 2> wrapped = {{false, false}};
   rTree_ = (void*) (new RTree);
-  graph_ = (void*) (new Graph(lengths, wrapped));
+  graph_ = new Graph(lengths, wrapped);
   unsigned int num_nodes = (xGrid_.size()-1)*(yGrid_.size()-1);
   vertex2Node_.reserve(num_nodes);
   RTree* rtree = (RTree*) rTree_;

@@ -20,7 +20,7 @@ namespace ftx {
 class DRVRenderer;
 class GridGraph;
 class GridRender;
-class Node;
+struct Node;
 class NodePainter;
 
 class FeatureExtractor {
@@ -33,8 +33,7 @@ class FeatureExtractor {
     void initGraphFromDef();
 
     void readRPT(std::string file_path,
-                 odb::dbLib* lib,
-                 bool triton=false);
+                 odb::dbLib* lib);
 
     void readCongestion(std::string file_path);
     void readCongestion(std::istream & isstream);
@@ -54,6 +53,7 @@ class FeatureExtractor {
     void drawGrid();
 
     void paintNodes(std::string file_path);
+
   private:
     void extractInstFeatures(odb::dbInst* inst);
     void extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,
@@ -69,8 +69,8 @@ class FeatureExtractor {
                           odb::dbTransform transform);
     void extractPassingNets(odb::dbNet* net);
 
-    odb::dbDatabase* db_;
-    ftx::GridGraph * gridGraph_;
+    odb::dbDatabase *db_;
+    ftx::GridGraph *gridGraph_;
     std::unique_ptr<DRVRenderer> drvRenderer_;
     std::unique_ptr<GridRender> gridRenderer_;
     std::unique_ptr<NodePainter> nodePainter_;

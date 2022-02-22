@@ -8,38 +8,26 @@
 
 namespace ftx {
 
-class Node {
-  public:
+struct Node {
     Node(vertexIndex node_id, odb::Rect rect);
     ~Node();
 
-    //Modifiers
-    void insertFeatureCount(FeatureCount feature, int amount);
-    void insertFeatureArea(FeatureArea feature, Utils::AreaDBU area);
-    void setViolation(bool violation);
-    void insertDRVType(DRVType drv);
-
-    //Getters
-    bool hasViolation();
-    std::unordered_set<DRVType> getDRVs();
-    int getFeatureCount(FeatureCount feature);
-    Utils::AreaDBU getFeatureArea(FeatureArea feature);
-    odb::Rect rect();
-    vertexIndex id();
-
+    std::string debugInfo();
     friend std::ostream& operator<<(std::ostream& os, Node& node);
-  private:
+
+    //Graph attributes
+    vertexIndex nodeID;
+    odb::Rect rect;
     //Placement Features
-    int numCells_, numCellPins_, numMacros_, numMacroPins_,
-        numPassingNets_;
-    Utils::AreaDBU cellArea_, l1BlockageArea_, l2BlockageArea_,
-                   l1PinArea_, l2PinArea_, macroArea_, macroPinArea_;
+    int numCells, numCellPins, numMacros, numMacroPins,
+        numPassingNets;
+    Utils::AreaDBU cellArea, l1BlockageArea, l2BlockageArea,
+                   l1PinArea, l2PinArea, macroArea, macroPinArea;
     //Global Routing Features
-    int vertical_overflow_, vertical_remain_, vertical_tracks_,
-        horizontal_overflow_, horizontal_remain_, horizontal_tracks_;
-    bool violation_;
+    int vertical_overflow, vertical_remain, vertical_tracks,
+        horizontal_overflow, horizontal_remain, horizontal_tracks;
+    //labels
+    bool violation;
     std::unordered_set<DRVType> drvs;
-    vertexIndex nodeID_;
-    odb::Rect rect_;
 };
 }

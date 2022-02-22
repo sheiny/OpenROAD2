@@ -55,13 +55,13 @@ write_csv(char* fileName)
 }
 
 void
-read_rpt(char* fileName, bool triton)
+read_rpt(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
   auto db_ptr = openroad->getDb();
   auto lib_ptr = db_ptr->getLibs().begin();
-  featureExt->readRPT(fileName, *lib_ptr, triton);
+  featureExt->readRPT(fileName, *lib_ptr);
 }
 
 void
