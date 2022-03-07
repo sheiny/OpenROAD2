@@ -12,7 +12,11 @@ Node::Node(vertexIndex node_id, odb::Rect rect) :
   numCellPins = 0;
   numMacros = 0;
   numMacroPins = 0;
-  numPassingNets = 0;
+
+  horizontal_capacity = 0;
+  vertical_capacity = 0;
+  horizontal_demand = 0;
+  vertical_demand = 0;
 
   vertical_overflow = 0;
   vertical_remain = 0;
@@ -45,7 +49,8 @@ Node::debugInfo()
   debug_info+="NumPins: "+std::to_string(numCellPins)+separator;
   debug_info+="NumMacros: "+std::to_string(numMacros)+separator;
   debug_info+="NumMacroPins: "+std::to_string(numMacroPins)+separator;
-  debug_info+="NumPassingNets: "+std::to_string(numPassingNets)+separator;
+  debug_info+="HorizontalOverflow: "+std::to_string((double)horizontal_demand/horizontal_capacity)+separator;
+  debug_info+="VerticalOverflow: "+std::to_string((double)vertical_demand/vertical_capacity)+separator;
   return debug_info;
 }
 
@@ -58,7 +63,8 @@ operator<<(std::ostream& os, Node& node)
     <<std::to_string(node.numCellPins)<<", "
     <<std::to_string(node.numMacros)<<", "
     <<std::to_string(node.numMacroPins)<<", "
-    <<std::to_string(node.numPassingNets)<<", "
+    <<std::to_string((double)node.horizontal_demand/node.horizontal_capacity)<<", "
+    <<std::to_string((double)node.vertical_demand/node.vertical_capacity)<<", "
 
     <<std::to_string(node.vertical_overflow)<<", "
     <<std::to_string(node.vertical_remain)<<", "

@@ -16,9 +16,9 @@ extern int Ftx_Init(Tcl_Interp *interp);
 
 namespace ord {
 
-ftx::FeatureExtractor *makeFeatureExtractor(odb::dbDatabase *db)
+ftx::FeatureExtractor *makeFeatureExtractor()
 {
-  return new ftx::FeatureExtractor{db};
+  return new ftx::FeatureExtractor{};
 }
 
 //This funcion will bind the calls between .tcl and .i files

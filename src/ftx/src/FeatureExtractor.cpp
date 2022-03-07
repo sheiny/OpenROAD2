@@ -4,20 +4,78 @@
 #include "ftx/GridGraph.h"
 #include "ftx/Utils.h"
 #include "ftx/RptParser.h"
+#include "ord/OpenRoad.hh"
 #include "odb/db.h"
 #include "odb/dbTransform.h"
+#include "stt/SteinerTreeBuilder.h"
 
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <stdexcept>
 #include <unordered_set>
+
+
+struct TrackGrid
+{
+  int step, offset;
+  bool horizontal;
+
+  void init(int _step, int _offset, bool _horizontal)
+  {
+    step = _step;
+    offset = _offset;
+    horizontal = _horizontal;
+  }
+};
+
+struct Segment
+{
+  Segment(int xs, int xe, int ys, int ye):
+    x1(xs),
+    x2(xe),
+    y1(ys),
+    y2(ye)
+  {};
+  int x1, x2, y1, y2;
+};
+
+std::vector<Segment>
+extractSegments(const stt::Tree &tree, bool horizontal)
+{
+  std::vector<Segment> result;
+  for(int i = 0; i < tree.branchCount(); ++i)
+  {
+    const stt::Branch& branch = tree.branch[i];
+    if(i == branch.n)
+      continue;
+    const int x1 = branch.x;
+    const int y1 = branch.y;
+    const stt::Branch& neighbor = tree.branch[branch.n];
+    const int x2 = neighbor.x;
+    const int y2 = neighbor.y;
+
+    if(horizontal)
+    {
+      result.push_back({x1, x2, y1, y1});
+      result.push_back({x1, x2, y2, y2});
+    }
+    else
+    {
+      result.push_back({x1, x1, y1, y2});
+      result.push_back({x2, x2, y1, y2});
+    }
+  }
+  return result;
+}
 
 namespace ftx {
 
-FeatureExtractor::FeatureExtractor(odb::dbDatabase *db) :
-  db_(db),
-  gridGraph_(nullptr)
+FeatureExtractor::FeatureExtractor()
 {
+  db_ = ord::OpenRoad::openRoad()->getDb();
+  logger_ = ord::OpenRoad::openRoad()->getLogger();
+  stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder();
 }
 
 FeatureExtractor::~FeatureExtractor()
@@ -28,6 +86,7 @@ FeatureExtractor::~FeatureExtractor()
 void
 FeatureExtractor::initGraph()
 {
+  std::cout<<"FeatureExtractor::initGraph called."<<std::endl;
   gridGraph_ = new ftx::GridGraph();
   auto block = db_->getChip()->getBlock();
   auto row = block->getRows().begin();
@@ -81,6 +140,7 @@ FeatureExtractor::readCongestion(std::istream & isstream)
 {
   ftx::CongestParser parser;
   auto congestions = parser.parseCongestion(isstream);
+
   for(auto c : congestions)
   {
     auto nodes = gridGraph_->intersectingNodes(c.rect);
@@ -111,6 +171,7 @@ void
 FeatureExtractor::clear()
 {
   db_ = nullptr;
+  stt_ = nullptr;
   delete gridGraph_;
 }
 
@@ -119,10 +180,17 @@ FeatureExtractor::extractFeatures()
 {
   std::cout<<"FeatureExtractor::extractFeatures called."<<std::endl;
   auto block = db_->getChip()->getBlock();
+  // Placement features
   for(auto inst : block->getInsts())
     extractInstFeatures(inst);
+
+  // Routing features
+  block->setDrivingItermsforNets();
+  initRoutingCapacity();
   for(auto net : block->getNets())
-    extractPassingNets(net);
+  {
+    extractRoutingFeatures(net);
+  }
 }
 
 double
@@ -197,7 +265,8 @@ FeatureExtractor::writeCSV(std::string file_path)
      <<"#CellPins,"
      <<"#Macros,"
      <<"#MacroPins,"
-     <<"#PassingNets,"
+     <<"HorizontalOverflow,"
+     <<"VerticalOverflow,"
   //count global routing features
      <<"#VerticalOverflow,"
      <<"#VerticalRemain,"
@@ -241,7 +310,6 @@ FeatureExtractor::writeCSV(std::string file_path)
      <<"#NeighborCellPins,"
      <<"#NeighborMacros,"
      <<"#NeighborMacroPins,"
-     <<"#NeighborPassingNets,"
   //count global routing neighbor features
      <<"#NeighborVerticalOverflow,"
      <<"#NeighborVerticalRemain,"
@@ -362,6 +430,71 @@ FeatureExtractor::drawGrid()
     gridRenderer_ = std::make_unique<GridRender>(db_, gridGraph_);
     gui->registerRenderer(gridRenderer_.get());
     gui->redraw();
+  }
+}
+
+void
+FeatureExtractor::initRoutingCapacity()
+{
+  odb::dbBlock *block = db_->getChip()->getBlock();
+  odb::dbSet<odb::dbTrackGrid> grids = block->getTrackGrids();
+  std::vector<TrackGrid> layerToGrid;
+  for(auto trackGrid : grids)
+  {
+    odb::dbTechLayer *techLayer = trackGrid->getTechLayer();
+    odb::dbTechLayerDir layerDirection = techLayer->getDirection();
+    if(layerDirection.getValue() == odb::dbTechLayerDir::Value::NONE)
+      continue;
+
+    if(trackGrid->getNumGridPatternsX() != 1 || trackGrid->getNumGridPatternsY() != 1)
+      throw std::out_of_range("There are more than one grid track pattern for a same routing layer.");
+
+    std::vector<int> grid;
+    bool horizontal;
+    if(layerDirection.getValue() == odb::dbTechLayerDir::Value::HORIZONTAL)
+    {
+      trackGrid->getGridY(grid);
+      horizontal = true;
+    }
+    else if(layerDirection.getValue() == odb::dbTechLayerDir::Value::VERTICAL)
+    {
+      trackGrid->getGridX(grid);
+      horizontal = false;
+    }
+    const int step = *std::next(grid.begin()) - grid.front();
+    const int offset = grid.front();
+    TrackGrid t_grid;
+    t_grid.init(step, offset, horizontal);
+    layerToGrid.push_back(t_grid);
+  }
+  for(int node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    int h_capacity = 0, v_capacity = 0;
+    ftx::Node *node = gridGraph_->node(node_id);
+    odb::Rect rect =  node->rect;
+    for(auto grid : layerToGrid)
+    {
+      int edge_length = 0, edge_origin = 0;
+      if(grid.horizontal)
+      {
+        edge_origin = rect.yMin();
+        edge_length = rect.dy();
+      }
+      else
+      {
+        edge_origin = rect.xMin();
+        edge_length = rect.dx();
+      }
+      const bool aligned = (edge_origin-grid.offset)%grid.step == 0;
+      const int capacity = (edge_length/grid.step) + aligned;
+
+      if(grid.horizontal)
+        h_capacity += capacity;
+      else
+        v_capacity += capacity;
+    }
+    node->horizontal_capacity = h_capacity;
+    node->vertical_capacity = v_capacity;
   }
 }
 
@@ -558,12 +691,58 @@ FeatureExtractor::extractMacroPins(odb::dbMaster* master, Node* node,
 }
 
 void
-FeatureExtractor::extractPassingNets(odb::dbNet* net)
+FeatureExtractor::extractRoutingFeatures(odb::dbNet* net)
 {
-  odb::Rect net_bbox = Utils::netBoudingBox(net);
-  std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(net_bbox);
-  for(auto node : nodes)
-    node->numPassingNets += 1;
+  //skip PG Nets (double check for clock?)
+  if ((net->getSigType() == odb::dbSigType::GROUND)
+      || (net->getSigType() == odb::dbSigType::POWER))
+    return;
+
+  const int driverID = net->getDrivingITerm();
+  if(driverID == 0 || driverID == -1)
+    return; //throw std::logic_error("Error, net without a driver (should we skip it?).");
+
+  // Get pin coords and driver
+  std::vector<int> xcoords, ycoords;
+  int rootIndex;
+  for(auto dbITerm : net->getITerms())
+  {
+    int x, y;
+    const bool pinExist = dbITerm->getAvgXY(&x, &y);
+    if(pinExist)
+    {
+      if(driverID == dbITerm->getId())
+      {
+        rootIndex = xcoords.size();
+      }
+      xcoords.push_back(x);
+      ycoords.push_back(y);
+    }
+  }
+  // Build Steiner Tree
+  const stt::Tree tree = stt_->makeSteinerTree(xcoords, ycoords, rootIndex);
+
+  // Get routing segments
+  const std::vector<Segment> horizontalSegments = extractSegments(tree, true);
+  const std::vector<Segment> verticalSegments = extractSegments(tree, false);
+
+  // Query intersecting nodes
+  std::unordered_set<Node*> horizontalNodes, verticalNodes;
+  for(auto seg : horizontalSegments)
+  {
+    const std::vector<Node*> nodes = gridGraph_->intersectingNodes({seg.x1, seg.y1, seg.x2, seg.y2});
+    horizontalNodes.insert(nodes.begin(), nodes.end());
+  }
+  for(auto seg : verticalSegments)
+  {
+    const std::vector<Node*> nodes = gridGraph_->intersectingNodes({seg.x1, seg.y1, seg.x2, seg.y2});
+    verticalNodes.insert(nodes.begin(), nodes.end());
+  }
+  // Increase demand of those nodes
+  for(auto node : horizontalNodes)
+    node->horizontal_demand += 1;
+  for(auto node : verticalNodes)
+    node->vertical_demand += 1;
 }
 
 }

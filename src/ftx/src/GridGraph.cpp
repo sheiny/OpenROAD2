@@ -189,7 +189,6 @@ GridGraph::neighborhoodFeatures(Node* node)
   int totalNumCellPins = 0;
   int totalNumMacros = 0;
   int totalNumMacroPins = 0;
-  int totalNumPassingNets = 0;
   int totalVerticalOverflow = 0;
   int totalVerticalRemain = 0;
   int totalVerticalTracks = 0;
@@ -212,7 +211,6 @@ GridGraph::neighborhoodFeatures(Node* node)
     totalNumCellPins += node->numCellPins;
     totalNumMacros += node->numMacros;
     totalNumMacroPins += node->numMacroPins;
-    totalNumPassingNets += node->numPassingNets;
     totalVerticalOverflow += node->vertical_overflow;
     totalVerticalRemain += node->vertical_remain;
     totalVerticalTracks += node->vertical_tracks;
@@ -234,7 +232,6 @@ GridGraph::neighborhoodFeatures(Node* node)
          + std::to_string(totalNumCellPins) + ", "
          + std::to_string(totalNumMacros) + ", "
          + std::to_string(totalNumMacroPins) + ", "
-         + std::to_string(totalNumPassingNets) + ", "
          + std::to_string(totalVerticalOverflow) + ", "
          + std::to_string(totalVerticalRemain) + ", "
          + std::to_string(totalVerticalTracks) + ", "

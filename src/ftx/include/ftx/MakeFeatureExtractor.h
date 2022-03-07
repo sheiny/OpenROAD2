@@ -4,15 +4,11 @@ namespace ftx{
 class FeatureExtractor;
 }
 
-namespace odb{
-class dbDatabase;
-}
-
 namespace ord {
 
 class OpenRoad;
 
-ftx::FeatureExtractor *makeFeatureExtractor(odb::dbDatabase *db);
+ftx::FeatureExtractor *makeFeatureExtractor();
 
 void initFeatureExtractor(OpenRoad *openroad);
 

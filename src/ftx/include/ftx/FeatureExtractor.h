@@ -16,6 +16,14 @@ namespace odb {
   class Rect;
 }
 
+namespace stt {
+  class SteinerTreeBuilder;
+}
+
+namespace utl {
+  class Logger;
+}
+
 namespace ftx {
 class DRVRenderer;
 class GridGraph;
@@ -25,7 +33,7 @@ class NodePainter;
 
 class FeatureExtractor {
   public:
-    FeatureExtractor(odb::dbDatabase *db);
+    FeatureExtractor();
     ~FeatureExtractor();
 
     void initGraph();
@@ -70,10 +78,13 @@ class FeatureExtractor {
                               Node* node, odb::dbTransform transform);
     void extractMacroPins(odb::dbMaster* master, Node* node,
                           odb::dbTransform transform);
-    void extractPassingNets(odb::dbNet* net);
+    void initRoutingCapacity();
+    void extractRoutingFeatures(odb::dbNet* net);
 
     odb::dbDatabase *db_;
     ftx::GridGraph *gridGraph_;
+    stt::SteinerTreeBuilder *stt_;
+    utl::Logger *logger_;
     std::unique_ptr<DRVRenderer> drvRenderer_;
     std::unique_ptr<GridRender> gridRenderer_;
     std::unique_ptr<NodePainter> nodePainter_;

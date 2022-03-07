@@ -27,6 +27,8 @@ target_include_directories(ftx
 target_link_libraries(ftx
     gui
     OpenSTA
+    stt
+    utl
     Boost::boost
 )
 
