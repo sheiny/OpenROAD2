@@ -54,6 +54,19 @@ Node::debugInfo()
   return debug_info;
 }
 
+std::string
+Node::printCongestion()
+{
+  std::string result;
+  result += std::to_string(vertical_overflow)+" ";
+  result += std::to_string(vertical_remain)+" ";
+  result += std::to_string(vertical_tracks)+" ";
+  result += std::to_string(horizontal_overflow)+" ";
+  result += std::to_string(horizontal_remain)+" ";
+  result += std::to_string(horizontal_tracks)+" ";
+  return result;
+}
+
 std::ostream&
 operator<<(std::ostream& os, Node& node)
 {

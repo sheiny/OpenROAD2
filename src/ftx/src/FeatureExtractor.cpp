@@ -84,7 +84,7 @@ FeatureExtractor::~FeatureExtractor()
 }
 
 void
-FeatureExtractor::initGraph()
+FeatureExtractor::initGraph(int sizeInRowHeights)
 {
   std::cout<<"FeatureExtractor::initGraph called."<<std::endl;
   gridGraph_ = new ftx::GridGraph();
@@ -92,7 +92,7 @@ FeatureExtractor::initGraph()
   auto row = block->getRows().begin();
   auto site = row->getSite();
   auto height = site->getHeight();
-  auto tile_dim = height * 3;
+  auto tile_dim = height * sizeInRowHeights;
   gridGraph_->initGridUsingDimensions(db_, tile_dim, tile_dim);
 }
 
@@ -125,6 +125,17 @@ FeatureExtractor::readRPT(std::string file_path,
       }
     }
   }
+
+  int num_violating_nodes = 0;
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    auto node_ptr = gridGraph_->node(node_id);
+    if (node_ptr->violation)
+    {
+      ++num_violating_nodes;
+    }
+  }
+  std::cout<<"Nodes with DRVs: "<<num_violating_nodes<<" of "<<gridGraph_->sizeNodes()<<", on Metal1/Metal2 Layers."<<std::endl;
 }
 
 void
@@ -132,7 +143,7 @@ FeatureExtractor::readCongestion(std::string file_path)
 {
   std::cout<<"FeatureExtractor::readCongestion called."<<std::endl;
   std::ifstream file(file_path);
-  return readCongestion(file);
+  readCongestion(file);
 }
 
 void
@@ -168,6 +179,44 @@ FeatureExtractor::readCongestion(std::istream & isstream)
 }
 
 void
+FeatureExtractor::initGraphFromCongestion(std::string file_path)
+{
+  std::cout<<"FeatureExtractor::initGraphFromCongestion called."<<std::endl;
+  gridGraph_ = new ftx::GridGraph();
+  std::vector<Utils::DBU> xTicks, yTicks;
+  ftx::CongestParser parser;
+  // Create grid
+  auto congestions = parser.parseCongestion(file_path);
+  for(auto congestion : congestions)
+  {
+    odb::Rect rect = congestion.rect;
+    xTicks.push_back(rect.xMin());
+    xTicks.push_back(rect.xMax());
+    yTicks.push_back(rect.yMin());
+    yTicks.push_back(rect.yMax());
+  }
+  gridGraph_->initGridFromCoords(xTicks, yTicks);
+
+  // Populate grid values
+  for(auto congestion : congestions)
+  {
+    odb::Rect rect = congestion.rect;
+    int xMid = (rect.xMin()+rect.xMax())/2;
+    int yMid = (rect.yMin()+rect.yMax())/2;
+    odb::Point center = odb::Point(xMid, yMid);
+    ftx::Node* node = gridGraph_->intersectingNode(center);
+    if(node == nullptr)
+      throw std::out_of_range("There is a gcell without any grid node overlap!!!");
+    node->vertical_overflow = congestion.v_overflow;
+    node->vertical_remain = congestion.v_remain;
+    node->vertical_tracks = congestion.v_tracks;
+    node->horizontal_overflow = congestion.h_overflow;
+    node->horizontal_remain = congestion.h_remain;
+    node->horizontal_tracks = congestion.h_tracks;
+  }
+}
+
+void
 FeatureExtractor::clear()
 {
   db_ = nullptr;
@@ -191,6 +240,65 @@ FeatureExtractor::extractFeatures()
   {
     extractRoutingFeatures(net);
   }
+}
+
+void
+FeatureExtractor::writeCNNInputFile(std::string path,
+                                    std::string circuitName,
+                                    std::string fileName,
+                                    auto container,
+                                    int neighborhoodSize)
+{
+  std::ofstream outViolating(path+"/temp.txt");
+  int validNeighborNodes = 0;
+  for(auto node : container)
+  {
+    std::string neighborhood;
+    bool validNeighborhood = gridGraph_->neighborhoodCongestion(node, neighborhoodSize, neighborhood);
+    if(validNeighborhood)
+    {
+      outViolating<<neighborhood<<std::endl;//write file
+      ++validNeighborNodes;
+    }
+  }
+  outViolating.close();
+  // it is very important to include in the name of the file the matrix
+  // shape it should be X_23_23_6
+  std::rename(std::string(path+"/temp.txt").c_str(),
+              std::string(path+"/"+circuitName+"_"+fileName+"_"+
+              std::to_string(validNeighborNodes)+"_"+
+              std::to_string(neighborhoodSize*2+1)+"_"+
+              std::to_string(neighborhoodSize*2+1)+"_6.txt").c_str());
+}
+
+void
+FeatureExtractor::extractCNNFeatures(std::string outputPath,
+                                     std::string circuitName,
+                                     int neighborhoodSize)
+{
+  std::vector<ftx::Node*> violatingNodes;
+  std::unordered_set<ftx::Node*> surroundingViolNodes;
+  std::vector<ftx::Node*> nonViolatingNodes;
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    ftx::Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->violation)
+    {
+      violatingNodes.push_back(node_ptr);
+      std::vector<ftx::Node*> neighborhood = gridGraph_->neighborhood(node_id);
+      for(auto neighbor : neighborhood)
+      {
+        if(neighbor->violation == false)
+          surroundingViolNodes.insert(neighbor);
+      }
+    }
+    if(surroundingViolNodes.find(node_ptr) == surroundingViolNodes.end())
+      nonViolatingNodes.push_back(node_ptr);
+  }
+  //TODO add padding?
+  writeCNNInputFile(outputPath, circuitName, "violatingNodes", violatingNodes, neighborhoodSize);
+  writeCNNInputFile(outputPath, circuitName, "surroundingViolNodes", surroundingViolNodes, neighborhoodSize);
+  writeCNNInputFile(outputPath, circuitName, "nonViolatingNodes", nonViolatingNodes, neighborhoodSize);
 }
 
 double

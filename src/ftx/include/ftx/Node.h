@@ -13,6 +13,9 @@ struct Node {
     ~Node();
 
     std::string debugInfo();
+
+    std::string printCongestion();
+
     friend std::ostream& operator<<(std::ostream& os, Node& node);
 
     //Graph attributes

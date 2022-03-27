@@ -20,10 +20,17 @@ using ftx::FeatureExtractor;
 namespace ftx {
 
 void
-init_graph()
+init_graph(int sizeInRowHeights = 3)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->initGraph();
+  featureExt->initGraph(sizeInRowHeights);
+}
+
+void
+init_graph_from_congest(char* fileName)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->initGraphFromCongestion(fileName);
 }
 
 void
@@ -45,6 +52,13 @@ run()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->extractFeatures();
+}
+
+void
+extract_cnn_features(char* outputPath, char* circuitName, int neighborhoodSize=11)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->extractCNNFeatures(outputPath, circuitName, neighborhoodSize);
 }
 
 void

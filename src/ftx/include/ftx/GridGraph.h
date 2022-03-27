@@ -19,8 +19,7 @@ class GridGraph
 
     //Builder functions
     void initGridFromDEFGCells(odb::dbDatabase* db);
-    void initGridFromCoords(odb::dbDatabase* db,
-                            std::vector<Utils::DBU> xTicks,
+    void initGridFromCoords(std::vector<Utils::DBU> xTicks,
                             std::vector<Utils::DBU> yTicks);
     void initGridUsingDimensions(odb::dbDatabase* db,
                                  Utils::DBU width,
@@ -40,6 +39,10 @@ class GridGraph
     std::vector<Node*> neighborhood(vertexIndex node_index);
 
     std::string neighborhoodFeatures(Node* node);
+
+    //Given a NeighborhoodSize it will extract the neighborhood window
+    //This window is calculated using Width = size*2+1 and Height = size*2+1
+    bool neighborhoodCongestion(Node* node, int size, std::string &result);
 
     Node* upNode(vertexIndex node_index);
     Node* downNode(vertexIndex node_index);

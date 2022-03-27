@@ -55,11 +55,9 @@ GridGraph::initGridFromDEFGCells(odb::dbDatabase* db)
 }
 
 void
-GridGraph::initGridFromCoords(odb::dbDatabase* db,
-                              std::vector<Utils::DBU> xTicks,
+GridGraph::initGridFromCoords(std::vector<Utils::DBU> xTicks,
                               std::vector<Utils::DBU> yTicks)
 {
-  db_ = db;
   //sorted grid without duplicates.
   xGrid_ = xTicks;
   std::sort(xGrid_.begin(), xGrid_.end());
@@ -239,6 +237,67 @@ GridGraph::neighborhoodFeatures(Node* node)
          + std::to_string(totalHorizontalRemain) + ", "
          + std::to_string(totalHorizontalTracks);
   return result;
+}
+
+bool
+GridGraph::neighborhoodCongestion(Node* node, int size, std::string &result)
+{
+  // First check if we have a valid neighborhood (try to walk
+  // size times on each direction)
+  // Up
+  ftx::Node* upNeighbor = node;
+  for(int i = 0; i < size; ++i)
+  {
+    upNeighbor = upNode(upNeighbor->nodeID);
+    if (upNeighbor == nullptr)
+      return false;
+  }
+  // Down
+  ftx::Node* downNeighbor = node;
+  for(int i = 0; i < size; ++i)
+  {
+    downNeighbor = downNode(downNeighbor->nodeID);
+    if (downNeighbor == nullptr)
+      return false;
+  }
+  // Left
+  ftx::Node* leftNeighbor = node;
+  for(int i = 0; i < size; ++i)
+  {
+    leftNeighbor = leftNode(leftNeighbor->nodeID);
+    if (leftNeighbor == nullptr)
+      return false;
+  }
+  // Right
+  ftx::Node* rightNeighbor = node;
+  for(int i = 0; i < size; ++i)
+  {
+    rightNeighbor = rightNode(rightNeighbor->nodeID);
+    if (rightNeighbor == nullptr)
+      return false;
+  }
+  //Then move to the starting point to follow row-major order
+  // when printing congestion attributes
+  ftx::Node *upLeft = upNeighbor;
+  for(int i = 0; i < size; ++i)
+    upLeft = leftNode(upLeft->nodeID);
+
+  int numJumps = size*2;
+  ftx::Node *leftMostNode = upLeft;
+  //for columns
+  for(int i = 0; i <= numJumps; ++i)
+  {
+    //  for rows
+    ftx::Node *currentNode = leftMostNode;
+    for(int j = 0; j <= numJumps; ++j)
+    {
+      result += currentNode->printCongestion();
+      currentNode = rightNode(currentNode->nodeID);
+    }
+    leftMostNode = downNode(leftMostNode->nodeID);
+  }
+  result.pop_back();// remove last character (space)
+  return true;
 }
 
 Node*

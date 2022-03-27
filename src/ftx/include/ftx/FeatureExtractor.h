@@ -36,7 +36,7 @@ class FeatureExtractor {
     FeatureExtractor();
     ~FeatureExtractor();
 
-    void initGraph();
+    void initGraph(int sizeInRowHeights);
 
     void initGraphFromDef();
 
@@ -46,8 +46,14 @@ class FeatureExtractor {
     void readCongestion(std::string file_path);
     void readCongestion(std::istream & isstream);
 
+    void initGraphFromCongestion(std::string file_path);
+
     void clear();
     void extractFeatures();
+
+    void extractCNNFeatures(std::string outputPath,
+                            std::string circuitName,
+                            int neighborhoodSize=11);
 
     double calculateDensity();
 
@@ -66,6 +72,12 @@ class FeatureExtractor {
 
     void printNodeDebugInfo(unsigned int id);
   private:
+    void writeCNNInputFile(std::string path,
+                           std::string circuitName,
+                           std::string fileName,
+                           auto container,
+                           int neighborhoodSize);
+
     void extractInstFeatures(odb::dbInst* inst);
     void extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,
                              odb::dbMaster* master, Node* node,
