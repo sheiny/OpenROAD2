@@ -135,7 +135,7 @@ FeatureExtractor::readRPT(std::string file_path,
       ++num_violating_nodes;
     }
   }
-  std::cout<<"Nodes with DRVs: "<<num_violating_nodes<<" of "<<gridGraph_->sizeNodes()<<", on Metal1/Metal2 Layers."<<std::endl;
+  std::cout<<"Nodes with DRVs: "<<num_violating_nodes<<" of "<<gridGraph_->sizeNodes()<<", on Metal1/Metal2/Metal3 Layers."<<std::endl;
 }
 
 void

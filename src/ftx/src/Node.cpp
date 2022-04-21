@@ -49,6 +49,11 @@ Node::debugInfo()
   debug_info+="NumPins: "+std::to_string(numCellPins)+separator;
   debug_info+="NumMacros: "+std::to_string(numMacros)+separator;
   debug_info+="NumMacroPins: "+std::to_string(numMacroPins)+separator;
+  debug_info+="NumMacroPins: "+std::to_string(numMacroPins)+separator;
+  debug_info+="HorizontalCap: "+std::to_string(horizontal_capacity)+separator;
+  debug_info+="VerticalCap: "+std::to_string(vertical_capacity)+separator;
+  debug_info+="HorizontalDemand: "+std::to_string(horizontal_demand)+separator;
+  debug_info+="VerticalDemand: "+std::to_string(vertical_demand)+separator;
   debug_info+="HorizontalOverflow: "+std::to_string((double)horizontal_demand/horizontal_capacity)+separator;
   debug_info+="VerticalOverflow: "+std::to_string((double)vertical_demand/vertical_capacity)+separator;
   return debug_info;

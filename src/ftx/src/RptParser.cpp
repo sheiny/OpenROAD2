@@ -28,8 +28,10 @@ RPTParser::parseDRVs(std::istream & isstream, odb::dbLib * lib)
       line = line.substr(0, line.find("#"));
     if(line.find("( Metal1 )") == std::string::npos &&
        line.find("( Metal2 )") == std::string::npos &&
+       line.find("( Metal3 )") == std::string::npos &&
        line.find("( metal1 )") == std::string::npos &&
-       line.find("( metal2 )") == std::string::npos )
+       line.find("( metal2 )") == std::string::npos &&
+       line.find("( metal3 )") == std::string::npos)
       continue;
 
     std::string drvStr = line.substr(0, line.find(")")+1);
