@@ -20,6 +20,20 @@ using ftx::FeatureExtractor;
 namespace ftx {
 
 void
+save_locations(char* fileName)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->saveLocations(fileName);
+}
+
+void
+load_locations(char* fileName)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->loadLocations(fileName);
+}
+
+void
 init_graph(int sizeInRowHeights = 3)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
@@ -62,10 +76,10 @@ extract_cnn_features(char* outputPath, char* circuitName, int neighborhoodSize=1
 }
 
 void
-write_csv(char* fileName)
+write_csv(char* fileName, int distance=0)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->writeCSV(fileName);
+  featureExt->writeCSV(fileName, distance);
 }
 
 void

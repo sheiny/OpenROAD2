@@ -13,11 +13,13 @@ Node::Node(vertexIndex node_id, odb::Rect rect) :
   numMacros = 0;
   numMacroPins = 0;
 
+  //GR features
   horizontal_capacity = 0;
   vertical_capacity = 0;
   horizontal_demand = 0;
   vertical_demand = 0;
 
+  //CNN features
   vertical_overflow = 0;
   vertical_remain = 0;
   vertical_tracks = 0;
@@ -72,46 +74,44 @@ Node::printCongestion()
   return result;
 }
 
-std::ostream&
-operator<<(std::ostream& os, Node& node)
+std::string
+Node::printPlacementFeatures()
 {
-  auto area = node.rect.area();
-  os<<std::to_string(node.nodeID)<<", "
-    <<std::to_string(node.numCells)<<", "
-    <<std::to_string(node.numCellPins)<<", "
-    <<std::to_string(node.numMacros)<<", "
-    <<std::to_string(node.numMacroPins)<<", "
-    <<std::to_string((double)node.horizontal_demand/node.horizontal_capacity)<<", "
-    <<std::to_string((double)node.vertical_demand/node.vertical_capacity)<<", "
+  auto area = rect.area();
+  std::string result;
+  result += std::to_string(numCells) + ", ";
+  result += std::to_string(numCellPins) + ", ";
+  result += std::to_string(numMacros) + ", ";
+  result += std::to_string(numMacroPins) + ", ";
+  result += std::to_string((double)horizontal_demand/horizontal_capacity) + ", ";
+  result += std::to_string((double)vertical_demand/vertical_capacity) + ", ";
 
-    <<std::to_string(node.vertical_overflow)<<", "
-    <<std::to_string(node.vertical_remain)<<", "
-    <<std::to_string(node.vertical_tracks)<<", "
-    <<std::to_string(node.horizontal_overflow)<<", "
-    <<std::to_string(node.horizontal_remain)<<", "
-    <<std::to_string(node.horizontal_tracks)<<", "
+  result += std::to_string(area) + ", ";
+  result += std::to_string((double)cellArea/area) + ", ";
+  result += std::to_string((double)macroArea/area) + ", ";
+  result += std::to_string((double)macroPinArea/area) + ", ";
+  result += std::to_string((double)l1BlockageArea/area) + ", ";
+  result += std::to_string((double)l2BlockageArea/area) + ", ";
+  result += std::to_string((double)l1PinArea/area) + ", ";
+  result += std::to_string((double)l2PinArea/area) + ", ";
+  return result;
+}
 
-    <<std::to_string(area)<<", "
-    <<std::to_string((double)node.cellArea/area)<<", "
-    <<std::to_string((double)node.macroArea/area)<<", "
-    <<std::to_string((double)node.macroPinArea/area)<<", "
-    <<std::to_string((double)node.l1BlockageArea/area)<<", "
-    <<std::to_string((double)node.l2BlockageArea/area)<<", "
-    <<std::to_string((double)node.l1PinArea/area)<<", "
-    <<std::to_string((double)node.l2PinArea/area)<<", ";
-  std::unordered_set<DRVType> drvs = node.drvs;
+std::string
+Node::printDRVs()
+{
+  std::string result;
   std::vector<DRVType> drvTypes{DRVType::adjacentCutSpacing,
     DRVType::sameLayerCutSpacing, DRVType::endOfLine, DRVType::floatingPatch,
     DRVType::minArea, DRVType::minWidth, DRVType::nonSuficientMetalOverlap,
     DRVType::cutShort, DRVType::metalShort, DRVType::outOfDieShort,
-    DRVType::cornerSpacing};
+    DRVType::cornerSpacing, DRVType::parallelRunLength};
   for(DRVType drv : drvTypes)
   {
     bool found = (drvs.find(drv) != drvs.end()) ? true : false;
-    os<<found<<", ";
+    result += std::to_string(found) + ", ";
   }
-  os<<(drvs.find(DRVType::parallelRunLength) != drvs.end()) ? true : false;
-
-  return os;
+  result += std::to_string(violation) + "\n";
+  return result;
 }
 }

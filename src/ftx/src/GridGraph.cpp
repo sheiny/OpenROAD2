@@ -124,118 +124,64 @@ GridGraph::intersectingNodes(odb::Rect rect)
 }
 
 std::vector<Node*>
-GridGraph::neighbors(vertexIndex node_index)
+GridGraph::neighborhood(Node* node, int distance)
 {
+  // First check if we have a valid neighborhood (try to walk
+  // distance times on each direction)
+  // Up
+  ftx::Node* upNeighbor = node;
+  for(int i = 0; i < distance; ++i)
+  {
+    upNeighbor = upNode(upNeighbor->nodeID);
+    if (upNeighbor == nullptr)
+      return {};
+  }
+  // Down
+  ftx::Node* downNeighbor = node;
+  for(int i = 0; i < distance; ++i)
+  {
+    downNeighbor = downNode(downNeighbor->nodeID);
+    if (downNeighbor == nullptr)
+      return {};
+  }
+  // Left
+  ftx::Node* leftNeighbor = node;
+  for(int i = 0; i < distance; ++i)
+  {
+    leftNeighbor = leftNode(leftNeighbor->nodeID);
+    if (leftNeighbor == nullptr)
+      return {};
+  }
+  // Right
+  ftx::Node* rightNeighbor = node;
+  for(int i = 0; i < distance; ++i)
+  {
+    rightNeighbor = rightNode(rightNeighbor->nodeID);
+    if (rightNeighbor == nullptr)
+      return {};
+  }
+  //Then move to the starting point to follow row-major order
+  // when printing congestion attributes
+  ftx::Node *upLeft = upNeighbor;
+  for(int i = 0; i < distance; ++i)
+    upLeft = leftNode(upLeft->nodeID);
+
   std::vector<Node*> result;
-  result.reserve(4);
-  auto up_ptr = upNode(node_index);
-  if(up_ptr != nullptr)
-    result.push_back(up_ptr);
-  auto down_ptr = downNode(node_index);
-  if(down_ptr != nullptr)
-    result.push_back(down_ptr);
-  auto left_ptr = leftNode(node_index);
-  if(left_ptr != nullptr)
-    result.push_back(left_ptr);
-  auto right_ptr = rightNode(node_index);
-  if(right_ptr != nullptr)
-    result.push_back(right_ptr);
-  return result;
-}
-
-std::vector<Node*>
-GridGraph::neighborhood(vertexIndex node_index)
-{
-  auto result = neighbors(node_index);
-  auto up_ptr = upNode(node_index);
-  if(up_ptr != nullptr)
+  result.reserve((distance*2+1)*(distance*2+1));
+  int numJumps = distance*2;
+  ftx::Node *leftMostNode = upLeft;
+  //for columns
+  for(int i = 0; i <= numJumps; ++i)
   {
-    auto left = leftNode(up_ptr->nodeID);
-    if(left != nullptr)
-      result.push_back(left);
-    auto right = rightNode(up_ptr->nodeID);
-    if(right != nullptr)
-      result.push_back(right);
+    //for rows
+    ftx::Node *currentNode = leftMostNode;
+    for(int j = 0; j <= numJumps; ++j)
+    {
+      result.push_back(currentNode);
+      currentNode = rightNode(currentNode->nodeID);
+    }
+    leftMostNode = downNode(leftMostNode->nodeID);
   }
-  auto down_ptr = downNode(node_index);
-  if(down_ptr != nullptr)
-  {
-    auto left = leftNode(down_ptr->nodeID);
-    if(left != nullptr)
-      result.push_back(left);
-    auto right = rightNode(down_ptr->nodeID);
-    if(right != nullptr)
-      result.push_back(right);
-  }
-  return result;
-}
-
-std::string
-GridGraph::neighborhoodFeatures(Node* node)
-{
-  auto neighborhoodNodes = neighborhood(node->nodeID);
-  Utils::AreaDBU totalTileArea = 0;
-  Utils::AreaDBU totalCellArea = 0;
-  Utils::AreaDBU totalL1PinArea = 0;
-  Utils::AreaDBU totalL2PinArea = 0;
-  Utils::AreaDBU totalL1BlkgArea = 0;
-  Utils::AreaDBU totalL2BlkgArea = 0;
-  Utils::AreaDBU totalMacroArea = 0;
-  Utils::AreaDBU totalMacroPinArea = 0;
-
-  int totalNumCells = 0;
-  int totalNumCellPins = 0;
-  int totalNumMacros = 0;
-  int totalNumMacroPins = 0;
-  int totalVerticalOverflow = 0;
-  int totalVerticalRemain = 0;
-  int totalVerticalTracks = 0;
-  int totalHorizontalOverflow = 0;
-  int totalHorizontalRemain = 0;
-  int totalHorizontalTracks = 0;
-
-  for(auto node : neighborhoodNodes)
-  {
-    totalTileArea += node->rect.area();
-    totalCellArea += node->cellArea;
-    totalL1PinArea += node->l1PinArea;
-    totalL2PinArea += node->l2PinArea;
-    totalL1BlkgArea += node->l1BlockageArea;
-    totalL2BlkgArea += node->l2BlockageArea;
-    totalMacroArea += node->macroArea;
-    totalMacroPinArea += node->macroPinArea;
-
-    totalNumCells += node->numCells;
-    totalNumCellPins += node->numCellPins;
-    totalNumMacros += node->numMacros;
-    totalNumMacroPins += node->numMacroPins;
-    totalVerticalOverflow += node->vertical_overflow;
-    totalVerticalRemain += node->vertical_remain;
-    totalVerticalTracks += node->vertical_tracks;
-    totalHorizontalOverflow += node->horizontal_overflow;
-    totalHorizontalRemain += node->horizontal_remain;
-    totalHorizontalTracks += node->horizontal_tracks;
-  }
-
-  std::string result = "";
-  result += std::to_string(totalTileArea) + ", "
-         + std::to_string((double)totalCellArea/totalTileArea) + ", "
-         + std::to_string((double)totalL1PinArea/totalTileArea) + ", "
-         + std::to_string((double)totalL2PinArea/totalTileArea) + ", "
-         + std::to_string((double)totalL1BlkgArea/totalTileArea) + ", "
-         + std::to_string((double)totalL2BlkgArea/totalTileArea) + ", "
-         + std::to_string((double)totalMacroArea/totalTileArea) + ", "
-         + std::to_string((double)totalMacroPinArea/totalTileArea) + ", "
-         + std::to_string(totalNumCells) + ", "
-         + std::to_string(totalNumCellPins) + ", "
-         + std::to_string(totalNumMacros) + ", "
-         + std::to_string(totalNumMacroPins) + ", "
-         + std::to_string(totalVerticalOverflow) + ", "
-         + std::to_string(totalVerticalRemain) + ", "
-         + std::to_string(totalVerticalTracks) + ", "
-         + std::to_string(totalHorizontalOverflow) + ", "
-         + std::to_string(totalHorizontalRemain) + ", "
-         + std::to_string(totalHorizontalTracks);
   return result;
 }
 

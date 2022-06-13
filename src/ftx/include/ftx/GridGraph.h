@@ -35,10 +35,10 @@ class GridGraph
     // and vertical adjacent nodes.
     std::vector<Node*> neighbors(vertexIndex node_index);
 
-    //Given a node index, this function returns the eight adjacent nodes.
-    std::vector<Node*> neighborhood(vertexIndex node_index);
-
-    std::string neighborhoodFeatures(Node* node);
+    //Given a node index, this function returns the distance adjacent nodes.
+    //Ex: distance 1 = eight adjacent nodes
+    //Width = distance*2+1 and Height = distance*2+1
+    std::vector<Node*> neighborhood(Node* node, int distance);
 
     //Given a NeighborhoodSize it will extract the neighborhood window
     //This window is calculated using Width = size*2+1 and Height = size*2+1

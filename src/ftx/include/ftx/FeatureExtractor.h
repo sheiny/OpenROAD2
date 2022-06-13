@@ -36,6 +36,10 @@ class FeatureExtractor {
     FeatureExtractor();
     ~FeatureExtractor();
 
+    void saveLocations(std::string file_path);
+
+    void loadLocations(std::string file_path);
+
     void initGraph(int sizeInRowHeights);
 
     void initGraphFromDef();
@@ -60,7 +64,7 @@ class FeatureExtractor {
     //Ignore nodes completely overlapped by macros!
     void calculateABU();
 
-    void writeCSV(std::string file_path);
+    void writeCSV(std::string file_path, int distance);
 
     void drawDRVs();
 
@@ -94,7 +98,7 @@ class FeatureExtractor {
     void extractRoutingFeatures(odb::dbNet* net);
 
     odb::dbDatabase *db_;
-    ftx::GridGraph *gridGraph_;
+    ftx::GridGraph *gridGraph_;//TODO use a unique pointer
     stt::SteinerTreeBuilder *stt_;
     utl::Logger *logger_;
     std::unique_ptr<DRVRenderer> drvRenderer_;

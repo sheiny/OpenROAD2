@@ -80,7 +80,70 @@ FeatureExtractor::FeatureExtractor()
 
 FeatureExtractor::~FeatureExtractor()
 {
-  clear();
+  //clear();
+}
+
+void
+FeatureExtractor::saveLocations(std::string file_path)
+{
+  std::ofstream ofs(file_path, std::ofstream::out);
+  auto block = db_->getChip()->getBlock();
+  for(auto inst : block->getInsts())
+  {
+    std::string name = inst->getName();
+    int xloc, yloc;
+    inst->getLocation(xloc, yloc);
+    ofs<<name<<" "<<xloc<<" "<<yloc<<std::endl;
+  }
+  ofs.close();
+}
+
+void
+FeatureExtractor::loadLocations(std::string file_path)
+{
+  std::ifstream file(file_path);
+  std::string line;
+  std::string delimiter = " ";
+  std::unordered_map<std::string, std::pair<int,int>> locations;
+  while(std::getline(file, line))
+  {
+    size_t pos = 0;
+    pos = line.find(delimiter);
+    std::string instName = line.substr(0, pos);
+    line.erase(0, pos + delimiter.length());
+    pos = line.find(delimiter);
+    int xloc = std::stoi(line.substr(0, pos));
+    line.erase(0, pos + delimiter.length());
+    int yloc = std::stoi(line);
+
+    locations[instName] = std::make_pair(xloc, yloc);
+  }
+  //get row height
+  //calculate average displacement
+  auto block = db_->getChip()->getBlock();
+  auto row = block->getRows().begin();
+  auto site = row->getSite();
+  int height = site->getHeight();
+  long totalXdispl = 0;
+  long totalYdispl = 0;
+  int numInstFound = 0;
+  for(auto inst : block->getInsts())
+  {
+    std::string name = inst->getName();
+    if(locations.find(name) == locations.end())
+      continue;
+    else
+    {
+      int xloc, yloc;
+      inst->getLocation(xloc, yloc);
+      ++numInstFound;
+      std::pair<int, int> savedLocation = locations[name];
+      totalXdispl += std::abs(xloc - savedLocation.first);
+      totalYdispl += std::abs(yloc - savedLocation.second);
+    }
+  }
+  double avgDipl = ((double)totalXdispl + (double)totalYdispl)/numInstFound;
+  std::cout<<"The total displacement in placement units is: "<<avgDipl<<" for: "<<numInstFound<<" instances."<<std::endl;
 }
 
 void
@@ -221,7 +284,8 @@ FeatureExtractor::clear()
 {
   db_ = nullptr;
   stt_ = nullptr;
-  delete gridGraph_;
+  if (gridGraph_ != nullptr)
+    delete gridGraph_;
 }
 
 void
@@ -279,23 +343,33 @@ FeatureExtractor::extractCNNFeatures(std::string outputPath,
   std::vector<ftx::Node*> violatingNodes;
   std::unordered_set<ftx::Node*> surroundingViolNodes;
   std::vector<ftx::Node*> nonViolatingNodes;
+  //Get violating nodes and their surrounded by violating neighbors.
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     ftx::Node *node_ptr = gridGraph_->node(node_id);
     if(node_ptr->violation)
     {
+      std::vector<ftx::Node*> neighborhood = gridGraph_->neighborhood(node_ptr, 1);
+      if(neighborhood.empty())//invalid neighborhood padding is required
+        continue;
       violatingNodes.push_back(node_ptr);
-      std::vector<ftx::Node*> neighborhood = gridGraph_->neighborhood(node_id);
-      for(auto neighbor : neighborhood)
+      for(ftx::Node* neighbor : neighborhood)
       {
         if(neighbor->violation == false)
           surroundingViolNodes.insert(neighbor);
       }
     }
-    if(surroundingViolNodes.find(node_ptr) == surroundingViolNodes.end())
-      nonViolatingNodes.push_back(node_ptr);
   }
-  //TODO add padding?
+  //Get the free violation nodes (excluding the surrounding ones)
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    ftx::Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->violation == false &&
+       surroundingViolNodes.find(node_ptr) == surroundingViolNodes.end())
+    {
+      nonViolatingNodes.push_back(node_ptr);
+    }
+  }
   writeCNNInputFile(outputPath, circuitName, "violatingNodes", violatingNodes, neighborhoodSize);
   writeCNNInputFile(outputPath, circuitName, "surroundingViolNodes", surroundingViolNodes, neighborhoodSize);
   writeCNNInputFile(outputPath, circuitName, "nonViolatingNodes", nonViolatingNodes, neighborhoodSize);
@@ -363,36 +437,27 @@ FeatureExtractor::calculateABU()
 }
 
 void
-FeatureExtractor::writeCSV(std::string file_path)
+FeatureExtractor::writeCSV(std::string file_path, int distance)
 {
+  int neighborhoodSize = (distance*2+1)*(distance*2+1);
   std::cout<<"FeatureExtractor::writeCSV called."<<std::endl;
   std::ofstream ofs(file_path, std::ofstream::out);
-  //count placement features
-  ofs<<"NodeID,"
-     <<"#Cells,"
-     <<"#CellPins,"
-     <<"#Macros,"
-     <<"#MacroPins,"
-     <<"HorizontalOverflow,"
-     <<"VerticalOverflow,"
-  //count global routing features
-     <<"#VerticalOverflow,"
-     <<"#VerticalRemain,"
-     <<"#VerticalTracks,"
-     <<"#HorizontalOverflow,"
-     <<"#HorizontalRemain,"
-     <<"#HorizontalTracks,"
-  //area features
-     <<"TileArea,"
-     <<"CellDensity,"
-     <<"MacroDensity,"
-     <<"MacroPinDensity,"
-     <<"Layer1BlkgDensity,"
-     <<"Layer2BlkgDensity,"
-     <<"Layer1PinDensity,"
-     <<"Layer2PinDensity,"
+  ofs<<"NodeID,";
+
+  //window features
+  std::vector<std::string> placementFeatures = {"#Cells,", "#CellPins,", "#Macros,",
+    "#MacroPins,", "HorizontalOverflow,", "VerticalOverflow,", "TileArea,",
+    "CellDensity,", "MacroDensity,", "MacroPinDensity,", "Layer1BlkgDensity,",
+    "Layer2BlkgDensity,", "Layer1PinDensity,", "Layer2PinDensity,"};
+  for(int i = 0; i < neighborhoodSize; i++)
+  {
+    for(std::string feature : placementFeatures)
+    {
+      ofs<<std::to_string(i)+"_"+feature;
+    }
+  }
   //drv types
-     <<"AdjacentCutSpacing,"
+  ofs<<"AdjacentCutSpacing,"
      <<"SameLayerCutSpacing,"
      <<"EndOfLine,"
      <<"FloatingPatch,"
@@ -404,49 +469,25 @@ FeatureExtractor::writeCSV(std::string file_path)
      <<"OutOfDieShort,"
      <<"CornerSpacing,"
      <<"ParallelRunLength,"
-  //neighbor area features
-     <<"NeighborTileArea,"
-     <<"NeighborCellArea,"
-     <<"NeighborL1PinArea,"
-     <<"NeighborL2PinArea,"
-     <<"NeighborL1BlkArea,"
-     <<"NeighborL2BlkArea,"
-     <<"NeighborMacroArea,"
-     <<"NeighborMacroPinArea,"
-  //count placement neighbor features
-     <<"#NeighborCells,"
-     <<"#NeighborCellPins,"
-     <<"#NeighborMacros,"
-     <<"#NeighborMacroPins,"
-  //count global routing neighbor features
-     <<"#NeighborVerticalOverflow,"
-     <<"#NeighborVerticalRemain,"
-     <<"#NeighborVerticalTracks,"
-     <<"#NeighborHorizontalOverflow,"
-     <<"#NeighborHorizontalRemain,"
-     <<"#NeighborHorizontalTracks,"
   //count global routing neighbor features
      <<"HasDetailedRoutingViolation"<<std::endl;
-
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     ftx::Node *node_ptr = gridGraph_->node(node_id);
-    ofs<<*node_ptr;
-    ofs<<", "<<gridGraph_->neighborhoodFeatures(node_ptr);
-    ofs<<", "<<node_ptr->violation<<std::endl;
+    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
+    if(neighborhood.empty())//invalide neighborhood padding is required
+      continue;
+    //print node ID
+    ofs<<std::to_string(node_ptr->nodeID)<<", ";
+    for(Node* node : neighborhood)//this follows the major order
+      ofs<<node->printPlacementFeatures();
+    //print node info
+    //print neighborhood folowing row major order print node infos
+    //print node violation info
+    ofs<<node_ptr->printDRVs();
   }
 
   ofs.close();
-}
-
-bool
-isValid(ftx::Node* node,
-        odb::Rect rows_bbox)
-{
-  if(node == nullptr)
-    return false;
-  odb::Rect node_rect = node->rect;
-  return node_rect.intersects(rows_bbox);
 }
 
 class DRVRenderer : public gui::Renderer
@@ -716,10 +757,12 @@ FeatureExtractor::extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,
   auto area = intersection.area();
   node->cellArea += area;
   if(area > 0)
+  {
     node->numCells += 1;
 
-  extractCellBlockages(master, node, transform);
-  extractCellPins(master, node, transform);
+    extractCellBlockages(master, node, transform);
+    extractCellPins(master, node, transform);
+  }
 }
 
 void
@@ -746,6 +789,9 @@ FeatureExtractor::extractCellPins(odb::dbMaster* master, Node* node,
 {
   odb::Rect node_rect = node->rect;
   for(auto term : master->getMTerms())
+  {
+    if(term->getName() == "VSS" || term->getName() == "VDD")
+      continue;
     for(auto pin : term->getMPins())
     {
       odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
@@ -762,6 +808,7 @@ FeatureExtractor::extractCellPins(odb::dbMaster* master, Node* node,
       if(areal1 + areal2 > 0)
         node->numCellPins += 1;
     }
+  }
 }
 
 void
@@ -776,9 +823,10 @@ FeatureExtractor::extractMacroFeatures(odb::dbInst* inst,
   Utils::AreaDBU area = Utils::nonOverlappingIntersectingArea(node_rect, obs_rects);
   node->macroArea += area;
   if(area > 0)
+  {
     node->numMacros += 1;
-
-  extractMacroPins(master, node, transform);
+    extractMacroPins(master, node, transform);
+  }
 }
 
 void
@@ -787,6 +835,9 @@ FeatureExtractor::extractMacroPins(odb::dbMaster* master, Node* node,
 {
   odb::Rect node_rect = node->rect;
   for(auto term : master->getMTerms())
+  {
+    if(term->getName() == "VSS" || term->getName() == "VDD")
+      continue;
     for(auto pin : term->getMPins())
     {
       odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
@@ -796,6 +847,7 @@ FeatureExtractor::extractMacroPins(odb::dbMaster* master, Node* node,
       if(area > 0)
         node->numMacroPins += 1;
     }
+  }
 }
 
 void

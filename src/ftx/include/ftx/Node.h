@@ -16,7 +16,9 @@ struct Node {
 
     std::string printCongestion();
 
-    friend std::ostream& operator<<(std::ostream& os, Node& node);
+    std::string printPlacementFeatures();
+
+    std::string printDRVs();
 
     //Graph attributes
     vertexIndex nodeID;
@@ -28,6 +30,7 @@ struct Node {
     //Global Routing Features
     int horizontal_capacity, vertical_capacity,
         horizontal_demand, vertical_demand;
+    //CNN features
     int vertical_overflow, vertical_remain, vertical_tracks,
         horizontal_overflow, horizontal_remain, horizontal_tracks;
     //labels
