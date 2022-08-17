@@ -20,6 +20,7 @@ record_tests {
   fillers5
   fillers6
   fillers7
+  fillers8
   fragmented_row01
   fragmented_row02
   fragmented_row03
@@ -27,11 +28,6 @@ record_tests {
   mirror1
   mirror2
   mirror3
-  multi_height01
-  multi_height02
-  multi_height03
-  multi_height04
-  multi_height05
   obstruction1
   obstruction2
   pad01

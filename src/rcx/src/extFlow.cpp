@@ -49,25 +49,7 @@ namespace rcx {
 
 using utl::RCX;
 
-using odb::dbBlock;
-using odb::dbBox;
-using odb::dbBTerm;
-using odb::dbCapNode;
-using odb::dbCCSeg;
-using odb::dbNet;
-using odb::dbRSeg;
-using odb::dbSet;
-using odb::dbShape;
-using odb::dbSigType;
-using odb::dbTechLayer;
-using odb::dbTechLayerDir;
-using odb::dbTechLayerType;
-using odb::dbWire;
-using odb::dbWirePath;
-using odb::dbWirePathItr;
-using odb::dbWirePathShape;
-using odb::gs;
-using odb::Rect;
+using namespace odb;
 
 uint extMain::getBucketNum(int base, int max, uint step, int xy) {
   if (xy >= max)
@@ -120,8 +102,7 @@ uint extMain::getNetBbox(dbNet* net, Rect& maxRect) {
     if (s.isVia())
       continue;
 
-    Rect r;
-    s.getBox(r);
+    Rect r = s.getBox();
 
     maxRect.merge(r);
     cnt++;
@@ -142,9 +123,6 @@ uint extMain::getNetBbox(dbNet* net, Rect* maxRect[2]) {
     if (s.isVia())
       continue;
 
-    Rect r;
-    s.getBox(r);
-
     //		maxRect.merge(r);
     cnt++;
   }
@@ -162,8 +140,7 @@ void extMain::getNetShapes(dbNet* net, Rect** maxRectSdb, Rect& maxRectGs,
     if (s.isVia())
       continue;
 
-    Rect r;
-    s.getBox(r);
+    Rect r = s.getBox();
 
     uint dd = 0;  // vertical
     if (r.dx() > r.dy())
@@ -192,8 +169,7 @@ void extMain::getNetSboxes(dbNet* net, Rect** maxRectSdb, Rect& maxRectGs,
       if (s->isVia())
         continue;
 
-      Rect r;
-      s->getBox(r);
+      Rect r = s->getBox();
 
       uint dd = 0;  // vertical
       if (r.dx() > r.dy())
@@ -299,8 +275,7 @@ Ath__array1D<uint>*** extMain::mkInstBins(uint binSize, int* bb_ll, int* bb_ur,
     dbInst* inst = *inst_itr;
     dbBox* bb = inst->getBBox();
 
-    Rect r;
-    bb->getBox(r);
+    Rect r = bb->getBox();
 
     for (uint dir = 0; dir < 2; dir++)
       addNetOnTable(inst->getId(), dir, &r, nm_step, bb_ll, bb_ur, instTable);
@@ -351,8 +326,7 @@ extWireBin*** extMain::mkSignalBins(uint binSize, int* bb_ll, int* bb_ur,
           if (s->isVia())
             continue;
 
-          Rect r;
-          s->getBox(r);
+          Rect r = s->getBox();
           addExtWires(r, sdbWireTable, netId, -s->getId(), s->getTechLayer(),
                       nm_step, bb_ll, bb_ur, wpool, cntxFlag);
         }
@@ -370,8 +344,7 @@ extWireBin*** extMain::mkSignalBins(uint binSize, int* bb_ll, int* bb_ur,
       if (s.isVia())
         continue;
 
-      Rect r;
-      s.getBox(r);
+      Rect r = s.getBox();
       addExtWires(r, sdbWireTable, netId, shapes.getShapeId(), s.getTechLayer(),
                   nm_step, bb_ll, bb_ur, wpool, cntxFlag);
 
@@ -467,8 +440,7 @@ uint extMain::mkSignalTables2(uint* nm_step, int* bb_ll, int* bb_ur,
       dbInst* inst = *inst_itr;
       dbBox* bb = inst->getBBox();
 
-      Rect s;
-      bb->getBox(s);
+      Rect s = bb->getBox();
 
       for (uint dir = 0; dir < 2; dir++)
         addNetOnTable(inst->getId(), dir, &s, nm_step, bb_ll, bb_ur, instTable);
@@ -542,8 +514,7 @@ uint extMain::mkSignalTables(uint* nm_step, int* bb_ll, int* bb_ur,
     dbInst* inst = *inst_itr;
     dbBox* bb = inst->getBBox();
 
-    Rect s;
-    bb->getBox(s);
+    Rect s = bb->getBox();
 
     for (uint dir = 0; dir < 2; dir++)
       addNetOnTable(inst->getId(), dir, &s, nm_step, bb_ll, bb_ur, instTable);
@@ -620,7 +591,7 @@ uint extMain::initSearchForNets(int* X1, int* Y1, uint* pitchTable,
   if ((extRect.dx() > 0) && (extRect.dy() > 0)) {
     maxRect = extRect;
   } else {
-    _block->getDieArea(maxRect);
+    maxRect = _block->getDieArea();
     if (!((maxRect.dx() > 0) && (maxRect.dy() > 0)))
       logger_->error(RCX, 81,
                      "Die Area for the block has 0 size, or is undefined!");
@@ -682,7 +653,7 @@ uint extMain::initSearchForNets(int* X1, int* Y1, uint* pitchTable,
   }
   uint layerCnt = n + 1;
 
-  _search = new Ath__gridTable(&maxRect, 2, layerCnt, W, pitchTable, S, X1, Y1);
+  _search = new odb::Ath__gridTable(&maxRect, 2, layerCnt, W, pitchTable, S, X1, Y1);
   _search->setBlock(_block);
   return layerCnt;
 }
@@ -807,8 +778,7 @@ uint extMain::addNetSBoxes(dbNet* net, uint dir, int* bb_ll, int* bb_ur,
       if (s->isVia())
         continue;
 
-      Rect r;
-      s->getBox(r);
+      Rect r = s->getBox();
       if (isIncludedInsearch(r, dir, bb_ll, bb_ur)) {
         uint level = s->getTechLayer()->getRoutingLevel();
 
@@ -854,8 +824,7 @@ uint extMain::addNetSBoxes2(dbNet* net, uint dir, int* bb_ll, int* bb_ur,
       if (s->isVia())
         continue;
 
-      Rect r;
-      s->getBox(r);
+      Rect r = s->getBox();
       if (isIncludedInsearch(r, dir, bb_ll, bb_ur)) {
         uint level = s->getTechLayer()->getRoutingLevel();
 
@@ -999,8 +968,7 @@ uint extMain::addNetShapesOnSearch(dbNet* net, uint dir, int* bb_ll, int* bb_ur,
       continue;
     }
 
-    Rect r;
-    s.getBox(r);
+    Rect r = s.getBox();
     if (isIncludedInsearch(r, dir, bb_ll, bb_ur)) {
       uint level = s.getTechLayer()->getRoutingLevel();
 
@@ -1202,13 +1170,13 @@ uint extWireBin::createDbNetsGS(dbBlock* block, dbCreateNetUtil* createDbNet) {
     Rect r;
     if (w->_shapeId < 0) {
       dbSBox* s = dbSBox::getSBox(block, -w->_shapeId);
-      s->getBox(r);
+      r = s->getBox();
     } else {
       dbShape s;
       // wire->getShape(w->_shapeId, s);
       wire->getSegment(w->_shapeId, w->_layer, s);
 
-      s.getBox(r);
+      r = s.getBox();
     }
     createDbNet->createSpecialWire(NULL, r, w->_layer, 0);
     cnt++;
@@ -1261,16 +1229,14 @@ uint extWireBin::createDbNets(dbBlock* block, dbCreateNetUtil* createDbNet) {
     if (w->_shapeId < 0) {
       dbSBox* s = dbSBox::getSBox(block, -w->_shapeId);
 
-      Rect r;
-      s->getBox(r);
+      Rect r = s->getBox();
 
       createDbNet->createSpecialWire(NULL, r, w->_layer, -w->_shapeId);
     } else {
       dbShape s;
       // wire->getShape(w->_shapeId, s);
       wire->getSegment(w->_shapeId, w->_layer, s);
-      Rect r;
-      s.getBox(r);
+      Rect r = s.getBox();
 
       createDbNet->createNetSingleWire(r, w->_layer->getRoutingLevel(),
                                        w->_netId, w->_shapeId);
@@ -1495,8 +1461,7 @@ uint extMain::addNetShapesGs(dbNet* net, bool gsRotated, bool swap_coords,
 
     int shapeId = shapes.getShapeId();
 
-    Rect r;
-    s.getBox(r);
+    Rect r = s.getBox();
 
     if (USE_DB_UNITS)
       this->GetDBcoords2(r);
@@ -1547,8 +1512,7 @@ uint extMain::addNetSboxesGs(dbNet* net, bool gsRotated, bool swap_coords,
       if (s->isVia())
         continue;
 
-      Rect r;
-      s->getBox(r);
+      Rect r = s->getBox();
       cnt += addShapeOnGS(NULL, s->getId(), r, true, s->getTechLayer(),
                           gsRotated, swap_coords, dir, true, createDbNet);
       /*
@@ -1813,7 +1777,6 @@ int extMain::fill_gs3(int dir, int* ll, int* ur, int* lo_gs, int* hi_gs,
   gs_dir = -1;
 #endif
 
-  uint pcnt = 0;
   uint netCnt = powerNetTable->getCnt();
   for (uint ii = 0; ii < netCnt; ii++) {
     dbNet* net = dbNet::getNet(_block, powerNetTable->get(ii));
@@ -1821,10 +1784,8 @@ int extMain::fill_gs3(int dir, int* ll, int* ur, int* lo_gs, int* hi_gs,
     if (createDbNet != NULL)
       createDbNet->createSpecialNet(net, NULL);
 
-    pcnt += addNetSboxesGs(net, rotatedGs, !dir, gs_dir, createDbNet);
+    addNetSboxesGs(net, rotatedGs, !dir, gs_dir, createDbNet);
   }
-  uint scnt = 0;
-
   uint lo_index = getBucketNum(sdbTable_ll[dir], sdbTable_ur[dir],
                                bucketSize[dir], lo_gs[dir]);
   uint hi_index = getBucketNum(sdbTable_ll[dir], sdbTable_ur[dir],
@@ -1848,7 +1809,7 @@ int extMain::fill_gs3(int dir, int* ll, int* ur, int* lo_gs, int* hi_gs,
       net->setSpef(true);
       tmpNetIdTable->add(netId);
 
-      scnt += addNetShapesGs(net, rotatedGs, !dir, gs_dir, createDbNet);
+      addNetShapesGs(net, rotatedGs, !dir, gs_dir, createDbNet);
     }
   }
   resetNetSpefFlag(tmpNetIdTable);
@@ -1891,9 +1852,9 @@ int extMain::fill_gs2(int dir, int* ll, int* ur, int* lo_gs, int* hi_gs,
 #endif
 
   if (gsTable != NULL) {
-    uint cnt = addNetsGs(gsTable[dir][bucket], gs_dir);
+    addNetsGs(gsTable[dir][bucket], gs_dir);
     if (bucket > 0)
-      cnt += addNetsGs(gsTable[dir][bucket - 1], gs_dir);
+      addNetsGs(gsTable[dir][bucket - 1], gs_dir);
 
     if (_overCell) {
       addInstsGs(instGsTable[dir][bucket], NULL, 0);
@@ -2682,10 +2643,8 @@ uint extMain::fillWindowSearch(extWindow* W, int* lo_sdb, int* hi_sdb,
         W->_currentDir, ll, ur, sdbTable_ll, sdbTable_ur, bucketSize,
         W->_sigtype, sdbSignalTable, tmpNetIdTable, createDbNet);
   } else {
-    uint processWireCnt =
-        addPowerNets(W->_currentDir, ll, ur, W->_pwrtype, createDbNet);
-    processWireCnt +=
-        addSignalNets(W->_currentDir, ll, ur, W->_sigtype, createDbNet);
+    addPowerNets(W->_currentDir, ll, ur, W->_pwrtype, createDbNet);
+    addSignalNets(W->_currentDir, ll, ur, W->_sigtype, createDbNet);
     // uint processWireCnt += addPowerNets(dir, lo_sdb, hi_sdb, pwrtype);
     // processWireCnt += addSignalNets(dir, lo_sdb, hi_sdb, sigtype);
   }
@@ -2756,8 +2715,7 @@ uint extMain::mkNetPropertiesForRsegs(dbBlock* blk, uint dir) {
       if (n == 0)
         continue;
 
-      Rect r;
-      s.getBox(r);
+      Rect r = s.getBox();
 
       if (!matchDir(dir, r)) {
         wire->setProperty(n, 0);
@@ -2811,8 +2769,7 @@ uint extMain::invalidateNonDirShapes(dbBlock* blk, uint dir, bool setMainNet) {
       if (shapeId == 0)
         continue;
 
-      Rect r;
-      s.getBox(r);
+      Rect r = s.getBox();
 
       int rsegId1 = 0;
       wire->getProperty(shapeId, rsegId1);
@@ -3664,8 +3621,7 @@ uint extMain::mkTileBoundaries(bool skipPower, bool skipInsts) {
       dbInst* inst = *inst_itr;
       dbBox* bb = inst->getBBox();
 
-      Rect s;
-      bb->getBox(s);
+      Rect s = bb->getBox();
 
       for (uint dir = 0; dir < 2; dir++)
         addNetOnTable(inst->getId(), dir, &s, _tiles->_tileSize, _tiles->_ll,
@@ -3811,8 +3767,7 @@ uint extMain::mkTilePowerNets(uint dir, int* lo_sdb, int* hi_sdb,
         if (s->isVia())
           continue;
 
-        Rect r;
-        s->getBox(r);
+        Rect r = s->getBox();
 
         if (!tileRect.intersects(r))
           continue;
@@ -4098,8 +4053,7 @@ void extMain::writeMapping(dbBlock* block) {
       if (s.isVia())
         continue;
 
-      Rect r;
-      s.getBox(r);
+      Rect r = s.getBox();
 
       fprintf(fp, "\t\t%d  %d %d  %d %d  %d %d\n", shapes.getShapeId(), r.dx(),
               r.dy(), r.xMin(), r.yMin(), r.xMax(), r.yMax());

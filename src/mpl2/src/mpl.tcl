@@ -39,6 +39,7 @@ sta::define_cmd_args "rtl_macro_placer" { -report_directory report_dir \
                                          [-macro_blockage_weight macro_blockage_wt] \
                                          [-location_weight location_wt] \
                                          [-notch_weight notch_wt] \
+                                         [-dead_space dead_space] \
                                          [-macro_halo macro_halo] \
                                          [-report_file report_file] \
                                          [-macro_blockage_file macro_blockage_file] \
@@ -47,7 +48,7 @@ sta::define_cmd_args "rtl_macro_placer" { -report_directory report_dir \
 proc rtl_macro_placer { args } {
     sta::parse_key_args "rtl_macro_placer" args keys { -config_file -report_directory
        -area_weight -wirelength_weight -outline_weight
-       -boundary_weight -macro_blockage_weight -location_weight -notch_weight
+       -boundary_weight -macro_blockage_weight -location_weight -notch_weight -dead_space
        -macro_halo -report_file -macro_blockage_file -prefer_location_file } flag {  }
 
     if { ![info exists keys(-report_directory)] } {
@@ -60,10 +61,11 @@ proc rtl_macro_placer { args } {
     set area_wt 0.01
     set wirelength_wt 88.7
     set outline_wt 74.71
-    set boundary_wt 25.0
+    set boundary_wt 225.0
     set macro_blockage_wt 50.0
     set location_wt 100.0
-    set notch_wt 212.5
+    set notch_wt 212.0
+    set dead_space 0.05
 
     set macro_halo 10.0
     set report_directory "rtl_mp"
@@ -71,6 +73,10 @@ proc rtl_macro_placer { args } {
     set config_file "" 
     set macro_blockage_file "macro_blockage.txt"
     set prefer_location_file "location.txt"
+
+    if { [info exists keys(-report_file)] } {
+        set report_file $keys(-report_file)
+    }
 
     if { [info exists keys(-area_weight)] } {
         set area_wt $keys(-area_weight)
@@ -100,6 +106,10 @@ proc rtl_macro_placer { args } {
         set notch_wt $keys(-notch_weight)
     }
 
+    if { [info exists keys(-dead_space)] } {
+        set notch_wt $keys(-dead_space)
+    }
+
     if { [info exists keys(-macro_halo)] } {
         set macro_halo $keys(-macro_halo)
     }
@@ -121,36 +131,10 @@ proc rtl_macro_placer { args } {
     }
 
     if {![mpl2::rtl_macro_placer_cmd $config_file $report_directory $area_wt $wirelength_wt \
-                    $outline_wt $boundary_wt $macro_blockage_wt $location_wt $notch_wt $macro_halo\
+                    $outline_wt $boundary_wt $macro_blockage_wt $location_wt $notch_wt $dead_space $macro_halo\
                     $report_file $macro_blockage_file $prefer_location_file]} {
         return false
     }
-
-    set block [ord::get_db_block]
-    set units [$block getDefUnits]
-    set macro_placement_file "./${report_directory}/macro_placement.cfg"
-
-    set ch [open $macro_placement_file]
-
-    while {![eof $ch]} {
-        set line [gets $ch]
-        if {[llength $line] == 0} {continue}
-
-        set inst_name [lindex $line 0]
-        set orientation [lindex $line 1]
-        set x [expr round([lindex $line 2] * $units)]
-        set y [expr round([lindex $line 3] * $units)]
-
-        if {[set inst [$block findInst $inst_name]] == "NULL"} {
-            utl::error MPL 4 "Cannot find instance $inst_name."
-        }
-
-        $inst setOrient $orientation
-        $inst setOrigin $x $y
-        $inst setPlacementStatus FIRM
-    }
-
-    close $ch
 
     return true
 }

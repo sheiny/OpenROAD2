@@ -815,6 +815,7 @@ void MacroPlacer::findMacros()
   }
 
   logger_->info(MPL, 5, "Found {} macros.", macros_.size());
+  logger_->metric("floorplan__design__instance__count__macros", macros_.size());
 }
 
 static bool isWithIn(int val, int min, int max)
@@ -1087,9 +1088,7 @@ void MacroPlacer::copyFaninsAcrossRegisters(sta::BfsFwdIterator& bfs,
     sta::Instance* inst = leaf_iter->next();
     sta::LibertyCell* lib_cell = network->libertyCell(inst);
     if (lib_cell->hasSequentials() && !lib_cell->isMacro()) {
-      sta::LibertyCellSequentialIterator seq_iter(lib_cell);
-      while (seq_iter.hasNext()) {
-        sta::Sequential* seq = seq_iter.next();
+      for (sta::Sequential* seq : lib_cell->sequentials()) {
         sta::FuncExpr* data_expr = seq->data();
         sta::FuncExprPortIterator data_port_iter(data_expr);
         while (data_port_iter.hasNext()) {
@@ -1200,7 +1199,6 @@ void MacroPlacer::fillMacroWeights(AdjWeightMap& adj_map)
   macro_weights_.resize(weight_size);
   for (size_t i = 0; i < weight_size; i++) {
     macro_weights_[i].resize(weight_size);
-    macro_weights_[i] = {0};
   }
 
   for (auto pair_weight : adj_map) {

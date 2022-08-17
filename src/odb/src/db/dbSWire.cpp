@@ -154,6 +154,45 @@ void _dbSWire::out(dbDiff& diff, char side, const char* field) const
   DIFF_END
 }
 
+void _dbSWire::addSBox(_dbSBox* box)
+{
+  box->_owner = getOID();
+  box->_next_box = (uint) _wires;
+  _wires = box->getOID();
+  _dbBlock* block = (_dbBlock*) getOwner();
+  for (auto callback : block->_callbacks)
+    callback->inDbSWireAddSBox((dbSBox*) box);
+}
+
+void _dbSWire::removeSBox(_dbSBox* box)
+{
+  _dbBlock* block = (_dbBlock*) getOwner();
+  uint boxid = box->getOID();
+  if (boxid == _wires) {
+    // at head of list, need to move head
+    _wires = (uint) box->_next_box;
+  } else {
+    // in the middle of the list, need to iterate and relink
+    dbId<_dbSBox> id = _wires;
+    if (id == 0)
+      return;
+    while (id != 0) {
+      _dbSBox* nbox = block->_sbox_tbl->getPtr(id);
+      uint nid = nbox->_next_box;
+
+      if (nid == boxid) {
+        nbox->_next_box = box->_next_box;
+        break;
+      }
+
+      id = nid;
+    }
+  }
+
+  for (auto callback : block->_callbacks)
+    callback->inDbSWireRemoveSBox((dbSBox*) box);
+}
+
 dbBlock* dbSWire::getBlock()
 {
   return (dbBlock*) getImpl()->getOwner();

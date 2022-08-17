@@ -140,8 +140,7 @@ getTransformedRects(odb::dbTransform transform, odb::dbSet<odb::dbBox> boxes)
   rects.reserve(boxes.size());
   for(auto box : boxes)
   {
-    odb::Rect rect;
-    box->getBox(rect);
+    odb::Rect rect = box->getBox();
     transform.apply(rect);
     rects.push_back(rect);
   }
@@ -165,8 +164,7 @@ rectsFromRoutingLevel(int level, odb::dbSet<odb::dbBox> boxes)
   for(auto box : boxes)
     if(level == box->getTechLayer()->getRoutingLevel())
     {
-      odb::Rect rect;
-      box->getBox(rect);
+      odb::Rect rect = box->getBox();
       result.push_back(rect);
     }
   return result;

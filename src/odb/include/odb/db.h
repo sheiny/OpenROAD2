@@ -137,6 +137,11 @@ class dbTechLayerCutSpacingTableOrthRule;
 class dbTechLayerCutSpacingTableDefRule;
 class dbTechLayerCutEnclosureRule;
 class dbTechLayerEolExtensionRule;
+class dbTechLayerArraySpacingRule;
+class dbTechLayerWidthTableRule;
+class dbTechLayerMinCutRule;
+class dbGuide;
+class dbMetalWidthViaMap;
 class dbModule;
 class dbModInst;
 class dbGroup;
@@ -507,9 +512,14 @@ class dbBox : public dbObject
   void getViaXY(int& x, int& y);
 
   ///
+  /// Return the placed location of this via.
+  ///
+  Point getViaXY();
+
+  ///
   /// Get the box bounding points.
   ///
-  void getBox(Rect& rect);
+  Rect getBox();
 
   ///
   /// Get the translated boxes of this via
@@ -536,11 +546,6 @@ class dbBox : public dbObject
   uint getDY();
   uint getWidth(uint dir = 1);
   uint getLength(uint dir = 1);
-
-  ///
-  /// Get GeomShape Interface
-  ///
-  GeomShape* getGeomShape();
 
   ///
   /// Set temporary flag visited
@@ -754,6 +759,11 @@ class dbSBox : public dbBox
   /// This function translates any dbBox whichs is part of a block
   ///
   static dbSBox* getSBox(dbBlock* block, uint oid);
+
+  ///
+  /// Destroy a SBox.
+  ///
+  static void destroy(dbSBox* box);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -992,6 +1002,11 @@ class dbBlock : public dbObject
   // void dbBlock::writeDb(char *filename, int allNode=0);
   void writeDb(char* filename, int allNode = 0);
 
+  //
+  // Utility to write guides file
+  //
+  void writeGuides(const char* filename) const;
+
   ///
   /// Find a specific via of this block.
   /// Returns NULL if the object was not found.
@@ -1197,13 +1212,13 @@ class dbBlock : public dbObject
   ///
   /// Get the die area. The default die-area is (0,0,0,0).
   ///
-  void getDieArea(Rect& rect);
+  Rect getDieArea();
 
   ///
   /// Get the core area. This computes the bbox of the rows
   /// and is O(#rows) in runtime.
   ///
-  void getCoreArea(Rect& rect);
+  Rect getCoreArea();
 
   void setPtFile(FILE* ptf);
   FILE* getPtFile();
@@ -1668,7 +1683,7 @@ class dbBTerm : public dbObject
   ///
   /// Get the block of this block-terminal.
   ///
-  dbBlock* getBlock();
+  dbBlock* getBlock() const;
 
   ///
   /// Get the hierarchical parent iterm of this bterm.
@@ -1838,6 +1853,7 @@ class dbBPin : public dbObject
   int getMinSpacing();
 
   std::vector<dbAccessPoint*> getAccessPoints() const;
+
   ///
   /// Create a new block-terminal-pin
   ///
@@ -2640,6 +2656,10 @@ class dbNet : public dbObject
   /// Translate a valid database-id back to a pointer.
   ///
   static dbNet* getValidNet(dbBlock* block, uint oid);
+
+  dbSet<dbGuide> getGuides() const;
+
+  void clearGuides();
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2797,6 +2817,12 @@ class dbInst : public dbObject
   void getLocation(int& x, int& y) const;
 
   ///
+  /// This method returns the lower-left corner
+  /// of the bounding box of this instance.
+  ///
+  Point getLocation() const;
+
+  ///
   /// This method sets the lower-left corner
   /// of the bounding box of this instance.
   ///
@@ -2920,16 +2946,6 @@ class dbInst : public dbObject
   /// Clear the user-defined flag bit.
   ///
   void clearUserFlag3();
-
-  ///
-  /// Set/Reset the size-only flag
-  ///
-  void setSizeOnly(bool v);
-
-  ///
-  /// Returns true if the size-only flag is set.
-  ///
-  bool isSizeOnly();
 
   ///
   /// Set/Reset the don't-touch flag
@@ -3158,20 +3174,28 @@ class dbInst : public dbObject
 
   ///
   /// Create a new instance.
-  /// Returns NULL if an instance with this name already exists.
-  /// Returns NULL if the master is not FROZEN.
-  ///
-  static dbInst* create(dbBlock* block, dbMaster* master, const char* name);
-
-  ///
-  /// Create a new instance within the specified region.
+  /// If physical_only is true the instance can't bee added to a dbModule.
+  /// If false, it will be added to the top module.
   /// Returns NULL if an instance with this name already exists.
   /// Returns NULL if the master is not FROZEN.
   ///
   static dbInst* create(dbBlock* block,
                         dbMaster* master,
                         const char* name,
-                        dbRegion* region);
+                        bool physical_only = false);
+
+  ///
+  /// Create a new instance within the specified region.
+  /// If physicalOnly is true the instance can't bee added to a dbModule.
+  /// If false, it will be added to the top module.
+  /// Returns NULL if an instance with this name already exists.
+  /// Returns NULL if the master is not FROZEN.
+  ///
+  static dbInst* create(dbBlock* block,
+                        dbMaster* master,
+                        const char* name,
+                        dbRegion* region,
+                        bool physical_only = false);
 
   ///
   /// Delete the instance from the block.
@@ -3506,6 +3530,10 @@ class dbVia : public dbObject
   /// Returns NULL if this via does not represent a block via
   //
   dbVia* getBlockVia();
+
+  void setDefault(bool);
+
+  bool isDefault();
 
   ///
   /// Create a block specific via.
@@ -4845,7 +4873,7 @@ class dbRow : public dbObject
   ///
   /// Get the bounding box of this row
   ///
-  void getBBox(Rect& bbox);
+  Rect getBBox();
 
   ///
   /// Create a new row.
@@ -4991,21 +5019,19 @@ class dbRegion : public dbObject
   void removeInst(dbInst* inst);
 
   ///
-  /// Get the parent of this region. Returns null of this region has no parent.
+  /// Remove this group from the region
   ///
-  dbRegion* getParent();
+  void removeGroup(dbGroup* group);
 
   ///
-  /// Get the children of this region.
+  /// Add group to this region.
   ///
-  dbSet<dbRegion> getChildren();
+  void addGroup(dbGroup* group);
 
   ///
-  /// Add child region to this region.
+  /// Get the groups of this region.
   ///
-  /// This method will do nothing if this child already has a parent.
-  ///
-  void addChild(dbRegion* region);
+  dbSet<dbGroup> getGroups();
 
   ///
   /// Get the block of this region
@@ -5017,12 +5043,6 @@ class dbRegion : public dbObject
   /// exists in the block.
   ///
   static dbRegion* create(dbBlock* block, const char* name);
-
-  ///
-  /// Create a new region. The region will become a child region of parent.
-  /// Returns NULL if a region with this name already exists in the block.
-  ///
-  static dbRegion* create(dbRegion* parent, const char* name);
 
   ///
   /// Destroy a region.
@@ -5641,6 +5661,8 @@ class dbMPin : public dbObject
   ///
   Rect getBBox();
 
+  std::vector<std::vector<odb::dbAccessPoint*>> getPinAccess() const;
+
   ///
   /// Create a new physical pin.
   ///
@@ -5863,6 +5885,11 @@ class dbTech : public dbObject
   ///
   ///
   dbSet<dbTechViaGenerateRule> getViaGenerateRules();
+
+  ///
+  ///
+  ///
+  dbSet<dbMetalWidthViaMap> getMetalWidthViaMap();
 
   ///
   ///
@@ -6893,7 +6920,19 @@ class dbTechLayer : public dbObject
     BELOWDIEEDGE,
     DIFFUSION,
     TRIMPOLY,
-    MIMCAP
+    MIMCAP,
+    STACKEDMIMCAP,
+    TSVMETAL,
+    TSV,
+    PASSIVATION,
+    HIGHR,
+    TRIMMETAL,
+    REGION,
+    MEOL,
+    WELLDISTANCE,
+    CPODE,
+    PADMETAL,
+    POLYROUTING
   };
   // User Code Begin dbTechLayerEnums
   // User Code End dbTechLayerEnums
@@ -6923,7 +6962,13 @@ class dbTechLayer : public dbObject
 
   dbSet<dbTechLayerEolExtensionRule> getTechLayerEolExtensionRules() const;
 
+  dbSet<dbTechLayerArraySpacingRule> getTechLayerArraySpacingRules() const;
+
   dbSet<dbTechLayerEolKeepOutRule> getTechLayerEolKeepOutRules() const;
+
+  dbSet<dbTechLayerWidthTableRule> getTechLayerWidthTableRules() const;
+
+  dbSet<dbTechLayerMinCutRule> getTechLayerMinCutRules() const;
 
   void setRectOnly(bool rect_only);
 
@@ -6949,6 +6994,7 @@ class dbTechLayer : public dbObject
   void setLef58Type(LEF58_TYPE type);
 
   LEF58_TYPE getLef58Type() const;
+  std::string getLef58TypeString() const;
 
   ///
   /// Get the layer name.
@@ -6976,7 +7022,7 @@ class dbTechLayer : public dbObject
   void setAlias(const char* alias);
 
   ///
-  /// Get the minimum path-width.
+  /// Get the default width.
   ///
   uint getWidth() const;
   void setWidth(int width);
@@ -7197,6 +7243,11 @@ class dbTechLayer : public dbObject
   /// Get routing-level of this routing layer. The routing level
   /// is from [1-num_layers]. This function returns 0, if this
   /// layer is not a routing layer.
+  ///
+  /// This layer is really intended for signal routing.  In LEF you
+  /// can have layers that have "TYPE ROUTING" but aren't really
+  /// for routing signal nets (e.g. MIMCAP, STACKEDMIMCAP).
+  /// These layers will return zero.
   ///
   int getRoutingLevel();
 
@@ -7691,6 +7742,10 @@ class dbTechLayerCornerSpacingRule : public dbObject
   void setExceptSameMetal(bool except_same_metal);
 
   bool isExceptSameMetal() const;
+
+  void setCornerToCorner(bool corner_to_corner);
+
+  bool isCornerToCorner() const;
 
   // User Code Begin dbTechLayerCornerSpacingRule
   void setType(CornerType _type);
@@ -8575,6 +8630,252 @@ class dbTechLayerEolExtensionRule : public dbObject
   // User Code End dbTechLayerEolExtensionRule
 };
 
+class dbTechLayerArraySpacingRule : public dbObject
+{
+ public:
+  // User Code Begin dbTechLayerArraySpacingRuleEnums
+  // User Code End dbTechLayerArraySpacingRuleEnums
+
+  void setViaWidth(int via_width);
+
+  int getViaWidth() const;
+
+  void setCutSpacing(int cut_spacing);
+
+  int getCutSpacing() const;
+
+  void setWithin(int within);
+
+  int getWithin() const;
+
+  void setArrayWidth(int array_width);
+
+  int getArrayWidth() const;
+
+  void setCutClass(dbTechLayerCutClassRule* cut_class);
+
+  void setParallelOverlap(bool parallel_overlap);
+
+  bool isParallelOverlap() const;
+
+  void setLongArray(bool long_array);
+
+  bool isLongArray() const;
+
+  void setViaWidthValid(bool via_width_valid);
+
+  bool isViaWidthValid() const;
+
+  void setWithinValid(bool within_valid);
+
+  bool isWithinValid() const;
+
+  // User Code Begin dbTechLayerArraySpacingRule
+
+  void setCutsArraySpacing(int num_cuts, int spacing);
+
+  const std::map<int, int>& getCutsArraySpacing() const;
+
+  dbTechLayerCutClassRule* getCutClass() const;
+
+  static dbTechLayerArraySpacingRule* create(dbTechLayer* layer);
+
+  static dbTechLayerArraySpacingRule* getTechLayerArraySpacingRule(
+      dbTechLayer* inly,
+      uint dbid);
+
+  static void destroy(dbTechLayerArraySpacingRule* rule);
+
+  // User Code End dbTechLayerArraySpacingRule
+};
+
+class dbTechLayerWidthTableRule : public dbObject
+{
+ public:
+  // User Code Begin dbTechLayerWidthTableRuleEnums
+  // User Code End dbTechLayerWidthTableRuleEnums
+
+  void setWrongDirection(bool wrong_direction);
+
+  bool isWrongDirection() const;
+
+  void setOrthogonal(bool orthogonal);
+
+  bool isOrthogonal() const;
+
+  // User Code Begin dbTechLayerWidthTableRule
+
+  void addWidth(int width);
+
+  std::vector<int> getWidthTable() const;
+
+  static dbTechLayerWidthTableRule* create(dbTechLayer* layer);
+
+  static dbTechLayerWidthTableRule* getTechLayerWidthTableRule(
+      dbTechLayer* inly,
+      uint dbid);
+
+  static void destroy(dbTechLayerWidthTableRule* rule);
+  // User Code End dbTechLayerWidthTableRule
+};
+
+class dbTechLayerMinCutRule : public dbObject
+{
+ public:
+  // User Code Begin dbTechLayerMinCutRuleEnums
+  // User Code End dbTechLayerMinCutRuleEnums
+
+  void setNumCuts(int num_cuts);
+
+  int getNumCuts() const;
+
+  std::map<std::string, int> getCutClassCutsMap() const;
+
+  void setWidth(int width);
+
+  int getWidth() const;
+
+  void setWithinCutDist(int within_cut_dist);
+
+  int getWithinCutDist() const;
+
+  void setLength(int length);
+
+  int getLength() const;
+
+  void setLengthWithinDist(int length_within_dist);
+
+  int getLengthWithinDist() const;
+
+  void setArea(int area);
+
+  int getArea() const;
+
+  void setAreaWithinDist(int area_within_dist);
+
+  int getAreaWithinDist() const;
+
+  void setPerCutClass(bool per_cut_class);
+
+  bool isPerCutClass() const;
+
+  void setWithinCutDistValid(bool within_cut_dist_valid);
+
+  bool isWithinCutDistValid() const;
+
+  void setFromAbove(bool from_above);
+
+  bool isFromAbove() const;
+
+  void setFromBelow(bool from_below);
+
+  bool isFromBelow() const;
+
+  void setLengthValid(bool length_valid);
+
+  bool isLengthValid() const;
+
+  void setAreaValid(bool area_valid);
+
+  bool isAreaValid() const;
+
+  void setAreaWithinDistValid(bool area_within_dist_valid);
+
+  bool isAreaWithinDistValid() const;
+
+  void setSameMetalOverlap(bool same_metal_overlap);
+
+  bool isSameMetalOverlap() const;
+
+  void setFullyEnclosed(bool fully_enclosed);
+
+  bool isFullyEnclosed() const;
+
+  // User Code Begin dbTechLayerMinCutRule
+
+  void setCutsPerCutClass(std::string cut_class, int num_cuts);
+
+  static dbTechLayerMinCutRule* create(dbTechLayer* layer);
+
+  static dbTechLayerMinCutRule* getTechLayerMinCutRule(dbTechLayer* inly,
+                                                       uint dbid);
+
+  static void destroy(dbTechLayerMinCutRule* rule);
+
+  // User Code End dbTechLayerMinCutRule
+};
+
+class dbGuide : public dbObject
+{
+ public:
+  // User Code Begin dbGuideEnums
+  // User Code End dbGuideEnums
+
+  Rect getBox() const;
+
+  // User Code Begin dbGuide
+
+  dbNet* getNet() const;
+
+  dbTechLayer* getLayer() const;
+
+  static dbGuide* create(dbNet* net, dbTechLayer* layer, Rect box);
+
+  static dbGuide* getGuide(dbBlock* block, uint dbid);
+
+  static void destroy(dbGuide* guide);
+
+  // User Code End dbGuide
+};
+
+class dbMetalWidthViaMap : public dbObject
+{
+ public:
+  // User Code Begin dbMetalWidthViaMapEnums
+  // User Code End dbMetalWidthViaMapEnums
+  void setViaCutClass(bool via_cut_class);
+
+  bool isViaCutClass() const;
+
+  void setCutLayer(dbTechLayer* cut_layer);
+
+  void setBelowLayerWidthLow(int below_layer_width_low);
+
+  int getBelowLayerWidthLow() const;
+
+  void setBelowLayerWidthHigh(int below_layer_width_high);
+
+  int getBelowLayerWidthHigh() const;
+
+  void setAboveLayerWidthLow(int above_layer_width_low);
+
+  int getAboveLayerWidthLow() const;
+
+  void setAboveLayerWidthHigh(int above_layer_width_high);
+
+  int getAboveLayerWidthHigh() const;
+
+  void setViaName(std::string via_name);
+
+  std::string getViaName() const;
+
+  void setPgVia(bool pg_via);
+
+  bool isPgVia() const;
+
+  // User Code Begin dbMetalWidthViaMap
+
+  dbTechLayer* getCutLayer() const;
+
+  static dbMetalWidthViaMap* create(dbTech* tech);
+
+  static void destroy(dbMetalWidthViaMap* via_map);
+
+  static dbMetalWidthViaMap* getMetalWidthViaMap(dbTech* tech, uint dbid);
+
+  // User Code End dbMetalWidthViaMap
+};
+
 class dbModule : public dbObject
 {
  public:
@@ -8585,9 +8886,10 @@ class dbModule : public dbObject
   dbModInst* getModInst() const;
 
   // User Code Begin dbModule
-  void addInst(dbInst* inst);
 
-  void removeInst(dbInst* inst);
+  // Adding an inst to a new module will remove it from its previous
+  // module.
+  void addInst(dbInst* inst);
 
   dbSet<dbInst> getInsts();
 
@@ -8595,12 +8897,15 @@ class dbModule : public dbObject
 
   dbModInst* findModInst(const char* name);
 
+  std::vector<dbInst*> getLeafInsts();
+
   static dbModule* create(dbBlock* block, const char* name);
 
   static void destroy(dbModule* module);
 
   static dbModule* getModule(dbBlock* block_, uint dbid_);
 
+  std::string getHierarchicalName() const;
   // User Code End dbModule
 };
 
@@ -8629,7 +8934,7 @@ class dbModInst : public dbObject
 
   std::string getName() const;
 
-  std::string getHierarchalName() const;
+  std::string getHierarchicalName() const;
   // User Code End dbModInst
 };
 
@@ -8641,21 +8946,15 @@ class dbGroup : public dbObject
 
   const char* getName() const;
 
-  Rect getBox() const;
-
-  void setParentGroup(dbGroup* parent_group);
-
   dbGroup* getParentGroup() const;
+
+  dbRegion* getRegion() const;
 
   // User Code Begin dbGroup
 
   void setType(dbGroupType type);
 
   dbGroupType getType() const;
-
-  void setBox(Rect _box);
-
-  bool hasBox();
 
   void addModInst(dbModInst* modinst);
 
@@ -8687,12 +8986,7 @@ class dbGroup : public dbObject
 
   static dbGroup* create(dbBlock* block, const char* name);
 
-  static dbGroup* create(dbBlock* block,
-                         const char* name,
-                         int x1,
-                         int y1,
-                         int x2,
-                         int y2);
+  static dbGroup* create(dbRegion* parent, const char* name);
 
   static dbGroup* create(dbGroup* parent, const char* name);
 
@@ -8916,11 +9210,23 @@ class dbAccessPoint : public dbObject
 
   dbBPin* getBPin() const;
 
+  std::vector<std::vector<dbObject*>> getVias() const;
+
+  void addTechVia(int num_cuts, dbTechVia* via);
+
+  void addBlockVia(int num_cuts, dbVia* via);
+
+  void addSegment(const Rect& segment,
+                  const bool& begin_style_trunc,
+                  const bool& end_style_trunc);
+
+  const std::vector<std::tuple<Rect, bool, bool>>& getSegments() const;
+
   static dbAccessPoint* create(dbBlock* block,
                                dbMPin* pin,
                                uint pin_access_idx);
 
-  static dbAccessPoint* create(dbBPin* pin);
+  static dbAccessPoint* create(dbBPin*);
 
   static dbAccessPoint* getAccessPoint(dbBlock* block, uint dbid);
 

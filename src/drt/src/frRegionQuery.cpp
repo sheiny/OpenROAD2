@@ -88,20 +88,6 @@ struct frRegionQuery::Impl
   void addGRObj(grVia* in, ObjectsByLayer<grBlockObject>& allShapes);
   void addGRObj(grShape* in);
   void addGRObj(grVia* in);
-  template <class Archive>
-  void serialize(Archive& ar, const unsigned int version)
-  {
-    (ar) & design_;
-    (ar) & shapes_;
-    (ar) & guides_;
-    (ar) & origGuides_;
-    // (ar) & grPins_;
-    (ar) & rpins_;
-    (ar) & grObjs_;
-    (ar) & drObjs_;
-    (ar) & markers_;
-  }
-  friend class boost::serialization::access;
 };
 
 frRegionQuery::frRegionQuery(frDesign* design, Logger* logger)
@@ -111,8 +97,7 @@ frRegionQuery::frRegionQuery(frDesign* design, Logger* logger)
   impl_->logger_ = logger;
 }
 
-frRegionQuery::frRegionQuery()
-    : impl_(nullptr)
+frRegionQuery::frRegionQuery() : impl_(nullptr)
 {
 }
 
@@ -127,8 +112,7 @@ void frRegionQuery::Impl::add(frShape* shape,
                               ObjectsByLayer<frBlockObject>& allShapes)
 {
   if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
-    Rect frb;
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     allShapes.at(shape->getLayerNum()).push_back(make_pair(frb, shape));
   } else {
     logger_->error(DRT, 5, "Unsupported region query add.");
@@ -137,10 +121,9 @@ void frRegionQuery::Impl::add(frShape* shape,
 
 void frRegionQuery::addDRObj(frShape* shape)
 {
-  Rect frb;
   if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect
       || shape->typeId() == frcPatchWire) {
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     impl_->drObjs_.at(shape->getLayerNum()).insert(make_pair(frb, shape));
   } else {
     impl_->logger_->error(DRT, 6, "Unsupported region query add.");
@@ -149,18 +132,16 @@ void frRegionQuery::addDRObj(frShape* shape)
 
 void frRegionQuery::addMarker(frMarker* in)
 {
-  Rect frb;
-  in->getBBox(frb);
+  Rect frb = in->getBBox();
   impl_->markers_.at(in->getLayerNum()).insert(make_pair(frb, in));
 }
 
 void frRegionQuery::Impl::addDRObj(frShape* shape,
                                    ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
   if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect
       || shape->typeId() == frcPatchWire) {
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     allShapes.at(shape->getLayerNum()).push_back(make_pair(frb, shape));
   } else {
     logger_->error(DRT, 7, "Unsupported region query add.");
@@ -169,13 +150,154 @@ void frRegionQuery::Impl::addDRObj(frShape* shape,
 
 void frRegionQuery::removeDRObj(frShape* shape)
 {
-  Rect frb;
   if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect
       || shape->typeId() == frcPatchWire) {
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     impl_->drObjs_.at(shape->getLayerNum()).remove(make_pair(frb, shape));
   } else {
     impl_->logger_->error(DRT, 31, "Unsupported region query add.");
+  }
+}
+
+void frRegionQuery::addBlockObj(frBlockObject* obj)
+{
+  switch (obj->typeId()) {
+    case frcInstTerm: {
+      auto instTerm = static_cast<frInstTerm*>(obj);
+      dbTransform xform = instTerm->getInst()->getUpdatedXform();
+      for (auto& pin : instTerm->getTerm()->getPins()) {
+        for (auto& uFig : pin->getFigs()) {
+          auto shape = uFig.get();
+          Rect frb = shape->getBBox();
+          xform.apply(frb);
+          impl_->shapes_.at(static_cast<frShape*>(shape)->getLayerNum())
+              .insert(make_pair(frb, instTerm));
+        }
+      }
+      break;
+    }
+    case frcInstBlockage: {
+      auto instBlk = static_cast<frInstBlockage*>(obj);
+      dbTransform xform = instBlk->getInst()->getUpdatedXform();
+      auto blk = instBlk->getBlockage();
+      auto pin = blk->getPin();
+      for (auto& uFig : pin->getFigs()) {
+        auto shape = uFig.get();
+        if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
+          Rect frb = shape->getBBox();
+          xform.apply(frb);
+          impl_->shapes_.at(static_cast<frShape*>(shape)->getLayerNum())
+              .insert(make_pair(frb, instBlk));
+        } else if (shape->typeId() == frcPolygon) {
+          // Decompose the polygon to rectangles and store those
+          // Convert the frPolygon to a Boost polygon
+          vector<gtl::point_data<frCoord>> points;
+          for (auto pt : ((frPolygon*) shape)->getPoints()) {
+            xform.apply(pt);
+            points.push_back({pt.x(), pt.y()});
+          }
+          gtl::polygon_90_data<frCoord> poly;
+          poly.set(points.begin(), points.end());
+          // Add the polygon to a polygon set
+          gtl::polygon_90_set_data<frCoord> polySet;
+          {
+            using namespace boost::polygon::operators;
+            polySet += poly;
+          }
+          // Decompose the polygon set to rectanges
+          vector<gtl::rectangle_data<frCoord>> rects;
+          polySet.get_rectangles(rects);
+          // Store the rectangles with this blockage
+          for (auto& rect : rects) {
+            Rect box(xl(rect), yl(rect), xh(rect), yh(rect));
+            impl_->shapes_.at(static_cast<frShape*>(shape)->getLayerNum())
+                .insert(make_pair(box, instBlk));
+          }
+        }
+      }
+      break;
+    }
+    case frcInst: {
+      auto inst = static_cast<frInst*>(obj);
+      for (auto& instTerm : inst->getInstTerms())
+        addBlockObj(instTerm.get());
+      for (auto& blkg : inst->getInstBlockages())
+        addBlockObj(blkg.get());
+      break;
+    }
+    default:
+      impl_->logger_->error(DRT, 513, "Unsupported region addBlockObj");
+  }
+}
+
+void frRegionQuery::removeBlockObj(frBlockObject* obj)
+{
+  switch (obj->typeId()) {
+    case frcInstTerm: {
+      auto instTerm = static_cast<frInstTerm*>(obj);
+      dbTransform xform = instTerm->getInst()->getUpdatedXform();
+      for (auto& pin : instTerm->getTerm()->getPins()) {
+        for (auto& uFig : pin->getFigs()) {
+          auto shape = uFig.get();
+          Rect frb = shape->getBBox();
+          xform.apply(frb);
+          impl_->shapes_.at(static_cast<frShape*>(shape)->getLayerNum())
+              .remove(make_pair(frb, instTerm));
+        }
+      }
+      break;
+    }
+    case frcInstBlockage: {
+      auto instBlk = static_cast<frInstBlockage*>(obj);
+      dbTransform xform = instBlk->getInst()->getUpdatedXform();
+      auto blk = instBlk->getBlockage();
+      auto pin = blk->getPin();
+      for (auto& uFig : pin->getFigs()) {
+        auto shape = uFig.get();
+        if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
+          Rect frb = shape->getBBox();
+          xform.apply(frb);
+          impl_->shapes_.at(static_cast<frShape*>(shape)->getLayerNum())
+              .remove(make_pair(frb, instBlk));
+        } else if (shape->typeId() == frcPolygon) {
+          // Decompose the polygon to rectangles and store those
+          // Convert the frPolygon to a Boost polygon
+          vector<gtl::point_data<frCoord>> points;
+          for (auto pt : ((frPolygon*) shape)->getPoints()) {
+            xform.apply(pt);
+            points.push_back({pt.x(), pt.y()});
+          }
+          gtl::polygon_90_data<frCoord> poly;
+          poly.set(points.begin(), points.end());
+          // Add the polygon to a polygon set
+          gtl::polygon_90_set_data<frCoord> polySet;
+          {
+            using namespace boost::polygon::operators;
+            polySet += poly;
+          }
+          // Decompose the polygon set to rectanges
+          vector<gtl::rectangle_data<frCoord>> rects;
+          polySet.get_rectangles(rects);
+          // Store the rectangles with this blockage
+          for (auto& rect : rects) {
+            Rect box(xl(rect), yl(rect), xh(rect), yh(rect));
+            impl_->shapes_.at(static_cast<frShape*>(shape)->getLayerNum())
+                .remove(make_pair(box, instBlk));
+          }
+        }
+      }
+      break;
+    }
+    case frcInst: {
+      auto inst = static_cast<frInst*>(obj);
+      for (auto& instTerm : inst->getInstTerms())
+        removeBlockObj(instTerm.get());
+      for (auto& blkg : inst->getInstBlockages())
+        removeBlockObj(blkg.get());
+      break;
+    }
+    default:
+      impl_->logger_->error(DRT, 512, "Unsupported region removeBlockObj");
   }
 }
 
@@ -186,9 +308,8 @@ void frRegionQuery::addGRObj(grShape* shape)
 
 void frRegionQuery::Impl::addGRObj(grShape* shape)
 {
-  Rect frb;
   if (shape->typeId() == grcPathSeg) {
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     grObjs_.at(shape->getLayerNum()).insert(make_pair(frb, shape));
   } else {
     logger_->error(DRT, 8, "Unsupported region query add.");
@@ -198,16 +319,14 @@ void frRegionQuery::Impl::addGRObj(grShape* shape)
 void frRegionQuery::Impl::addGRObj(grVia* via,
                                    ObjectsByLayer<grBlockObject>& allShapes)
 {
-  Rect frb;
-  via->getBBox(frb);
+  Rect frb = via->getBBox();
   allShapes.at(via->getViaDef()->getCutLayerNum())
       .push_back(make_pair(frb, via));
 }
 
 void frRegionQuery::removeGRObj(grVia* via)
 {
-  Rect frb;
-  via->getBBox(frb);
+  Rect frb = via->getBBox();
   impl_->grObjs_.at(via->getViaDef()->getCutLayerNum())
       .remove(make_pair(frb, via));
 }
@@ -215,9 +334,8 @@ void frRegionQuery::removeGRObj(grVia* via)
 void frRegionQuery::Impl::addGRObj(grShape* shape,
                                    ObjectsByLayer<grBlockObject>& allShapes)
 {
-  Rect frb;
   if (shape->typeId() == grcPathSeg) {
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     allShapes.at(shape->getLayerNum()).push_back(make_pair(frb, shape));
   } else {
     logger_->error(DRT, 9, "Unsupported region query add.");
@@ -226,9 +344,8 @@ void frRegionQuery::Impl::addGRObj(grShape* shape,
 
 void frRegionQuery::removeGRObj(grShape* shape)
 {
-  Rect frb;
   if (shape->typeId() == grcPathSeg) {
-    shape->getBBox(frb);
+    Rect frb = shape->getBBox();
     impl_->grObjs_.at(shape->getLayerNum()).remove(make_pair(frb, shape));
   } else {
     impl_->logger_->error(DRT, 10, "Unsupported region query add.");
@@ -237,23 +354,20 @@ void frRegionQuery::removeGRObj(grShape* shape)
 
 void frRegionQuery::removeMarker(frMarker* in)
 {
-  Rect frb;
-  in->getBBox(frb);
+  Rect frb = in->getBBox();
   impl_->markers_.at(in->getLayerNum()).remove(make_pair(frb, in));
 }
 
 void frRegionQuery::Impl::add(frVia* via,
                               ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
   dbTransform xform;
-  Point origin;
-  via->getOrigin(origin);
+  Point origin = via->getOrigin();
   xform.setOffset(origin);
   for (auto& uShape : via->getViaDef()->getLayer1Figs()) {
     auto shape = uShape.get();
     if (shape->typeId() == frcRect) {
-      shape->getBBox(frb);
+      Rect frb = shape->getBBox();
       xform.apply(frb);
       allShapes.at(via->getViaDef()->getLayer1Num())
           .push_back(make_pair(frb, via));
@@ -264,7 +378,7 @@ void frRegionQuery::Impl::add(frVia* via,
   for (auto& uShape : via->getViaDef()->getLayer2Figs()) {
     auto shape = uShape.get();
     if (shape->typeId() == frcRect) {
-      shape->getBBox(frb);
+      Rect frb = shape->getBBox();
       xform.apply(frb);
       allShapes.at(via->getViaDef()->getLayer2Num())
           .push_back(make_pair(frb, via));
@@ -275,7 +389,7 @@ void frRegionQuery::Impl::add(frVia* via,
   for (auto& uShape : via->getViaDef()->getCutFigs()) {
     auto shape = uShape.get();
     if (shape->typeId() == frcRect) {
-      shape->getBBox(frb);
+      Rect frb = shape->getBBox();
       xform.apply(frb);
       allShapes.at(via->getViaDef()->getCutLayerNum())
           .push_back(make_pair(frb, via));
@@ -287,8 +401,7 @@ void frRegionQuery::Impl::add(frVia* via,
 
 void frRegionQuery::addDRObj(frVia* via)
 {
-  Rect frb;
-  via->getBBox(frb);
+  Rect frb = via->getBBox();
   impl_->drObjs_.at(via->getViaDef()->getCutLayerNum())
       .insert(make_pair(frb, via));
 }
@@ -296,24 +409,21 @@ void frRegionQuery::addDRObj(frVia* via)
 void frRegionQuery::Impl::addDRObj(frVia* via,
                                    ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
-  via->getBBox(frb);
+  Rect frb = via->getBBox();
   allShapes.at(via->getViaDef()->getCutLayerNum())
       .push_back(make_pair(frb, via));
 }
 
 void frRegionQuery::removeDRObj(frVia* via)
 {
-  Rect frb;
-  via->getBBox(frb);
+  Rect frb = via->getBBox();
   impl_->drObjs_.at(via->getViaDef()->getCutLayerNum())
       .remove(make_pair(frb, via));
 }
 
 void frRegionQuery::addGRObj(grVia* via)
 {
-  Rect frb;
-  via->getBBox(frb);
+  Rect frb = via->getBBox();
   impl_->grObjs_.at(via->getViaDef()->getCutLayerNum())
       .insert(make_pair(frb, via));
 }
@@ -321,15 +431,13 @@ void frRegionQuery::addGRObj(grVia* via)
 void frRegionQuery::Impl::add(frInstTerm* instTerm,
                               ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
-  dbTransform xform;
-  instTerm->getInst()->getUpdatedXform(xform);
+  dbTransform xform = instTerm->getInst()->getUpdatedXform();
 
   for (auto& pin : instTerm->getTerm()->getPins()) {
     for (auto& uFig : pin->getFigs()) {
       auto shape = uFig.get();
       if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
-        shape->getBBox(frb);
+        Rect frb = shape->getBBox();
         xform.apply(frb);
         allShapes.at(static_cast<frShape*>(shape)->getLayerNum())
             .push_back(make_pair(frb, instTerm));
@@ -343,12 +451,11 @@ void frRegionQuery::Impl::add(frInstTerm* instTerm,
 void frRegionQuery::Impl::add(frBTerm* term,
                               ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
   for (auto& pin : term->getPins()) {
     for (auto& uFig : pin->getFigs()) {
       auto shape = uFig.get();
       if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
-        shape->getBBox(frb);
+        Rect frb = shape->getBBox();
         allShapes.at(static_cast<frShape*>(shape)->getLayerNum())
             .push_back(make_pair(frb, term));
       } else {
@@ -361,15 +468,13 @@ void frRegionQuery::Impl::add(frBTerm* term,
 void frRegionQuery::Impl::add(frInstBlockage* instBlk,
                               ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
-  dbTransform xform;
-  instBlk->getInst()->getUpdatedXform(xform);
+  dbTransform xform = instBlk->getInst()->getUpdatedXform();
   auto blk = instBlk->getBlockage();
   auto pin = blk->getPin();
   for (auto& uFig : pin->getFigs()) {
     auto shape = uFig.get();
     if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
-      shape->getBBox(frb);
+      Rect frb = shape->getBBox();
       xform.apply(frb);
       allShapes.at(static_cast<frShape*>(shape)->getLayerNum())
           .push_back(make_pair(frb, instBlk));
@@ -410,12 +515,11 @@ void frRegionQuery::Impl::add(frInstBlockage* instBlk,
 void frRegionQuery::Impl::add(frBlockage* blk,
                               ObjectsByLayer<frBlockObject>& allShapes)
 {
-  Rect frb;
   auto pin = blk->getPin();
   for (auto& uFig : pin->getFigs()) {
     auto shape = uFig.get();
     if (shape->typeId() == frcPathSeg || shape->typeId() == frcRect) {
-      shape->getBBox(frb);
+      Rect frb = shape->getBBox();
       allShapes.at(static_cast<frShape*>(shape)->getLayerNum())
           .push_back(make_pair(frb, blk));
     } else {
@@ -427,8 +531,7 @@ void frRegionQuery::Impl::add(frBlockage* blk,
 void frRegionQuery::Impl::addGuide(frGuide* guide,
                                    ObjectsByLayer<frGuide>& allShapes)
 {
-  Rect frb;
-  guide->getBBox(frb);
+  Rect frb = guide->getBBox();
   for (int i = guide->getBeginLayerNum(); i <= guide->getEndLayerNum(); i++) {
     allShapes.at(i).push_back(make_pair(frb, guide));
   }
@@ -437,9 +540,8 @@ void frRegionQuery::Impl::addGuide(frGuide* guide,
 void frRegionQuery::Impl::addRPin(frRPin* rpin,
                                   ObjectsByLayer<frRPin>& allRPins)
 {
-  Rect frb;
   frLayerNum layerNum = rpin->getLayerNum();
-  rpin->getBBox(frb);
+  Rect frb = rpin->getBBox();
   allRPins.at(layerNum).push_back(make_pair(frb, rpin));
 }
 
@@ -447,8 +549,7 @@ void frRegionQuery::Impl::addOrigGuide(frNet* net,
                                        const frRect& rect,
                                        ObjectsByLayer<frNet>& allShapes)
 {
-  Rect frb;
-  rect.getBBox(frb);
+  Rect frb = rect.getBBox();
   allShapes.at(rect.getLayerNum()).push_back(make_pair(frb, net));
 }
 
@@ -472,8 +573,7 @@ void frRegionQuery::queryRPin(const Rect& box,
                               const frLayerNum layerNum,
                               Objects<frRPin>& result) const
 {
-  impl_->rpins_.at(layerNum).query(bgi::intersects(box),
-                                   back_inserter(result));
+  impl_->rpins_.at(layerNum).query(bgi::intersects(box), back_inserter(result));
 }
 
 void frRegionQuery::queryGuide(const Rect& box,
@@ -545,8 +645,7 @@ void frRegionQuery::queryDRObj(const Rect& box,
                                vector<frBlockObject*>& result) const
 {
   Objects<frBlockObject> temp;
-  impl_->drObjs_.at(layerNum).query(bgi::intersects(box),
-                                    back_inserter(temp));
+  impl_->drObjs_.at(layerNum).query(bgi::intersects(box), back_inserter(temp));
   transform(temp.begin(), temp.end(), back_inserter(result), [](auto& kv) {
     return kv.second;
   });
@@ -581,8 +680,7 @@ void frRegionQuery::queryMarker(const Rect& box,
                                 vector<frMarker*>& result) const
 {
   Objects<frMarker> temp;
-  impl_->markers_.at(layerNum).query(bgi::intersects(box),
-                                     back_inserter(temp));
+  impl_->markers_.at(layerNum).query(bgi::intersects(box), back_inserter(temp));
   transform(temp.begin(), temp.end(), back_inserter(result), [](auto& kv) {
     return kv.second;
   });
@@ -948,18 +1046,3 @@ void frRegionQuery::clearGuides()
     m.clear();
   }
 }
-
-template <class Archive>
-void frRegionQuery::serialize(Archive& ar, const unsigned int version)
-{
-  (ar) & impl_;
-}
-
-// Explicit instantiations
-template void frRegionQuery::serialize<InputArchive>(
-    InputArchive& ar,
-    const unsigned int file_version);
-
-template void frRegionQuery::serialize<OutputArchive>(
-    OutputArchive& ar,
-    const unsigned int file_version);

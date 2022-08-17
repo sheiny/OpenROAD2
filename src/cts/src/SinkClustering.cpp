@@ -51,13 +51,13 @@ using std::vector;
 using utl::CTS;
 
 SinkClustering::SinkClustering(CtsOptions* options, TechChar* techChar)
-    : _options(options),
-      _logger(options->getLogger()),
-      _techChar(techChar),
-      _maxInternalDiameter(10),
-      _capPerUnit(0.0),
-      _useMaxCapLimit(options->getSinkClusteringUseMaxCap()),
-      _scaleFactor(1)
+    : options_(options),
+      logger_(options->getLogger()),
+      techChar_(techChar),
+      maxInternalDiameter_(10),
+      capPerUnit_(0.0),
+      useMaxCapLimit_(options->getSinkClusteringUseMaxCap()),
+      scaleFactor_(1)
 {
 }
 
@@ -67,7 +67,7 @@ void SinkClustering::normalizePoints(float maxDiameter)
   double xMin = std::numeric_limits<double>::infinity();
   double yMax = -std::numeric_limits<double>::infinity();
   double yMin = std::numeric_limits<double>::infinity();
-  for (const Point<double>& p : _points) {
+  for (const Point<double>& p : points_) {
     xMax = std::max(p.getX(), xMax);
     yMax = std::max(p.getY(), yMax);
     xMin = std::min(p.getX(), xMin);
@@ -76,30 +76,42 @@ void SinkClustering::normalizePoints(float maxDiameter)
 
   double xSpan = xMax - xMin;
   double ySpan = yMax - yMin;
-  for (Point<double>& p : _points) {
+  for (Point<double>& p : points_) {
     double x = p.getX();
     double xNorm = (x - xMin) / xSpan;
     double y = p.getY();
     double yNorm = (y - yMin) / ySpan;
     p = Point<double>(xNorm, yNorm);
   }
-  _maxInternalDiameter = maxDiameter / std::min(xSpan, ySpan);
-  _capPerUnit
-      = _techChar->getCapPerDBU() * _scaleFactor * std::min(xSpan, ySpan);
+  maxInternalDiameter_ = maxDiameter / std::min(xSpan, ySpan);
+  capPerUnit_
+      = techChar_->getCapPerDBU() * scaleFactor_ * std::min(xSpan, ySpan);
 }
 
 void SinkClustering::computeAllThetas()
 {
-  for (unsigned idx = 0; idx < _points.size(); ++idx) {
-    const Point<double>& p = _points[idx];
-    double theta = computeTheta(p.getX(), p.getY());
-    _thetaIndexVector.emplace_back(theta, idx);
+  for (unsigned idx = 0; idx < points_.size(); ++idx) {
+    const Point<double>& p = points_[idx];
+    const double theta = computeTheta(p.getX(), p.getY());
+    thetaIndexVector_.emplace_back(theta, idx);
   }
 }
 
 void SinkClustering::sortPoints()
 {
-  std::sort(_thetaIndexVector.begin(), _thetaIndexVector.end());
+  std::sort(thetaIndexVector_.begin(), thetaIndexVector_.end());
+}
+
+/* static */
+bool SinkClustering::isOne(double pos)
+{
+  return (1 - pos) < std::numeric_limits<double>::epsilon();
+}
+
+/* static */
+bool SinkClustering::isZero(double pos)
+{
+  return pos < std::numeric_limits<double>::epsilon();
 }
 
 double SinkClustering::computeTheta(double x, double y) const
@@ -134,7 +146,7 @@ unsigned SinkClustering::numVertex(unsigned x, unsigned y) const
     return 3;
   }
 
-  _logger->error(CTS, 58, "Invalid parameters in {}.", __func__);
+  logger_->error(CTS, 58, "Invalid parameters in {}.", __func__);
 
   // avoid warn message
   return 4;
@@ -142,14 +154,20 @@ unsigned SinkClustering::numVertex(unsigned x, unsigned y) const
 
 void SinkClustering::run(unsigned groupSize, float maxDiameter, int scaleFactor)
 {
-  _scaleFactor = scaleFactor;
+  scaleFactor_ = scaleFactor;
 
+  auto original_points = points_;
   normalizePoints(maxDiameter);
   computeAllThetas();
   sortPoints();
   findBestMatching(groupSize);
-  if (_logger->debugCheck(CTS, "Stree", 1))
+  if (logger_->debugCheck(CTS, "Stree", 1))
     writePlotFile(groupSize);
+
+  if (options_->getGuiDebug()
+      || logger_->debugCheck(CTS, "Stree", 1) ) {
+    clusteringVisualizer(original_points, groupSize);
+  }
 }
 
 void SinkClustering::findBestMatching(unsigned groupSize)
@@ -167,51 +185,45 @@ void SinkClustering::findBestMatching(unsigned groupSize)
   // Has the sink indexes for each cluster of each solution.
   vector<vector<vector<unsigned>>> solutions;
 
-  if (_useMaxCapLimit) {
-    debugPrint(_logger,
+  if (useMaxCapLimit_) {
+    debugPrint(logger_,
                CTS,
                "Stree",
                1,
                "Clustering with max cap limit of {:.3e}",
-               _options->getSinkBufferMaxCap());
+               options_->getSinkBufferInputCap() * max_cap__factor_);
   }
   // Iterates over the theta vector.
-  for (unsigned i = 0; i < _thetaIndexVector.size(); ++i) {
+  for (unsigned i = 0; i < thetaIndexVector_.size(); ++i) {
     // The - groupSize is because each solution will start on a different index.
     // There is groupSize solutions.
     for (unsigned j = 0; j < groupSize; ++j) {
-      if (!((i + j) >= _thetaIndexVector.size())) {
+      if ((i + j) < thetaIndexVector_.size()) {
         // Add vectors in case they are no allocated yet.
         if (solutions.size() < (j + 1)) {
-          vector<vector<unsigned>> clusterIndexes;
-          solutions.push_back(clusterIndexes);
-          vector<vector<Point<double>>> clusterPoints;
-          solutionPoints.push_back(clusterPoints);
-          vector<vector<unsigned>> clusterPointsIdx;
-          solutionPointsIdx.push_back(clusterPointsIdx);
+          solutions.push_back({});
+          solutionPoints.push_back({});
+          solutionPointsIdx.push_back({});
         }
         if (solutions[j].size() < (clusters[j] + 1)) {
-          vector<unsigned> indexesVector;
-          solutions[j].push_back(indexesVector);
-          vector<Point<double>> pointsVector;
-          solutionPoints[j].push_back(pointsVector);
-          vector<unsigned> idxVector;
-          solutionPointsIdx[j].push_back(idxVector);
+          solutions[j].push_back({});
+          solutionPoints[j].push_back({});
+          solutionPointsIdx[j].push_back({});
         }
         // Get the current point
-        unsigned idx = _thetaIndexVector[i + j].second;
-        Point<double>& p = _points[idx];
+        const unsigned idx = thetaIndexVector_[i + j].second;
+        const Point<double>& p = points_[idx];
         double distanceCost = 0;
-        double capCost = _pointsCap[idx];
+        double capCost = pointsCap_[idx];
         unsigned pointIdx = 0;
         // Check the distance from the current point to others in the cluster,
         // if there are any.
         for (Point<double> comparisonPoint : solutionPoints[j][clusters[j]]) {
-          double cost = p.computeDist(comparisonPoint);
-          if (_useMaxCapLimit) {
+          const double cost = p.computeDist(comparisonPoint);
+          if (useMaxCapLimit_) {
             capCost
-                += cost * _capPerUnit
-                   + _pointsCap[solutionPointsIdx[j][clusters[j]][pointIdx]];
+                += cost * capPerUnit_
+                   + pointsCap_[solutionPointsIdx[j][clusters[j]][pointIdx]];
           }
           pointIdx++;
           if (cost > distanceCost) {
@@ -219,13 +231,13 @@ void SinkClustering::findBestMatching(unsigned groupSize)
           }
         }
         // If the cluster size is higher than groupSize,
-        // or the distance is higher than _maxInternalDiameter
+        // or the distance is higher than maxInternalDiameter_
         //-> start another cluster and save the cost of the current one.
         if (isLimitExceeded(solutionPoints[j][clusters[j]].size(),
                             distanceCost,
                             capCost,
                             groupSize)) {
-          debugPrint(_logger,
+          debugPrint(logger_,
                      CTS,
                      "Stree",
                      4,
@@ -236,7 +248,7 @@ void SinkClustering::findBestMatching(unsigned groupSize)
           // The cost is computed as the highest cost found on the current
           // cluster
           if (previousCosts[j] == 0) {
-            previousCosts[j] = _maxInternalDiameter;
+            previousCosts[j] = maxInternalDiameter_;
           }
           costs[j] += previousCosts[j];
           // A new cluster is defined
@@ -254,12 +266,9 @@ void SinkClustering::findBestMatching(unsigned groupSize)
         // Add vectors in case they are no allocated yet. (Depends if a new
         // cluster was defined above)
         if (solutions[j].size() < (clusters[j] + 1)) {
-          vector<unsigned> indexesVector;
-          solutions[j].push_back(indexesVector);
-          vector<Point<double>> pointsVector;
-          solutionPoints[j].push_back(pointsVector);
-          vector<unsigned> idxVector;
-          solutionPointsIdx[j].push_back(idxVector);
+          solutions[j].push_back({});
+          solutionPoints[j].push_back({});
+          solutionPointsIdx[j].push_back({});
         }
         // Save the current Point in it's respective cluster. (Depends if a new
         // cluster was defined above)
@@ -276,24 +285,21 @@ void SinkClustering::findBestMatching(unsigned groupSize)
     // one late).
     for (unsigned j = (i + 1); j < groupSize; ++j) {
       if (solutions[j].size() < (clusters[j] + 1)) {
-        vector<unsigned> indexesVector;
-        solutions[j].push_back(indexesVector);
-        vector<Point<double>> pointsVector;
-        solutionPoints[j].push_back(pointsVector);
-        vector<unsigned> idxVector;
-        solutionPointsIdx[j].push_back(idxVector);
+        solutions[j].push_back({});
+        solutionPoints[j].push_back({});
+        solutionPointsIdx[j].push_back({});
       }
       // Thus here we will assign the Points missing from those solutions.
-      unsigned idx = _thetaIndexVector[i].second;
-      Point<double>& p = _points[idx];
+      const unsigned idx = thetaIndexVector_[i].second;
+      const Point<double>& p = points_[idx];
       unsigned pointIdx = 0;
       double distanceCost = 0;
-      double capCost = _pointsCap[idx];
+      double capCost = pointsCap_[idx];
       for (Point<double> comparisonPoint : solutionPoints[j][clusters[j]]) {
-        double cost = p.computeDist(comparisonPoint);
-        if (_useMaxCapLimit) {
-          capCost += cost * _capPerUnit
-                     + _pointsCap[solutionPointsIdx[j][clusters[j]][pointIdx]];
+        const double cost = p.computeDist(comparisonPoint);
+        if (useMaxCapLimit_) {
+          capCost += cost * capPerUnit_
+                     + pointsCap_[solutionPointsIdx[j][clusters[j]][pointIdx]];
         }
         pointIdx++;
         if (cost > distanceCost) {
@@ -305,7 +311,7 @@ void SinkClustering::findBestMatching(unsigned groupSize)
                           distanceCost,
                           capCost,
                           groupSize)) {
-        debugPrint(_logger,
+        debugPrint(logger_,
                    CTS,
                    "Stree",
                    4,
@@ -314,7 +320,7 @@ void SinkClustering::findBestMatching(unsigned groupSize)
                    distanceCost,
                    capCost);
         if (previousCosts[j] == 0) {
-          previousCosts[j] = _maxInternalDiameter;
+          previousCosts[j] = maxInternalDiameter_;
         }
         costs[j] += previousCosts[j];
         clusters[j] = clusters[j] + 1;
@@ -325,12 +331,9 @@ void SinkClustering::findBestMatching(unsigned groupSize)
         }
       }
       if (solutions[j].size() < (clusters[j] + 1)) {
-        vector<unsigned> indexesVector;
-        solutions[j].push_back(indexesVector);
-        vector<Point<double>> pointsVector;
-        solutionPoints[j].push_back(pointsVector);
-        vector<unsigned> idxVector;
-        solutionPointsIdx[j].push_back(idxVector);
+        solutions[j].push_back({});
+        solutionPoints[j].push_back({});
+        solutionPointsIdx[j].push_back({});
       }
       solutionPoints[j][clusters[j]].push_back(p);
       solutionPointsIdx[j][clusters[j]].push_back(idx);
@@ -349,9 +352,9 @@ void SinkClustering::findBestMatching(unsigned groupSize)
     }
   }
   debugPrint(
-      _logger, CTS, "Stree", 2, "Best solution cost = {:.3}", bestSolutionCost);
+      logger_, CTS, "Stree", 2, "Best solution cost = {:.3}", bestSolutionCost);
   // Save the solution for the Tree Builder.
-  _bestSolution = solutions[bestSolution];
+  bestSolution_ = solutions[bestSolution];
 }
 
 bool SinkClustering::isLimitExceeded(unsigned size,
@@ -359,11 +362,20 @@ bool SinkClustering::isLimitExceeded(unsigned size,
                                      double capCost,
                                      unsigned sizeLimit)
 {
-  if (_useMaxCapLimit) {
-    return (capCost > _options->getSinkBufferMaxCap());
+  if (useMaxCapLimit_) {
+    return (capCost > options_->getSinkBufferInputCap() * max_cap__factor_);
   } else {
-    return (size >= sizeLimit || cost > _maxInternalDiameter);
+    return (size >= sizeLimit || cost > maxInternalDiameter_);
   }
+}
+
+void SinkClustering::clusteringVisualizer(
+    const std::vector<Point<double>>& points,
+    unsigned groupSize)
+{
+  graphics_ = std::make_unique<Graphics>(logger_, this, groupSize, points);
+  if (Graphics::guiActive())
+    graphics_->clockPlot(true);
 }
 
 void SinkClustering::writePlotFile(unsigned groupSize)
@@ -389,13 +401,13 @@ void SinkClustering::writePlotFile(unsigned groupSize)
 
   unsigned clusterCounter = 0;
   double totalWL = 0;
-  for (const vector<unsigned>& clusters : _bestSolution) {
+  for (const vector<unsigned>& clusters : bestSolution_) {
     const unsigned color = clusterCounter % colors.size();
     const unsigned marker = (clusterCounter / colors.size()) % markers.size();
     vector<Point<double>> clusterNodes;
     for (unsigned idx : clusters) {
-      const Point<double>& point = _points[idx];
-      clusterNodes.emplace_back(_points[idx]);
+      const Point<double>& point = points_[idx];
+      clusterNodes.emplace_back(points_[idx]);
       file << "plt.scatter(" << point.getX() << ", " << point.getY() << ", c=\""
            << colors[color] << "\", marker='" << markers[marker] << "')\n";
     }
@@ -403,7 +415,7 @@ void SinkClustering::writePlotFile(unsigned groupSize)
     totalWL += wl;
     clusterCounter++;
   }
-  _logger->report(
+  logger_->report(
       "Total cluster WL = {:.3} for {} clusters.", totalWL, clusterCounter);
   file << "plt.show()\n";
   file.close();
@@ -421,16 +433,16 @@ double SinkClustering::getWireLength(vector<Point<double>> points)
   }
   driverX /= points.size();
   driverY /= points.size();
-  vecX.emplace_back(driverX * _options->getDbUnits());
-  vecY.emplace_back(driverY * _options->getDbUnits());
+  vecX.emplace_back(driverX * options_->getDbUnits());
+  vecY.emplace_back(driverY * options_->getDbUnits());
 
   for (const auto& point : points) {
-    vecX.emplace_back(point.getX() * _options->getDbUnits());
-    vecY.emplace_back(point.getY() * _options->getDbUnits());
+    vecX.emplace_back(point.getX() * options_->getDbUnits());
+    vecY.emplace_back(point.getY() * options_->getDbUnits());
   }
-  stt::SteinerTreeBuilder* sttBuilder = _options->getSttBuilder();
+  stt::SteinerTreeBuilder* sttBuilder = options_->getSttBuilder();
   stt::Tree pdTree = sttBuilder->makeSteinerTree(vecX, vecY, 0);
   int wl = pdTree.length;
-  return wl / double(_options->getDbUnits());
+  return wl / double(options_->getDbUnits());
 }
 }  // namespace cts

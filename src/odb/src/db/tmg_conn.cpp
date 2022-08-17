@@ -59,7 +59,7 @@ tmg_rcpt::tmg_rcpt()
 {
 }
 
-void tmg_getDriveTerm(dbNet* net, dbITerm** iterm, dbBTerm** bterm)
+static void tmg_getDriveTerm(dbNet* net, dbITerm** iterm, dbBTerm** bterm)
 {
   *iterm = NULL;
   *bterm = NULL;
@@ -351,7 +351,6 @@ void tmg_conn::loadSWire(dbNet* net)
   dbSet<dbSBox>::iterator itb;
   dbSBox* sbox;
   dbShape shape;
-  Rect rect;
   int x1, y1, x2, y2;
   dbTechLayer* layer1 = NULL;
   dbTechLayer* layer2 = NULL;
@@ -363,7 +362,7 @@ void tmg_conn::loadSWire(dbNet* net)
     sboxes = sw->getWires();
     for (itb = sboxes.begin(); itb != sboxes.end(); ++itb) {
       sbox = *itb;
-      sbox->getBox(rect);
+      Rect rect = sbox->getBox();
       if (sbox->isVia()) {
         x1 = (rect.xMin() + rect.xMax()) / 2;
         x2 = x1;
@@ -677,7 +676,6 @@ void tmg_conn::detachTilePins()
   tmg_rcterm* tx;
   dbBTerm* bterm;
   dbShape pin;
-  Rect rectb, recti;
   dbTechVia* tv;
   _slicedTilePinCnt = 0;
   bool sliceDone;
@@ -688,7 +686,7 @@ void tmg_conn::detachTilePins()
     bterm = tx->_bterm;
     if (!bterm->getFirstPin(pin) || pin.isVia())
       continue;
-    pin.getBox(rectb);
+    Rect rectb = pin.getBox();
     rtlb = pin.getTechLayer()->getRoutingLevel();
     sliceDone = false;
     for (k = 0; !sliceDone && k < _termN; k++) {
@@ -711,7 +709,7 @@ void tmg_conn::detachTilePins()
         for (box_itr = boxes.begin(); !sliceDone && box_itr != boxes.end();
              box_itr++) {
           dbBox* box = *box_itr;
-          box->getBox(recti);
+          Rect recti = box->getBox();
           transform.apply(recti);
           if (box->isVia()) {
             tv = box->getTechVia();
@@ -762,15 +760,13 @@ void tmg_conn::detachTilePins()
 void tmg_conn::getBTermSearchBox(dbBTerm* bterm, dbShape& pin, Rect& rect)
 {
   int ii;
-  // if (bterm->isSetTilePin()) {
   for (ii = 0; ii < _slicedTilePinCnt; ii++) {
     if (_slicedTileBTerm[ii] == bterm) {
       rect.reset(_stbtx1[ii], _stbty1[ii], _stbtx2[ii], _stbty2[ii]);
       return;
     }
   }
-  //}
-  pin.getBox(rect);
+  rect = pin.getBox();
   return;
 }
 
@@ -944,7 +940,6 @@ void tmg_conn::findConnections(bool verbose)
   detachTilePins();
 
   // connect pins
-  Rect rect;
   for (int j = 0; j < _termN; j++) {
     _csV = &_csVV[j];
     _csN = 0;
@@ -971,7 +966,7 @@ void tmg_conn::findConnections(bool verbose)
               rt_t = tv->getTopLayer()->getRoutingLevel();
               if (rt_t <= 1)
                 continue;  // skipping V01
-              box->getBox(rect);
+              Rect rect = box->getBox();
               transform.apply(rect);
               // notice(0, "iterm %s (%d %d) (%d
               // %d)\n",box->getTechVia()->getName().c_str(),
@@ -1019,7 +1014,7 @@ void tmg_conn::findConnections(bool verbose)
                 }
             } else if (ipass == 0 && !box->isVia()) {
               rt = box->getTechLayer()->getRoutingLevel();
-              box->getBox(rect);
+              Rect rect = box->getBox();
               transform.apply(rect);
               // notice(0, "iterm %s (%d %d) (%d
               // %d)\n",box->getTechLayer()->getName().c_str(),
@@ -1585,7 +1580,7 @@ void tmg_conn::printConnections()
   // called after findConnections
   int j;
   notice(0,
-         "\nprintConnections net %d  %s\n",
+         "printConnections net %d  %s\n",
          _net->getId(),
          _net->getName().c_str());
 
@@ -1630,16 +1625,14 @@ void tmg_conn::printConnections()
 static void print_rcterm(tmg_rcterm* x)
 {
   dbITerm* iterm = x->_iterm;
-  // if (iterm) notice(0, " iterm %s/%s",iterm->getInst()->getName().c_str(),
-  //     iterm->getMTerm()->getName().c_str());
   if (iterm)
     notice(0,
-           " iterm I%d/%s",
-           iterm->getInst()->getId(),
+           " iterm %s/%s\n",
+           iterm->getInst()->getName().c_str(),
            iterm->getMTerm()->getName().c_str());
   dbBTerm* bterm = x->_bterm;
   if (bterm)
-    notice(0, " bterm %s", x->_bterm->getName().c_str());
+    notice(0, " bterm %s\n", x->_bterm->getName().c_str());
 }
 
 int tmg_conn::getStartNode()
@@ -1667,7 +1660,6 @@ int tmg_conn::getStartNode()
 void tmg_conn::analyzeNet(dbNet* net,
                           bool force,
                           bool verbose,
-                          bool quiet,
                           bool no_convert,
                           int cutLength,
                           int maxLength,
@@ -1701,18 +1693,18 @@ void tmg_conn::analyzeNet(dbNet* net,
         net->destroySWires();
     }
     relocateShorts();
-    treeReorder(verbose, quiet, noConvert);
+    treeReorder(verbose, noConvert);
   }
   net->setDisconnected(!_connected);
   net->setWireOrdered(true);  // 090606
   if (!_connected) {
-    if (!quiet)
+    if (verbose) {
       notice(0,
-             "\ndisconnected net %d  %s\n",
+             "disconnected net %d  %s\n",
              _net->getId(),
              _net->getName().c_str());
-    if (verbose)
       printDisconnect();  // this is not complete
+    }
   }
 }
 
@@ -1727,18 +1719,17 @@ void tmg_conn::analyzeLoadedNet(bool verbose, bool no_convert)
   findConnections(verbose);
   if (!no_convert)
     adjustShapes();
-  treeReorder(verbose, false, no_convert);
+  treeReorder(verbose, no_convert);
   _net->setDisconnected(!_connected);
   _net->setWireOrdered(
       _connected);  // this will change,
                     // we should wire-order the disconnected nets
-  if (!_connected) {
+  if (!_connected && verbose) {
     notice(0,
-           "\ndisconnected net %d  %s\n",
+           "disconnected net %d  %s\n",
            _net->getId(),
            _net->getName().c_str());
-    if (verbose)
-      printDisconnect();  // this is not complete
+    printDisconnect();  // this is not complete
   }
 }
 
@@ -1831,7 +1822,7 @@ bool tmg_conn::checkConnected()
   return con;  // all terms connected, may be floating pieces of wire
 }
 
-void tmg_conn::treeReorder(bool verbose, bool quiet, bool no_convert)
+void tmg_conn::treeReorder(bool verbose, bool no_convert)
 {
   _connected = true;
   _need_short_wire_id = 0;
@@ -1855,12 +1846,11 @@ void tmg_conn::treeReorder(bool verbose, bool quiet, bool no_convert)
     if (verbose) {
       notice(0, "j=%d pt=%ld ", j, x->_pt ? (x->_pt - &_ptV[0]) : 0);
       print_rcterm(x);
-      notice(0, "\n");
     }
     if (x->_pt == NULL) {
       _connected = false;
       if (x->_iterm) {
-        if (!quiet)
+        if (verbose)
           notice(0,
                  "unconnected iterm I%d(%s)/%s in net %d\n",
                  x->_iterm->getInst()->getId(),
@@ -1868,7 +1858,7 @@ void tmg_conn::treeReorder(bool verbose, bool quiet, bool no_convert)
                  x->_iterm->getMTerm()->getConstName(),
                  _net->getId());
       } else {
-        if (!quiet)
+        if (verbose)
           notice(0,
                  "unconnected bterm %s in net %d\n",
                  x->_bterm->getConstName(),
@@ -1903,10 +1893,9 @@ void tmg_conn::treeReorder(bool verbose, bool quiet, bool no_convert)
     return;
   }
   if (verbose) {
-    notice(0, "starting at %d ", jstart);
+    notice(0, "starting at %d\n", jstart);
     if (x)
       print_rcterm(x);
-    notice(0, "\n");
   }
   int last_term_index = 0;
   while (1) {
@@ -1926,16 +1915,12 @@ void tmg_conn::treeReorder(bool verbose, bool quiet, bool no_convert)
         }
       }
       if (verbose) {
-        notice(0, "%d-%d", jfr, jto);
-        if (is_short)
-          notice(0, " short");
-        if (is_loop)
-          notice(0, " loop");
-        if (x && x->_iterm)
-          notice(0, " iterm I%d", x->_iterm->getInst()->getId());
-        if (x && x->_bterm)
-          notice(0, " bterm");
-        notice(0, "\n");
+        notice(0, "%d-%d %s%s%s%s\n",
+               jfr, jto,
+               is_short ? " short" : "",
+               is_loop ? " loop" : "",
+               x && x->_iterm ? " iterm" : "",
+               x && x->_bterm ? " bterm" : "");
       }
       if (!no_convert) {
         addToWire(jfr, jto, k, is_short, is_loop);
@@ -1968,7 +1953,6 @@ void tmg_conn::treeReorder(bool verbose, bool quiet, bool no_convert)
       if (verbose) {
         notice(0, "net %d feedthru at ", _net->getId());
         print_rcterm(x);
-        notice(0, "\n");
         notice(0, "last_id = %d\n", _last_id);
       }
     }
@@ -2154,7 +2138,7 @@ int tmg_conn::addPointIfExt(int ipt, tmg_rc* rc)
 void tmg_conn::addToWire(int fr, int to, int k, bool is_short, bool is_loop)
 {
   int verbose = 0;
-  tmg_rc* rc = &_rcV[k];
+  tmg_rc* rc = (k >= 0) ? &_rcV[k] : nullptr;
   tmg_rcterm* x;
   int xfr, yfr, xto, yto;
   xfr = _ptV[fr]._x;

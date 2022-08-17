@@ -11,13 +11,10 @@ read_def $def_filename
 create_clock -period 10 clk1
 set_max_fanout 10 [current_design]
 
+source Nangate45/Nangate45.rc
 set_wire_rc -layer metal1
 estimate_parasitics -placement
 
 report_check_types -max_fanout
 repair_design
 report_check_types -max_fanout
-
-# set repaired_filename [make_result_file "repair_fanout1.def"]
-# write_def $repaired_filename
-# diff_file repair_fanout1.defok $repaired_filename

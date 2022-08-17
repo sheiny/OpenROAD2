@@ -170,8 +170,8 @@ void dump_part_id_to_file(const char *name) {
         getPartitionMgr()->dumpPartIdToFile(name);
 }
 
-unsigned run_3party_clustering() {
-        getPartitionMgr()->run3PClustering();
+unsigned run_clustering() {
+        getPartitionMgr()->runClustering();
         unsigned id = getPartitionMgr()->getCurrentClusId();
         return id;
 }
@@ -192,8 +192,8 @@ void report_netlist_partitions(unsigned id) {
         getPartitionMgr()->reportNetlistPartitions(id);
 }
 
-void read_file(const char* filename) {
-        getPartitionMgr()->readPartitioningFile(filename);
+unsigned read_file(const char* filename, const char* instance_map_file) {
+  return getPartitionMgr()->readPartitioningFile(filename, instance_map_file);
 }
 
 void set_final_partitions(unsigned value) {
@@ -202,14 +202,6 @@ void set_final_partitions(unsigned value) {
 
 void set_force_graph(bool value) {
         getPartitionMgr()->getOptions().setForceGraph(value);
-}
-
-void set_clustering_scheme(const char* name) {
-        getPartitionMgr()->getOptions().setClusteringScheme(name);
-}
-
-void run_clustering() {
-        getPartitionMgr()->runClustering();
 }
 
 void report_graph() {
@@ -228,7 +220,8 @@ partition_design_cmd(unsigned int max_num_macro, unsigned int min_num_macro,
                      unsigned int ignore_net_threshold,
                      unsigned int num_hops, unsigned int timing_weight,
                      bool std_cell_timing_flag,
-                     const char* report_directory, const char* file_name)
+                     const char* report_directory, const char* file_name,
+                     float keepin_lx, float keepin_ly, float keepin_ux, float keepin_uy)
 {
   getPartitionMgr()->partitionDesign(max_num_macro, min_num_macro,
                                      max_num_inst, min_num_inst,
@@ -237,7 +230,8 @@ partition_design_cmd(unsigned int max_num_macro, unsigned int min_num_macro,
                                      num_hops, timing_weight,
                                      std_cell_timing_flag,
                                      report_directory,
-                                     file_name);
+                                     file_name,
+                                     keepin_lx, keepin_ly, keepin_ux, keepin_uy);
 }
 
 %}

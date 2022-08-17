@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -69,6 +70,8 @@
 #include "dbGroupItr.h"
 #include "dbGroupModInstItr.h"
 #include "dbGroupPowerNetItr.h"
+#include "dbGuide.h"
+#include "dbGuideItr.h"
 #include "dbHashTable.hpp"
 #include "dbHier.h"
 #include "dbITerm.h"
@@ -89,8 +92,8 @@
 #include "dbRSeg.h"
 #include "dbRSegItr.h"
 #include "dbRegion.h"
+#include "dbRegionGroupItr.h"
 #include "dbRegionInstItr.h"
-#include "dbRegionItr.h"
 #include "dbRow.h"
 #include "dbSBox.h"
 #include "dbSBoxItr.h"
@@ -167,95 +170,75 @@ _dbBlock::_dbBlock(_dbDatabase* db)
 
   _bterm_tbl = new dbTable<_dbBTerm>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbBTermObj);
-  ZALLOCATED(_bterm_tbl);
 
   _iterm_tbl = new dbTable<_dbITerm>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbITermObj, 1024, 10);
-  ZALLOCATED(_iterm_tbl);
 
   _net_tbl = new dbTable<_dbNet>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbNetObj);
-  ZALLOCATED(_net_tbl);
 
   _inst_hdr_tbl = new dbTable<_dbInstHdr>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbInstHdrObj);
-  ZALLOCATED(_inst_hdr_tbl);
 
   _inst_tbl = new dbTable<_dbInst>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbInstObj);
-  ZALLOCATED(_inst_tbl);
 
   _module_tbl = new dbTable<_dbModule>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbModuleObj);
-  ZALLOCATED(_module_tbl);
 
   _modinst_tbl = new dbTable<_dbModInst>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbModInstObj);
-  ZALLOCATED(_modinst_tbl);
 
   _group_tbl = new dbTable<_dbGroup>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbGroupObj);
-  ZALLOCATED(_group_tbl);
 
   ap_tbl_ = new dbTable<_dbAccessPoint>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbAccessPointObj);
-  ZALLOCATED(ap_tbl_);
+
+  _guide_tbl = new dbTable<_dbGuide>(
+      db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbGuideObj);
 
   _box_tbl = new dbTable<_dbBox>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbBoxObj, 1024, 10);
-  ZALLOCATED(_box_tbl);
 
   _via_tbl = new dbTable<_dbVia>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbViaObj, 1024, 10);
-  ZALLOCATED(_via_tbl);
 
   _gcell_grid_tbl = new dbTable<_dbGCellGrid>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbGCellGridObj);
-  ZALLOCATED(_gcell_grid_tbl);
 
   _track_grid_tbl = new dbTable<_dbTrackGrid>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbTrackGridObj);
-  ZALLOCATED(_track_grid_tbl);
 
   _obstruction_tbl = new dbTable<_dbObstruction>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbObstructionObj);
-  ZALLOCATED(_obstruction_tbl);
 
   _blockage_tbl = new dbTable<_dbBlockage>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbBlockageObj);
-  ZALLOCATED(_blockage_tbl);
 
   _wire_tbl = new dbTable<_dbWire>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbWireObj);
-  ZALLOCATED(_wire_tbl);
 
   _swire_tbl = new dbTable<_dbSWire>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbSWireObj);
-  ZALLOCATED(_swire_tbl);
 
   _sbox_tbl = new dbTable<_dbSBox>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbSBoxObj);
-  ZALLOCATED(_sbox_tbl);
 
   _row_tbl = new dbTable<_dbRow>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbRowObj);
-  ZALLOCATED(_row_tbl);
 
   _fill_tbl = new dbTable<_dbFill>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbFillObj);
-  ZALLOCATED(_fill_tbl);
 
   _region_tbl = new dbTable<_dbRegion>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbRegionObj, 32, 5);
-  ZALLOCATED(_region_tbl);
 
   _hier_tbl = new dbTable<_dbHier>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbHierObj, 16, 4);
-  ZALLOCATED(_hier_tbl);
 
   _bpin_tbl = new dbTable<_dbBPin>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbBPinObj);
-  ZALLOCATED(_bpin_tbl);
 
   _non_default_rule_tbl = new dbTable<_dbTechNonDefaultRule>(
       db,
@@ -264,7 +247,6 @@ _dbBlock::_dbBlock(_dbDatabase* db)
       dbTechNonDefaultRuleObj,
       16,
       4);
-  ZALLOCATED(_non_default_rule_tbl);
 
   _layer_rule_tbl
       = new dbTable<_dbTechLayerRule>(db,
@@ -273,26 +255,20 @@ _dbBlock::_dbBlock(_dbDatabase* db)
                                       dbTechLayerRuleObj,
                                       16,
                                       4);
-  ZALLOCATED(_layer_rule_tbl);
 
   _prop_tbl = new dbTable<_dbProperty>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbPropertyObj);
-  ZALLOCATED(_prop_tbl);
 
   _name_cache
       = new _dbNameCache(db, this, (GetObjTbl_t) &_dbBlock::getObjectTable);
-  ZALLOCATED(_name_cache);
 
   _r_val_tbl = new dbPagedVector<float, 4096, 12>();
-  ZALLOCATED(_r_val_tbl);
   _r_val_tbl->push_back(0.0);
 
   _c_val_tbl = new dbPagedVector<float, 4096, 12>();
-  ZALLOCATED(_c_val_tbl);
   _c_val_tbl->push_back(0.0);
 
   _cc_val_tbl = new dbPagedVector<float, 4096, 12>();
-  ZALLOCATED(_cc_val_tbl);
   _cc_val_tbl->push_back(0.0);
 
   _cap_node_tbl
@@ -302,7 +278,6 @@ _dbBlock::_dbBlock(_dbDatabase* db)
                                 dbCapNodeObj,
                                 4096,
                                 12);
-  ZALLOCATED(_cap_node_tbl);
 
   // We need to allocate the first cap-node (id == 1) to resolve a problem with
   // the extraction code (Hopefully this is temporary)
@@ -310,14 +285,11 @@ _dbBlock::_dbBlock(_dbDatabase* db)
 
   _r_seg_tbl = new dbTable<_dbRSeg>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbRSegObj, 4096, 12);
-  ZALLOCATED(_r_seg_tbl);
 
   _cc_seg_tbl = new dbTable<_dbCCSeg>(
       db, this, (GetObjTbl_t) &_dbBlock::getObjectTable, dbCCSegObj, 4096, 12);
-  ZALLOCATED(_cc_seg_tbl);
 
   _extControl = new dbExtControl();
-  ZALLOCATED(_extControl);
 
   _net_hash.setTable(_net_tbl);
   _inst_hash.setTable(_inst_tbl);
@@ -328,64 +300,46 @@ _dbBlock::_dbBlock(_dbDatabase* db)
   _bterm_hash.setTable(_bterm_tbl);
 
   _net_bterm_itr = new dbNetBTermItr(_bterm_tbl);
-  ZALLOCATED(_net_bterm_itr);
 
   _net_iterm_itr = new dbNetITermItr(_iterm_tbl);
-  ZALLOCATED(_net_iterm_itr);
 
   _inst_iterm_itr = new dbInstITermItr(_iterm_tbl);
-  ZALLOCATED(_inst_iterm_itr);
 
   _box_itr = new dbBoxItr(_box_tbl);
-  ZALLOCATED(_box_itr);
 
   _swire_itr = new dbSWireItr(_swire_tbl);
-  ZALLOCATED(_swire_itr);
 
   _sbox_itr = new dbSBoxItr(_sbox_tbl);
-  ZALLOCATED(_sbox_itr);
 
   _cap_node_itr = new dbCapNodeItr(_cap_node_tbl);
-  ZALLOCATED(_cap_node_itr);
 
   _r_seg_itr = new dbRSegItr(_r_seg_tbl);
-  ZALLOCATED(_r_seg_itr);
 
   _cc_seg_itr = new dbCCSegItr(_cc_seg_tbl);
-  ZALLOCATED(_cc_seg_itr);
 
   _region_inst_itr = new dbRegionInstItr(_inst_tbl);
-  ZALLOCATED(_region_inst_itr);
 
   _module_inst_itr = new dbModuleInstItr(_inst_tbl);
-  ZALLOCATED(_module_inst_itr);
 
   _module_modinst_itr = new dbModuleModInstItr(_modinst_tbl);
-  ZALLOCATED(_module_modinst_itr);
+
+  _region_group_itr = new dbRegionGroupItr(_group_tbl);
 
   _group_itr = new dbGroupItr(_group_tbl);
-  ZALLOCATED(_group_itr);
+
+  _guide_itr = new dbGuideItr(_guide_tbl);
 
   _group_inst_itr = new dbGroupInstItr(_inst_tbl);
-  ZALLOCATED(_group_inst_itr);
 
   _group_modinst_itr = new dbGroupModInstItr(_modinst_tbl);
-  ZALLOCATED(_group_modinst_itr);
 
   _group_power_net_itr = new dbGroupPowerNetItr(_net_tbl);
-  ZALLOCATED(_group_power_net_itr);
 
   _group_ground_net_itr = new dbGroupGroundNetItr(_net_tbl);
-  ZALLOCATED(_group_ground_net_itr);
 
   _bpin_itr = new dbBPinItr(_bpin_tbl);
-  ZALLOCATED(_bpin_itr);
-
-  _region_itr = new dbRegionItr(_region_tbl);
-  ZALLOCATED(_region_itr);
 
   _prop_itr = new dbPropertyItr(_prop_tbl);
-  ZALLOCATED(_prop_itr);
 
   _num_ext_dbs = 1;
   _searchDb = NULL;
@@ -438,109 +392,77 @@ _dbBlock::_dbBlock(_dbDatabase* db, const _dbBlock& block)
   }
 
   _bterm_tbl = new dbTable<_dbBTerm>(db, this, *block._bterm_tbl);
-  ZALLOCATED(_bterm_tbl);
 
   _iterm_tbl = new dbTable<_dbITerm>(db, this, *block._iterm_tbl);
-  ZALLOCATED(_iterm_tbl);
 
   _net_tbl = new dbTable<_dbNet>(db, this, *block._net_tbl);
-  ZALLOCATED(_net_tbl);
 
   _inst_hdr_tbl = new dbTable<_dbInstHdr>(db, this, *block._inst_hdr_tbl);
-  ZALLOCATED(_inst_hdr_tbl);
 
   _inst_tbl = new dbTable<_dbInst>(db, this, *block._inst_tbl);
-  ZALLOCATED(_inst_tbl);
 
   _module_tbl = new dbTable<_dbModule>(db, this, *block._module_tbl);
-  ZALLOCATED(_module_tbl);
 
   _modinst_tbl = new dbTable<_dbModInst>(db, this, *block._modinst_tbl);
-  ZALLOCATED(_modinst_tbl);
 
   _group_tbl = new dbTable<_dbGroup>(db, this, *block._group_tbl);
-  ZALLOCATED(_group_tbl);
 
   ap_tbl_ = new dbTable<_dbAccessPoint>(db, this, *block.ap_tbl_);
-  ZALLOCATED(ap_tbl_);
+
+  _guide_tbl = new dbTable<_dbGuide>(db, this, *block._guide_tbl);
 
   _box_tbl = new dbTable<_dbBox>(db, this, *block._box_tbl);
-  ZALLOCATED(_box_tbl);
 
   _via_tbl = new dbTable<_dbVia>(db, this, *block._via_tbl);
-  ZALLOCATED(_via_tbl);
 
   _gcell_grid_tbl = new dbTable<_dbGCellGrid>(db, this, *block._gcell_grid_tbl);
-  ZALLOCATED(_gcell_grid_tbl);
 
   _track_grid_tbl = new dbTable<_dbTrackGrid>(db, this, *block._track_grid_tbl);
-  ZALLOCATED(_track_grid_tbl);
 
   _obstruction_tbl
       = new dbTable<_dbObstruction>(db, this, *block._obstruction_tbl);
-  ZALLOCATED(_obstruction_tbl);
 
   _blockage_tbl = new dbTable<_dbBlockage>(db, this, *block._blockage_tbl);
-  ZALLOCATED(_blockage_tbl);
 
   _wire_tbl = new dbTable<_dbWire>(db, this, *block._wire_tbl);
-  ZALLOCATED(_wire_tbl);
 
   _swire_tbl = new dbTable<_dbSWire>(db, this, *block._swire_tbl);
-  ZALLOCATED(_swire_tbl);
 
   _sbox_tbl = new dbTable<_dbSBox>(db, this, *block._sbox_tbl);
-  ZALLOCATED(_sbox_tbl);
 
   _row_tbl = new dbTable<_dbRow>(db, this, *block._row_tbl);
-  ZALLOCATED(_row_tbl);
 
   _fill_tbl = new dbTable<_dbFill>(db, this, *block._fill_tbl);
-  ZALLOCATED(_fill_tbl);
 
   _region_tbl = new dbTable<_dbRegion>(db, this, *block._region_tbl);
-  ZALLOCATED(_region_tbl);
 
   _hier_tbl = new dbTable<_dbHier>(db, this, *block._hier_tbl);
-  ZALLOCATED(_hier_tbl);
 
   _bpin_tbl = new dbTable<_dbBPin>(db, this, *block._bpin_tbl);
-  ZALLOCATED(_bpin_tbl);
 
   _non_default_rule_tbl = new dbTable<_dbTechNonDefaultRule>(
       db, this, *block._non_default_rule_tbl);
-  ZALLOCATED(_non_default_rule_tbl);
 
   _layer_rule_tbl
       = new dbTable<_dbTechLayerRule>(db, this, *block._layer_rule_tbl);
-  ZALLOCATED(_layer_rule_tbl);
 
   _prop_tbl = new dbTable<_dbProperty>(db, this, *block._prop_tbl);
-  ZALLOCATED(_prop_tbl);
 
   _name_cache = new _dbNameCache(db, this, *block._name_cache);
-  ZALLOCATED(_name_cache);
 
   _r_val_tbl = new dbPagedVector<float, 4096, 12>(*block._r_val_tbl);
-  ZALLOCATED(_r_val_tbl);
 
   _c_val_tbl = new dbPagedVector<float, 4096, 12>(*block._c_val_tbl);
-  ZALLOCATED(_c_val_tbl);
 
   _cc_val_tbl = new dbPagedVector<float, 4096, 12>(*block._cc_val_tbl);
-  ZALLOCATED(_cc_val_tbl);
 
   _cap_node_tbl = new dbTable<_dbCapNode>(db, this, *block._cap_node_tbl);
-  ZALLOCATED(_cap_node_tbl);
 
   _r_seg_tbl = new dbTable<_dbRSeg>(db, this, *block._r_seg_tbl);
-  ZALLOCATED(_r_seg_tbl);
 
   _cc_seg_tbl = new dbTable<_dbCCSeg>(db, this, *block._cc_seg_tbl);
-  ZALLOCATED(_cc_seg_tbl);
 
   _extControl = new dbExtControl();
-  ZALLOCATED(_extControl);
 
   _net_hash.setTable(_net_tbl);
   _inst_hash.setTable(_inst_tbl);
@@ -551,64 +473,46 @@ _dbBlock::_dbBlock(_dbDatabase* db, const _dbBlock& block)
   _bterm_hash.setTable(_bterm_tbl);
 
   _net_bterm_itr = new dbNetBTermItr(_bterm_tbl);
-  ZALLOCATED(_net_bterm_itr);
 
   _net_iterm_itr = new dbNetITermItr(_iterm_tbl);
-  ZALLOCATED(_net_iterm_itr);
 
   _inst_iterm_itr = new dbInstITermItr(_iterm_tbl);
-  ZALLOCATED(_inst_iterm_itr);
 
   _box_itr = new dbBoxItr(_box_tbl);
-  ZALLOCATED(_box_itr);
 
   _swire_itr = new dbSWireItr(_swire_tbl);
-  ZALLOCATED(_swire_itr);
 
   _sbox_itr = new dbSBoxItr(_sbox_tbl);
-  ZALLOCATED(_sbox_itr);
 
   _cap_node_itr = new dbCapNodeItr(_cap_node_tbl);
-  ZALLOCATED(_cap_node_itr);
 
   _r_seg_itr = new dbRSegItr(_r_seg_tbl);
-  ZALLOCATED(_r_seg_itr);
 
   _cc_seg_itr = new dbCCSegItr(_cc_seg_tbl);
-  ZALLOCATED(_cc_seg_itr);
 
   _region_inst_itr = new dbRegionInstItr(_inst_tbl);
-  ZALLOCATED(_region_inst_itr);
 
   _module_inst_itr = new dbModuleInstItr(_inst_tbl);
-  ZALLOCATED(_module_inst_itr);
 
   _module_modinst_itr = new dbModuleModInstItr(_modinst_tbl);
-  ZALLOCATED(_module_modinst_itr);
+
+  _region_group_itr = new dbRegionGroupItr(_group_tbl);
 
   _group_itr = new dbGroupItr(_group_tbl);
-  ZALLOCATED(_group_itr);
+
+  _guide_itr = new dbGuideItr(_guide_tbl);
 
   _group_inst_itr = new dbGroupInstItr(_inst_tbl);
-  ZALLOCATED(_group_inst_itr);
 
   _group_modinst_itr = new dbGroupModInstItr(_modinst_tbl);
-  ZALLOCATED(_group_modinst_itr);
 
   _group_power_net_itr = new dbGroupPowerNetItr(_net_tbl);
-  ZALLOCATED(_group_power_net_itr);
 
   _group_ground_net_itr = new dbGroupGroundNetItr(_net_tbl);
-  ZALLOCATED(_group_ground_net_itr);
 
   _bpin_itr = new dbBPinItr(_bpin_tbl);
-  ZALLOCATED(_bpin_itr);
-
-  _region_itr = new dbRegionItr(_region_tbl);
-  ZALLOCATED(_region_itr);
 
   _prop_itr = new dbPropertyItr(_prop_tbl);
-  ZALLOCATED(_prop_itr);
 
   // ??? Initialize search-db on copy?
   _searchDb = NULL;
@@ -636,6 +540,7 @@ _dbBlock::~_dbBlock()
   delete _modinst_tbl;
   delete _group_tbl;
   delete ap_tbl_;
+  delete _guide_tbl;
   delete _box_tbl;
   delete _via_tbl;
   delete _gcell_grid_tbl;
@@ -673,13 +578,14 @@ _dbBlock::~_dbBlock()
   delete _region_inst_itr;
   delete _module_inst_itr;
   delete _module_modinst_itr;
+  delete _region_group_itr;
   delete _group_itr;
+  delete _guide_itr;
   delete _group_inst_itr;
   delete _group_modinst_itr;
   delete _group_power_net_itr;
   delete _group_ground_net_itr;
   delete _bpin_itr;
-  delete _region_itr;
   delete _prop_itr;
 
   std::list<dbBlockCallBackObj*>::iterator _cbitr;
@@ -794,6 +700,9 @@ dbObjectTable* _dbBlock::getObjectTable(dbObjectType type)
 
     case dbAccessPointObj:
       return ap_tbl_;
+
+    case dbGuideObj:
+      return _guide_tbl;
 
     case dbNetObj:
       return _net_tbl;
@@ -930,6 +839,7 @@ dbOStream& operator<<(dbOStream& stream, const _dbBlock& block)
   stream << *block._modinst_tbl;
   stream << *block._group_tbl;
   stream << *block.ap_tbl_;
+  stream << *block._guide_tbl;
   stream << *block._box_tbl;
   stream << *block._via_tbl;
   stream << *block._gcell_grid_tbl;
@@ -1015,6 +925,7 @@ dbIStream& operator>>(dbIStream& stream, _dbBlock& block)
   stream >> *block._modinst_tbl;
   stream >> *block._group_tbl;
   stream >> *block.ap_tbl_;
+  stream >> *block._guide_tbl;
   stream >> *block._box_tbl;
   stream >> *block._via_tbl;
   stream >> *block._gcell_grid_tbl;
@@ -1066,12 +977,12 @@ void _dbBlock::add_rect(const Rect& rect)
   if (_flags._valid_bbox)
     box->_shape._rect.merge(rect);
 }
-void _dbBlock::add_geom_shape(GeomShape* shape)
+void _dbBlock::add_oct(const Oct& oct)
 {
   _dbBox* box = _box_tbl->getPtr(_bbox);
 
   if (_flags._valid_bbox)
-    box->_shape._rect.merge(shape);
+    box->_shape._rect.merge(oct);
 }
 
 void _dbBlock::remove_rect(const Rect& rect)
@@ -1215,6 +1126,9 @@ bool _dbBlock::operator==(const _dbBlock& rhs) const
   if (*ap_tbl_ != *rhs.ap_tbl_)
     return false;
 
+  if (*_guide_tbl != *rhs._guide_tbl)
+    return false;
+
   if (*_box_tbl != *rhs._box_tbl)
     return false;
 
@@ -1341,6 +1255,7 @@ void _dbBlock::differences(dbDiff& diff,
   DIFF_TABLE(_modinst_tbl);
   DIFF_TABLE(_group_tbl);
   DIFF_TABLE(ap_tbl_);
+  DIFF_TABLE(_guide_tbl);
   DIFF_TABLE_NO_DEEP(_box_tbl);
   DIFF_TABLE(_via_tbl);
   DIFF_TABLE_NO_DEEP(_gcell_grid_tbl);
@@ -1424,6 +1339,7 @@ void _dbBlock::out(dbDiff& diff, char side, const char* field) const
   DIFF_OUT_TABLE(_modinst_tbl);
   DIFF_OUT_TABLE(_group_tbl);
   DIFF_OUT_TABLE(ap_tbl_);
+  DIFF_OUT_TABLE(_guide_tbl);
   DIFF_OUT_TABLE_NO_DEEP(_box_tbl);
   DIFF_OUT_TABLE(_via_tbl);
   DIFF_OUT_TABLE_NO_DEEP(_gcell_grid_tbl);
@@ -1511,8 +1427,7 @@ void dbBlock::ComputeBBox()
       dbBPin* bp = *pitr;
       if (bp->getPlacementStatus().isPlaced()) {
         for (dbBox* box : bp->getBoxes()) {
-          Rect r;
-          box->getBox(r);
+          Rect r = box->getBox();
           bbox->_shape._rect.merge(r);
         }
       }
@@ -1533,7 +1448,8 @@ void dbBlock::ComputeBBox()
 
   for (sitr = sboxes.begin(); sitr != sboxes.end(); ++sitr) {
     dbSBox* box = (dbSBox*) *sitr;
-    bbox->_shape._rect.merge(box->getGeomShape());
+    Rect rect = box->getBox();
+    bbox->_shape._rect.merge(rect);
   }
 
   dbSet<dbWire> wires(block, block->_wire_tbl);
@@ -1979,27 +1895,26 @@ void dbBlock::setDieArea(const Rect& new_area)
   }
 }
 
-void dbBlock::getDieArea(Rect& r)
+Rect dbBlock::getDieArea()
 {
   _dbBlock* block = (_dbBlock*) this;
-  r = block->_die_area;
+  return block->_die_area;
 }
 
-void dbBlock::getCoreArea(Rect& rect)
+Rect dbBlock::getCoreArea()
 {
   auto rows = getRows();
   if (rows.size() > 0) {
+    Rect rect;
     rect.mergeInit();
 
     for (dbRow* row : rows) {
-      Rect rowRect;
-      row->getBBox(rowRect);
-      rect.merge(rowRect);
+      rect.merge(row->getBBox());
     }
-  } else {
-    // Default to die area if there aren't any rows.
-    getDieArea(rect);
-  }
+    return rect;
+  } 
+  // Default to die area if there aren't any rows.
+  return getDieArea();
 }
 
 FILE* dbBlock::getPtFile()
@@ -2276,7 +2191,6 @@ void dbBlock::initParasiticsValueTables()
                                   dbCapNodeObj,
                                   4096,
                                   12);
-    ZALLOCATED(block->_cap_node_tbl);
   }
   block->_maxCapNodeId = 0;
 
@@ -2291,7 +2205,6 @@ void dbBlock::initParasiticsValueTables()
                                dbRSegObj,
                                4096,
                                12);
-    ZALLOCATED(block->_r_seg_tbl);
   }
   block->_maxRSegId = 0;
 
@@ -2306,7 +2219,6 @@ void dbBlock::initParasiticsValueTables()
                                 dbCCSegObj,
                                 4096,
                                 12);
-    ZALLOCATED(block->_cc_seg_tbl);
   }
   block->_maxCCSegId = 0;
 
@@ -2315,7 +2227,6 @@ void dbBlock::initParasiticsValueTables()
   else {
     delete block->_cc_val_tbl;
     block->_cc_val_tbl = new dbPagedVector<float, 4096, 12>();
-    ZALLOCATED(block->_cc_val_tbl);
   }
   block->_cc_val_tbl->push_back(0.0);
 
@@ -2324,7 +2235,6 @@ void dbBlock::initParasiticsValueTables()
   else {
     delete block->_r_val_tbl;
     block->_r_val_tbl = new dbPagedVector<float, 4096, 12>();
-    ZALLOCATED(block->_r_val_tbl);
   }
   block->_r_val_tbl->push_back(0.0);
 
@@ -2333,7 +2243,6 @@ void dbBlock::initParasiticsValueTables()
   else {
     delete block->_c_val_tbl;
     block->_c_val_tbl = new dbPagedVector<float, 4096, 12>();
-    ZALLOCATED(block->_c_val_tbl);
   }
   block->_c_val_tbl->push_back(0.0);
 }
@@ -2509,7 +2418,6 @@ void dbBlock::copyViaTable(dbBlock* dst_, dbBlock* src_)
   _dbBlock* src = (_dbBlock*) src_;
   delete dst->_via_tbl;
   dst->_via_tbl = new dbTable<_dbVia>(dst->getDatabase(), dst, *src->_via_tbl);
-  ZALLOCATED(dst->_via_tbl);
 }
 
 dbBlock* dbBlock::create(dbChip* chip_, const char* name_, char hier_delimeter_)
@@ -3403,6 +3311,38 @@ void dbBlock::writeDb(char* filename, int allNode)
     block->_journal->pushParam(allNode);
     block->_journal->endAction();
   }
+}
+
+void dbBlock::writeGuides(const char* filename) const
+{
+  std::ofstream guide_file;
+  guide_file.open(filename);
+  if (!guide_file) {
+    getImpl()->getLogger()->error(
+        utl::ODB, 307, "Guides file could not be opened.");
+  }
+  dbBlock* block = (dbBlock*) this;
+  std::vector<dbNet*> nets;
+  nets.reserve(block->getNets().size());
+  for (auto net : block->getNets()) {
+    if (!net->getGuides().empty())
+      nets.push_back(net);
+  }
+  std::sort(nets.begin(), nets.end(), [](odb::dbNet* net1, odb::dbNet* net2) {
+    return strcmp(net1->getConstName(), net2->getConstName()) < 0;
+  });
+  for (auto net : nets) {
+    guide_file << net->getName() << "\n";
+    guide_file << "(\n";
+    for (auto guide : net->getGuides()) {
+      guide_file << guide->getBox().xMin() << " " << guide->getBox().yMin()
+                 << " " << guide->getBox().xMax() << " "
+                 << guide->getBox().yMax() << " "
+                 << guide->getLayer()->getName() << "\n";
+    }
+    guide_file << ")\n";
+  }
+  guide_file.close();
 }
 
 bool dbBlock::differences(dbBlock* block1,

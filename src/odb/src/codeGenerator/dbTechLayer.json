@@ -124,7 +124,7 @@
     {
       "type": "uint",
       "name": "lef58_type_",
-      "bits": 3,
+      "bits": 5,
       "flags": [
         "no-set",
         "no-get"
@@ -143,7 +143,19 @@
         "BELOWDIEEDGE",
         "DIFFUSION",
         "TRIMPOLY",
-        "MIMCAP"
+        "MIMCAP",
+        "STACKEDMIMCAP",
+        "TSVMETAL",
+        "TSV",
+        "PASSIVATION",
+        "HIGHR",
+        "TRIMMETAL",
+        "REGION",
+        "MEOL",
+        "WELLDISTANCE",
+        "CPODE",
+        "PADMETAL",
+        "POLYROUTING"
       ],
       "public": true
     }

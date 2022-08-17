@@ -48,29 +48,8 @@ FILE* fp;
 #endif
 
 using utl::RCX;
+using namespace odb;
 
-using odb::dbBlock;
-using odb::dbBox;
-using odb::dbBTerm;
-using odb::dbCapNode;
-using odb::dbCCSeg;
-using odb::dbChip;
-using odb::dbNet;
-using odb::dbRSeg;
-using odb::dbSet;
-using odb::dbShape;
-using odb::dbSigType;
-using odb::dbTech;
-using odb::dbTechLayer;
-using odb::dbTechLayerDir;
-using odb::dbTechLayerType;
-using odb::dbWire;
-using odb::dbWirePath;
-using odb::dbWirePathItr;
-using odb::dbWirePathShape;
-using odb::ISdb;
-using odb::Rect;
-using odb::ZPtr;
 
 void extMain::print_RC(dbRSeg* rc) {
   dbShape s;
@@ -367,11 +346,9 @@ void extMain::getShapeRC(dbNet* net, dbShape& s, Point& prevPoint,
     } else {
       if (USE_DB_UNITS)
         width = GetDBcoords2(width);
-      double SUB_MULT = 1.0;
 
       for (uint ii = 0; ii < _metRCTable.getCnt(); ii++) {
-        double c1 = getFringe(level, width, ii, areaCap);
-        c1 *= SUB_MULT;
+        getFringe(level, width, ii, areaCap);
 #ifdef HI_ACC_10312011
         if (width < 400)
           _tmpCapTable[ii] =
@@ -1068,8 +1045,7 @@ ZPtr<ISdb> extMain::getCcSdb() { return _extCcapSDB; }
 ZPtr<ISdb> extMain::getNetSdb() { return _extNetSDB; }
 void extMain::setExtractionBbox(const char* bbox) {
   if ((bbox == NULL) || (strcmp(bbox, "") == 0)) {
-    Rect r;
-    _block->getDieArea(r);
+    Rect r = _block->getDieArea();
     _x1 = r.xMin();
     _y1 = r.yMin();
     _x2 = r.xMax();
@@ -1081,8 +1057,7 @@ void extMain::setExtractionBbox(const char* bbox) {
   if (getExtAreaCoords(bbox))
     _extNetSDB->setMaxArea(_x1, _y1, _x2, _y2);
   else {
-    Rect r;
-    _block->getDieArea(r);
+    Rect r = _block->getDieArea();
 
     _x1 = r.xMin();
     _y1 = r.yMin();
@@ -2303,8 +2278,7 @@ uint extMain::makeBlockRCsegs(bool btermThresholdFlag, const char* cmp_file,
     logger_->info(RCX, 473, "Initial Tiling {} ...",
                   getBlock()->getName().c_str());
 
-    Rect maxRect;
-    _block->getDieArea(maxRect);
+    Rect maxRect = _block->getDieArea();
     logger_->info(RCX, 125, "Tiling for die area {}x{} = {} {}  {} {}",
                   maxRect.dx(), maxRect.dy(), maxRect.xMin(), maxRect.yMin(),
                   maxRect.xMax(), maxRect.yMax());
@@ -2314,8 +2288,7 @@ uint extMain::makeBlockRCsegs(bool btermThresholdFlag, const char* cmp_file,
     return 0;
   }
   if (debug == 803) {
-    Rect maxRect;
-    _block->getDieArea(maxRect);
+    Rect maxRect = _block->getDieArea();
 
     _use_signal_tables = 3;
     uint wireCnt = fillWindowsDB(rlog, maxRect, use_signal_table);
@@ -2736,8 +2709,7 @@ uint extMain::makeBlockRCsegs(bool btermThresholdFlag, const char* cmp_file,
                                    extCompute1, &m);
         } else {
           //#else
-          Rect maxRect;
-          _block->getDieArea(maxRect);
+          Rect maxRect = _block->getDieArea();
 
           if (initTiling) {
             logger_->info(RCX, 123, "Initial Tiling {} ...",

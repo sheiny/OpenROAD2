@@ -1,7 +1,7 @@
 [INFO ODB-0222] Reading LEF file: Nangate45/Nangate45.lef
 [INFO ODB-0223]     Created 22 technology layers
 [INFO ODB-0224]     Created 27 technology vias
-[INFO ODB-0225]     Created 134 library cells
+[INFO ODB-0225]     Created 135 library cells
 [INFO ODB-0226] Finished LEF file:  Nangate45/Nangate45.lef
 [INFO ODB-0127] Reading DEF file: repair_hold1.def
 [INFO ODB-0128] Design: top
@@ -12,6 +12,6 @@
 worst slack -0.09
 worst slack 1.84
 [INFO RSZ-0046] Found 4 endpoints with hold violations.
-[INFO RSZ-0032] Inserted 41 hold buffers.
-worst slack 0.21
-worst slack 1.67
+[INFO RSZ-0032] Inserted 37 hold buffers.
+worst slack 0.20
+worst slack 1.66

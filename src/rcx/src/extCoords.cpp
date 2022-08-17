@@ -38,6 +38,8 @@
 
 namespace rcx {
 
+using namespace odb;
+
 void extSpef::initSearchForNets() {
   uint W[16];
   uint S[16];
@@ -49,8 +51,7 @@ void extSpef::initSearchForNets() {
   dbSet<dbTechLayer>::iterator itr;
   dbTrackGrid* tg = NULL;
 
-  Rect maxRect;
-  _block->getDieArea(maxRect);
+  Rect maxRect = _block->getDieArea();
 
   std::vector<int> trackXY(32000);
   uint n = 0;
@@ -121,8 +122,7 @@ uint extSpef::addNetShapesOnSearch(uint netId) {
       level2 = 0;
     }
 
-    Rect r;
-    s.getBox(r);
+    Rect r = s.getBox();
 
     _search->addBox(r.xMin(), r.yMin(), r.xMax(), r.yMax(), level1, netId,
                     shapeId, wtype);
@@ -278,9 +278,6 @@ bool extSpef::readNodeCoords(uint cpos) {
   _xCoordTable->add(x);
   _yCoordTable->add(y);
   uint level = 0;
-  //	if (_NsLayer && _parser->getWordCnt() > cpos + 3)
-  //		level = _tech->findLayer(_parser->get(cpos +
-  // 3))->getRoutingLevel();
   _levelTable->add(level);
   return true;
 }
@@ -471,6 +468,8 @@ void extSpef::searchDealloc() { _search->dealloc(); }
 
 }  // namespace rcx
 
+namespace odb {
+
 void Ath__grid::dealloc() {
   for (uint ii = 0; ii <= _searchHiTrack; ii++) {
     Ath__track* btrack = _trackTable[ii];
@@ -497,3 +496,5 @@ void Ath__gridTable::dealloc() {
     }
   }
 }
+
+}  // namespace odb

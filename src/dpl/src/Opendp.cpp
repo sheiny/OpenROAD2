@@ -105,15 +105,7 @@ Opendp::isMultiRow(const Cell *cell) const
 {
   auto iter = db_master_map_.find(cell->db_inst_->getMaster());
   assert(iter != db_master_map_.end());
-  return iter->second.is_multi_row_;
-}
-
-Power
-Opendp::topPower(const Cell *cell) const
-{
-  auto iter = db_master_map_.find(cell->db_inst_->getMaster());
-  assert(iter != db_master_map_.end());
-  return iter->second.top_power_;
+  return iter->second.is_multi_row;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -124,11 +116,13 @@ Group::Group() :
 }
 
 Opendp::Opendp() :
+  block_(nullptr),
   pad_left_(0),
   pad_right_(0),
   max_displacement_x_(0),
   max_displacement_y_(0),
-  grid_(nullptr)
+  grid_(nullptr),
+  have_fillers_(false)
 {
   dummy_cell_.is_placed_ = true;
 }
@@ -150,7 +144,7 @@ void
 Opendp::initBlock()
 {
   block_ = db_->getChip()->getBlock();
-  block_->getCoreArea(core_);
+  core_ = block_->getCoreArea();
 }
 
 void
@@ -203,6 +197,9 @@ Opendp::detailedPlacement(int max_displacement_x,
 {
   importDb();
 
+  if (have_fillers_)
+    logger_->warn(DPL, 37, "Use remove_fillers before detailed placement.");
+
   if (max_displacement_x == 0 || max_displacement_y == 0) {
     // defaults
     max_displacement_x_ = 500;
@@ -213,7 +210,6 @@ Opendp::detailedPlacement(int max_displacement_x,
     max_displacement_y_ = max_displacement_y;
   }
 
-  reportImportWarnings();
   hpwl_before_ = hpwl();
   detailedPlacement();
   // Save displacement stats before updating instance DB locations.
@@ -252,11 +248,15 @@ Opendp::reportLegalizationStats() const
   logger_->report("Placement Analysis");
   logger_->report("---------------------------------");
   logger_->report("total displacement   {:10.1f} u", dbuToMicrons(displacement_sum_));
+  logger_->metric("design__instance__displacement__total", dbuToMicrons(displacement_sum_));
   logger_->report("average displacement {:10.1f} u", dbuToMicrons(displacement_avg_));
+  logger_->metric("design__instance__displacement__mean", dbuToMicrons(displacement_avg_));
   logger_->report("max displacement     {:10.1f} u", dbuToMicrons(displacement_max_));
+  logger_->metric("design__instance__displacement__max", dbuToMicrons(displacement_max_));
   logger_->report("original HPWL        {:10.1f} u", dbuToMicrons(hpwl_before_));
   double hpwl_legal = hpwl();
   logger_->report("legalized HPWL       {:10.1f} u", dbuToMicrons(hpwl_legal));
+  logger_->metric("route__wirelength__estimated", dbuToMicrons(hpwl_legal));
   int hpwl_delta = (hpwl_before_ == 0.0)
     ? 0.0
     : round((hpwl_legal - hpwl_before_) / hpwl_before_ * 100);
@@ -299,35 +299,12 @@ Opendp::hpwl() const
 int64_t
 Opendp::hpwl(dbNet *net) const
 {
-  if (isSupply(net))
+  if (net->getSigType().isSupply())
     return 0;
   else {
     Rect bbox = net->getTermBBox();
     return bbox.dx() + bbox.dy();
   }
-}
-
-bool
-Opendp::isSupply(dbNet *net) const
-{
-  dbSigType sig_type = net->getSigType();
-  return sig_type == dbSigType::POWER || sig_type == dbSigType::GROUND;
-}
-
-////////////////////////////////////////////////////////////////
-
-Power
-Opendp::rowTopPower(int row) const
-{
-  return ((row0_top_power_is_vdd_ ? row : row + 1) % 2 == 0) ? VDD : VSS;
-}
-
-dbOrientType
-Opendp::rowOrient(int row) const
-{
-  // Row orient flips R0 -> MX -> R0 -> MX ...
-  return ((row0_orient_is_r0_ ? row : row + 1) % 2 == 0) ? dbOrientType::R0
-                                                         : dbOrientType::MX;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -367,6 +344,8 @@ Opendp::isPaddedType(dbInst *inst) const
     case dbMasterType::ENDCAP:
     case dbMasterType::ENDCAP_PRE:
     case dbMasterType::ENDCAP_POST:
+    case dbMasterType::ENDCAP_LEF58_RIGHTEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTEDGE:
       return true;
     case dbMasterType::CORE_SPACER:
     case dbMasterType::BLOCK:
@@ -376,6 +355,16 @@ Opendp::isPaddedType(dbInst *inst) const
     case dbMasterType::ENDCAP_TOPRIGHT:
     case dbMasterType::ENDCAP_BOTTOMLEFT:
     case dbMasterType::ENDCAP_BOTTOMRIGHT:
+    case dbMasterType::ENDCAP_LEF58_BOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_TOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTBOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTBOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTTOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTTOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTBOTTOMCORNER:
+    case dbMasterType::ENDCAP_LEF58_LEFTBOTTOMCORNER:
+    case dbMasterType::ENDCAP_LEF58_RIGHTTOPCORNER:
+    case dbMasterType::ENDCAP_LEF58_LEFTTOPCORNER:
       // These classes are completely ignored by the placer.
     case dbMasterType::COVER:
     case dbMasterType::COVER_BUMP:
@@ -418,6 +407,18 @@ Opendp::isStdCell(const Cell *cell) const
     case dbMasterType::ENDCAP_TOPRIGHT:
     case dbMasterType::ENDCAP_BOTTOMLEFT:
     case dbMasterType::ENDCAP_BOTTOMRIGHT:
+    case dbMasterType::ENDCAP_LEF58_BOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_TOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTBOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTBOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTTOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTTOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTBOTTOMCORNER:
+    case dbMasterType::ENDCAP_LEF58_LEFTBOTTOMCORNER:
+    case dbMasterType::ENDCAP_LEF58_RIGHTTOPCORNER:
+    case dbMasterType::ENDCAP_LEF58_LEFTTOPCORNER:
       // These classes are completely ignored by the placer.
     case dbMasterType::COVER:
     case dbMasterType::COVER_BUMP:

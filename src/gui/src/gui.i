@@ -99,6 +99,8 @@ namespace std {
   %template(DisplayControlMap) map<string, bool>;
 }
 
+%rename(pause) gui_pause;
+
 %inline %{
 
 bool enabled()
@@ -170,7 +172,8 @@ const std::string add_ruler(
   double x1, 
   double y1, 
   const std::string& label = "", 
-  const std::string& name = "")
+  const std::string& name = "",
+  bool euclidian = true)
 {
   if (!check_gui("add_ruler")) {
     return "";
@@ -178,7 +181,7 @@ const std::string add_ruler(
   odb::Point ll = make_point(x0, y0);
   odb::Point ur = make_point(x1, y1);
   auto gui = gui::Gui::get();
-  return gui->addRuler(ll.x(), ll.y(), ur.x(), ur.y(), label, name);  
+  return gui->addRuler(ll.x(), ll.y(), ur.x(), ur.y(), label, name, euclidian);
 }
 
 void delete_ruler(const std::string& name)
@@ -420,7 +423,9 @@ const std::string input_dialog(const char* title, const char* question)
   return gui->requestUserInput(title, question);
 }
 
-void pause(int timeout = 0)
+// glib has pause() so this is %rename'd to pause in the scripting
+// language to avoid conflicts in C++.
+void gui_pause(int timeout = 0)
 {
   if (!check_gui("pause")) {
     return;

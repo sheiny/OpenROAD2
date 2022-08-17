@@ -57,7 +57,6 @@ Opendp::checkPlacement(bool verbose)
   vector<Cell *> in_rows_failures;
   vector<Cell *> overlap_failures;
   vector<Cell *> site_align_failures;
-  vector<Cell *> power_line_failures;
 
   initGrid();
   for (Cell &cell : cells_) {
@@ -65,10 +64,6 @@ Opendp::checkPlacement(bool verbose)
       // Site alignment check
       if (cell.x_ % site_width_ != 0 || cell.y_ % row_height_ != 0)
         site_align_failures.push_back(&cell);
-      if (checkPowerLine(cell)) {
-        checkPowerLine(cell);
-        power_line_failures.push_back(&cell);
-      }
       if (!checkInRows(cell))
         in_rows_failures.push_back(&cell);
     }
@@ -86,10 +81,9 @@ Opendp::checkPlacement(bool verbose)
     reportOverlapFailure(cell);
   });
   reportFailures(site_align_failures, 6, "Site aligned", verbose);
-  reportFailures(power_line_failures, 7, "Power line", verbose);
 
-  if (power_line_failures.size()
-      + placed_failures.size()
+  logger_->metric("design__violations", placed_failures.size() + in_rows_failures.size() + overlap_failures.size() + site_align_failures.size());
+  if (placed_failures.size()
       + in_rows_failures.size()
       + overlap_failures.size()
       + site_align_failures.size() > 0) {
@@ -137,24 +131,6 @@ bool
 Opendp::isPlaced(const Cell *cell)
 {
   return cell->db_inst_->isPlaced();
-}
-
-bool
-Opendp::checkPowerLine(const Cell &cell) const
-{
-  int height = gridHeight(&cell);
-  dbOrientType orient = cell.db_inst_->getOrient();
-  int grid_y = gridY(&cell);
-  Power top_power = topPower(&cell);
-  return !(height == 1 || height == 3)
-      // Everything below here is probably wrong but never exercised.
-      && ((height % 2 == 0
-           // Even height
-           && top_power == rowTopPower(grid_y)) ||
-          (height % 2 == 1
-           // Odd height
-           && ((top_power == rowTopPower(grid_y) && orient != dbOrientType::R0)
-               || (top_power != rowTopPower(grid_y) && orient != dbOrientType::MX))));
 }
 
 bool
@@ -268,6 +244,18 @@ Opendp::isCrWtBlClass(const Cell *cell) const
     case dbMasterType::ENDCAP_TOPRIGHT:
     case dbMasterType::ENDCAP_BOTTOMLEFT:
     case dbMasterType::ENDCAP_BOTTOMRIGHT:
+    case dbMasterType::ENDCAP_LEF58_BOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_TOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTBOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTBOTTOMEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTTOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_LEFTTOPEDGE:
+    case dbMasterType::ENDCAP_LEF58_RIGHTBOTTOMCORNER:
+    case dbMasterType::ENDCAP_LEF58_LEFTBOTTOMCORNER:
+    case dbMasterType::ENDCAP_LEF58_RIGHTTOPCORNER:
+    case dbMasterType::ENDCAP_LEF58_LEFTTOPCORNER:
       // These classes are completely ignored by the placer.
     case dbMasterType::COVER:
     case dbMasterType::COVER_BUMP:

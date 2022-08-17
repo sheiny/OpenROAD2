@@ -253,10 +253,6 @@ proc buffer_ports { args } {
     keys {-buffer_cell -max_utilization} \
     flags {-inputs -outputs}
   
-  if { [info exists keys(-buffer_cell)] } {
-    utl::warn RSZ 15 "-buffer_cell is deprecated."
-  }
-  
   set buffer_inputs [info exists flags(-inputs)]
   set buffer_outputs [info exists flags(-outputs)]
   if { !$buffer_inputs && !$buffer_outputs } {
@@ -266,7 +262,6 @@ proc buffer_ports { args } {
   sta::check_argc_eq0 "buffer_ports" $args
   
   rsz::set_max_utilization [rsz::parse_max_util keys]
-  rsz::resizer_preamble
   if { $buffer_inputs } {
     rsz::buffer_inputs
   }
@@ -299,7 +294,6 @@ proc repair_design { args } {
   
   sta::check_argc_eq0 "repair_design" $args
   rsz::check_parasitics
-  rsz::resizer_preamble
   set max_wire_length [rsz::check_max_wire_length $max_wire_length]
   rsz::repair_design_cmd $max_wire_length $slew_margin $cap_margin
 }
@@ -316,12 +310,11 @@ proc repair_clock_nets { args } {
 
   sta::check_argc_eq0 "repair_clock_nets" $args
   rsz::check_parasitics
-  rsz::resizer_preamble
   set max_wire_length [rsz::check_max_wire_length $max_wire_length]
   rsz::repair_clk_nets_cmd $max_wire_length
 }
 
-sta::define_cmd_args "repair_clock_inverters" {-buffer_cell buffer_cell}
+sta::define_cmd_args "repair_clock_inverters" {}
 
 proc repair_clock_inverters { args } {
   sta::check_argc_eq0 "repair_clock_inverters" $args
@@ -359,20 +352,17 @@ proc repair_tie_fanout { args } {
 # -max_passes is for developer debugging so intentionally not documented
 # in define_cmd_args
 sta::define_cmd_args "repair_timing" {[-setup] [-hold]\
-                                        [-slack_margin slack_margin]\
+                                        [-setup_margin setup_margin]\
+                                        [-hold_margin hold_margin]\
                                         [-max_buffer_percent buffer_percent]\
                                         [-allow_setup_violations]\
                                         [-max_utilization util]}
 
 proc repair_timing { args } {
   sta::parse_key_args "repair_timing" args \
-    keys {-slack_margin -libraries -max_utilization
-      -max_buffer_percent -max_passes} \
+    keys {-setup_margin -hold_margin -slack_margin \
+            -libraries -max_utilization -max_buffer_percent -max_passes} \
     flags {-setup -hold -allow_setup_violations}
-  
-  if { [info exists keys(-libraries)] } {
-    utl::warn RSZ 63 "-libraries is deprecated."
-  }
   
   set setup [info exists flags(-setup)]
   set hold [info exists flags(-hold)]
@@ -381,7 +371,20 @@ proc repair_timing { args } {
     set hold 1
   }
   
-  set slack_margin [rsz::parse_time_margin_arg "-slack_margin" keys]
+  if { [info exists keys(-slack_margin)] } {
+    utl::warn RSZ 76 "-slack_margin is deprecated. Use -setup_margin/-hold_margin"
+    if { !$setup && $hold } {
+      set setup_margin 0.0
+      set hold_margin [rsz::parse_time_margin_arg "-slack_margin" keys]
+    } else {
+      set setup_margin [rsz::parse_time_margin_arg "-slack_margin" keys]
+      set hold_margin 0.0
+    }
+  } else {
+    set setup_margin [rsz::parse_time_margin_arg "-setup_margin" keys]
+    set hold_margin [rsz::parse_time_margin_arg "-hold_margin" keys]
+  }
+
   set allow_setup_violations [info exists flags(-allow_setup_violations)]
   rsz::set_max_utilization [rsz::parse_max_util keys]
   
@@ -398,18 +401,16 @@ proc repair_timing { args } {
   }
   sta::check_argc_eq0 "repair_timing" $args
   rsz::check_parasitics
-  rsz::resizer_preamble
   if { $setup } {
-    rsz::repair_setup $slack_margin $max_passes
+    rsz::repair_setup $setup_margin $max_passes
   }
   if { $hold } {
-    rsz::repair_hold $slack_margin $allow_setup_violations $max_buffer_percent
+    rsz::repair_hold $setup_margin $hold_margin \
+      $allow_setup_violations $max_buffer_percent $max_passes
   }
 }
 
 ################################################################
-
-sta::define_cmd_args "report_design_area" {}
 
 proc report_design_area {} {
   set util [format %.0f [expr [rsz::utilization] * 100]]
@@ -426,7 +427,7 @@ proc report_floating_nets { args } {
   set floating_nets [rsz::find_floating_nets]
   set floating_net_count [llength $floating_nets]
   if { $floating_net_count > 0 } {
-    utl::warn RSZ 20 "found $floating_net_count floatiing nets."
+    utl::warn RSZ 20 "found $floating_net_count floating nets."
     if { $verbose } {
       foreach net $floating_nets {
         utl::report " [get_full_name $net]"
@@ -454,18 +455,9 @@ sta::proc_redirect report_long_wires {
 
 namespace eval rsz {
   
-# for testing resizing separately
-proc resize { args } {
-  sta::check_argc_eq0 "resize" $args
-  check_parasitics
-  resizer_preamble
-  resize_to_target_slew
-}
-  
 # for testing
 proc repair_setup_pin { end_pin } {
   check_parasitics
-  resizer_preamble
   repair_setup_pin_cmd $end_pin
 }
   
@@ -535,7 +527,6 @@ proc check_corner_wire_caps {} {
 
 proc check_max_wire_length { max_wire_length } {
   if { [rsz::wire_signal_resistance [sta::cmd_corner]] > 0 } {
-    # Must follow rsz::resizer_preamble so buffers are known.
     set min_delay_max_wire_length [rsz::find_max_wire_length]
     if { $max_wire_length > 0 } {
       if { $max_wire_length < $min_delay_max_wire_length } {

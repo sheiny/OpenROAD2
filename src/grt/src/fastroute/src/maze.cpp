@@ -30,14 +30,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 ////////////////////////////////////////////////////////////////////////////////
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <algorithm>
-#include <iomanip>
-#include <set>
-#include <sstream>
 
 #include "DataType.h"
 #include "FastRoute.h"
@@ -67,7 +60,7 @@ void FastRouteCore::fixEmbeddedTrees()
   // check embedded trees only when maze router is called
   // i.e., when running overflow iterations
   if (overflow_iterations_ > 0) {
-    for (int netID = 0; netID < num_valid_nets_; netID++) {
+    for (int netID = 0; netID < netCount(); netID++) {
       checkAndFixEmbeddedTree(netID);
     }
   }
@@ -463,7 +456,7 @@ void FastRouteCore::convertToMazerouteNet(const int netID)
 
 void FastRouteCore::convertToMazeroute()
 {
-  for (int netID = 0; netID < num_valid_nets_; netID++) {
+  for (int netID = 0; netID < netCount(); netID++) {
     convertToMazerouteNet(netID);
   }
 
@@ -1007,14 +1000,14 @@ bool FastRouteCore::updateRouteType1(const int net_id,
     int x_pos = tile_size_ * (E1x + 0.5) + x_corner_;
     int y_pos = tile_size_ * (E1y + 0.5) + y_corner_;
     if (verbose_)
-      logger_->warn(
+      logger_->error(
           GRT,
           169,
           "Net {}: Invalid index for position ({}, {}). Net degree: {}.",
           netName(nets_[net_id]),
           x_pos,
           y_pos,
-          nets_[net_id]->numPins);
+          nets_[net_id]->numPins());
     return false;
   }
 
@@ -1192,7 +1185,7 @@ bool FastRouteCore::updateRouteType2(const int net_id,
           netName(nets_[net_id]),
           x_pos,
           y_pos,
-          nets_[net_id]->numPins);
+          nets_[net_id]->numPins());
     return false;
   }
 
@@ -1268,6 +1261,31 @@ void FastRouteCore::reInitTree(const int netID)
   checkAndFixEmbeddedTree(netID);
 }
 
+float getCost(const int i,
+              const float logis_cof,
+              const float cost_height,
+              const int slope,
+              const int capacity,
+              const int cost_type)
+{
+  float cost;
+  if (cost_type == 2) {
+    if (i < capacity - 1)
+      cost
+          = cost_height / (exp((float) (capacity - i - 1) * logis_cof) + 1) + 1;
+    else
+      cost = cost_height / (exp((float) (capacity - i - 1) * logis_cof) + 1) + 1
+             + cost_height / slope * (i - capacity);
+  } else {
+    if (i < capacity)
+      cost = cost_height / (exp((float) (capacity - i) * logis_cof) + 1) + 1;
+    else
+      cost = cost_height / (exp((float) (capacity - i) * logis_cof) + 1) + 1
+             + cost_height / slope * (i - capacity);
+  }
+  return cost;
+}
+
 void FastRouteCore::mazeRouteMSMD(const int iter,
                                   const int expand,
                                   const float cost_height,
@@ -1289,48 +1307,13 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
   h_cost_table_.resize(max_usage_multiplier * h_capacity_);
   v_cost_table_.resize(max_usage_multiplier * v_capacity_);
 
-  if (cost_type == 2) {
-    for (int i = 0; i < max_usage_multiplier * h_capacity_; i++) {
-      if (i < h_capacity_ - 1)
-        h_cost_table_[i]
-            = cost_height / (exp((float) (h_capacity_ - i - 1) * logis_cof) + 1)
-              + 1;
-      else
-        h_cost_table_[i]
-            = cost_height / (exp((float) (h_capacity_ - i - 1) * logis_cof) + 1)
-              + 1 + cost_height / slope * (i - h_capacity_);
-    }
-    for (int i = 0; i < max_usage_multiplier * v_capacity_; i++) {
-      if (i < v_capacity_ - 1)
-        v_cost_table_[i]
-            = cost_height / (exp((float) (v_capacity_ - i - 1) * logis_cof) + 1)
-              + 1;
-      else
-        v_cost_table_[i]
-            = cost_height / (exp((float) (v_capacity_ - i - 1) * logis_cof) + 1)
-              + 1 + cost_height / slope * (i - v_capacity_);
-    }
-  } else {
-    for (int i = 0; i < max_usage_multiplier * h_capacity_; i++) {
-      if (i < h_capacity_)
-        h_cost_table_[i]
-            = cost_height / (exp((float) (h_capacity_ - i) * logis_cof) + 1)
-              + 1;
-      else
-        h_cost_table_[i]
-            = cost_height / (exp((float) (h_capacity_ - i) * logis_cof) + 1) + 1
-              + cost_height / slope * (i - h_capacity_);
-    }
-    for (int i = 0; i < max_usage_multiplier * v_capacity_; i++) {
-      if (i < v_capacity_)
-        v_cost_table_[i]
-            = cost_height / (exp((float) (v_capacity_ - i) * logis_cof) + 1)
-              + 1;
-      else
-        v_cost_table_[i]
-            = cost_height / (exp((float) (v_capacity_ - i) * logis_cof) + 1) + 1
-              + cost_height / slope * (i - v_capacity_);
-    }
+  for (int i = 0; i < max_usage_multiplier * h_capacity_; i++) {
+    h_cost_table_[i]
+        = getCost(i, logis_cof, cost_height, slope, h_capacity_, cost_type);
+  }
+  for (int i = 0; i < max_usage_multiplier * v_capacity_; i++) {
+    v_cost_table_[i]
+        = getCost(i, logis_cof, cost_height, slope, v_capacity_, cost_type);
   }
 
   for (int i = 0; i < y_grid_; i++) {
@@ -1352,7 +1335,7 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
 
   std::vector<bool> pop_heap2(y_grid_ * x_range_, false);
 
-  for (int nidRPC = 0; nidRPC < num_valid_nets_; nidRPC++) {
+  for (int nidRPC = 0; nidRPC < netCount(); nidRPC++) {
     const int netID = ordering ? tree_order_cong_[nidRPC].treeIndex : nidRPC;
 
     const int deg = sttrees_[netID].deg;
@@ -1456,28 +1439,42 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
 
         // left
         if (curX > regionX1) {
-          float tmp;
+          float tmp, cost1, cost2;
+          const int pos1 = h_edges_[curY][curX - 1].usage
+                           + h_edges_[curY][curX - 1].red
+                           + L * h_edges_[curY][(curX - 1)].last_usage;
+
+          if (pos1 < h_cost_table_.size())
+            cost1 = h_cost_table_.at(pos1);
+          else
+            cost1 = getCost(
+                pos1, logis_cof, cost_height, slope, h_capacity_, cost_type);
+
           if ((preY == curY) || (d1[curY][curX] == 0)) {
-            tmp = d1[curY][curX]
-                  + h_cost_table_[h_edges_[curY][curX - 1].usage
-                                  + h_edges_[curY][curX - 1].red
-                                  + L * h_edges_[curY][(curX - 1)].last_usage];
+            tmp = d1[curY][curX] + cost1;
           } else {
             if (curX < regionX2 - 1) {
-              const int tmp_cost
-                  = d1[curY][curX + 1]
-                    + h_cost_table_[h_edges_[curY][curX].usage
-                                    + h_edges_[curY][curX].red
-                                    + L * h_edges_[curY][curX].last_usage];
+              const int pos2 = h_edges_[curY][curX].usage
+                               + h_edges_[curY][curX].red
+                               + L * h_edges_[curY][curX].last_usage;
+
+              if (pos2 < h_cost_table_.size())
+                cost2 = h_cost_table_.at(pos2);
+              else
+                cost2 = getCost(pos2,
+                                logis_cof,
+                                cost_height,
+                                slope,
+                                h_capacity_,
+                                cost_type);
+
+              const int tmp_cost = d1[curY][curX + 1] + cost2;
 
               if (tmp_cost < d1[curY][curX] + via) {
                 hyper_h_[curY][curX] = true;
               }
             }
-            tmp = d1[curY][curX] + via
-                  + h_cost_table_[h_edges_[curY][curX - 1].usage
-                                  + h_edges_[curY][curX - 1].red
-                                  + L * h_edges_[curY][curX - 1].last_usage];
+            tmp = d1[curY][curX] + via + cost1;
           }
           tmpX = curX - 1;  // the left neighbor
 
@@ -1506,28 +1503,40 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
         }
         // right
         if (curX < regionX2) {
-          float tmp;
+          float tmp, cost1, cost2;
+          const int pos1 = h_edges_[curY][curX].usage + h_edges_[curY][curX].red
+                           + L * h_edges_[curY][curX].last_usage;
+
+          if (pos1 < h_cost_table_.size())
+            cost1 = h_cost_table_.at(pos1);
+          else
+            cost1 = getCost(
+                pos1, logis_cof, cost_height, slope, h_capacity_, cost_type);
+
           if ((preY == curY) || (d1[curY][curX] == 0)) {
-            tmp = d1[curY][curX]
-                  + h_cost_table_[h_edges_[curY][curX].usage
-                                  + h_edges_[curY][curX].red
-                                  + L * h_edges_[curY][curX].last_usage];
+            tmp = d1[curY][curX] + cost1;
           } else {
             if (curX > regionX1 + 1) {
-              const int tmp_cost
-                  = d1[curY][curX - 1]
-                    + h_cost_table_[h_edges_[curY][curX - 1].usage
-                                    + h_edges_[curY][curX - 1].red
-                                    + L * h_edges_[curY][curX - 1].last_usage];
+              const int pos2 = h_edges_[curY][curX - 1].usage
+                               + h_edges_[curY][curX - 1].red
+                               + L * h_edges_[curY][curX - 1].last_usage;
+
+              if (pos2 < h_cost_table_.size())
+                cost2 = h_cost_table_.at(pos2);
+              else
+                cost2 = getCost(pos2,
+                                logis_cof,
+                                cost_height,
+                                slope,
+                                h_capacity_,
+                                cost_type);
+              const int tmp_cost = d1[curY][curX - 1] + cost2;
 
               if (tmp_cost < d1[curY][curX] + via) {
                 hyper_h_[curY][curX] = true;
               }
             }
-            tmp = d1[curY][curX] + via
-                  + h_cost_table_[h_edges_[curY][curX].usage
-                                  + h_edges_[curY][curX].red
-                                  + L * h_edges_[curY][curX].last_usage];
+            tmp = d1[curY][curX] + via + cost1;
           }
           tmpX = curX + 1;  // the right neighbor
 
@@ -1556,29 +1565,41 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
         }
         // bottom
         if (curY > regionY1) {
-          float tmp;
+          float tmp, cost1, cost2;
+          const int pos1 = v_edges_[curY - 1][curX].usage
+                           + v_edges_[curY - 1][curX].red
+                           + L * v_edges_[curY - 1][curX].last_usage;
+
+          if (pos1 < v_cost_table_.size())
+            cost1 = v_cost_table_.at(pos1);
+          else
+            cost1 = getCost(
+                pos1, logis_cof, cost_height, slope, v_capacity_, cost_type);
 
           if ((preX == curX) || (d1[curY][curX] == 0)) {
-            tmp = d1[curY][curX]
-                  + v_cost_table_[v_edges_[curY - 1][curX].usage
-                                  + v_edges_[curY - 1][curX].red
-                                  + L * v_edges_[curY - 1][curX].last_usage];
+            tmp = d1[curY][curX] + cost1;
           } else {
             if (curY < regionY2 - 1) {
-              const int tmp_cost
-                  = d1[curY + 1][curX]
-                    + v_cost_table_[v_edges_[curY][curX].usage
-                                    + v_edges_[curY][curX].red
-                                    + L * v_edges_[curY][curX].last_usage];
+              const int pos2 = v_edges_[curY][curX].usage
+                               + v_edges_[curY][curX].red
+                               + L * v_edges_[curY][curX].last_usage;
+
+              if (pos2 < v_cost_table_.size())
+                cost2 = v_cost_table_.at(pos2);
+              else
+                cost2 = getCost(pos2,
+                                logis_cof,
+                                cost_height,
+                                slope,
+                                v_capacity_,
+                                cost_type);
+              const int tmp_cost = d1[curY + 1][curX] + cost2;
 
               if (tmp_cost < d1[curY][curX] + via) {
                 hyper_v_[curY][curX] = true;
               }
             }
-            tmp = d1[curY][curX] + via
-                  + v_cost_table_[v_edges_[curY - 1][curX].usage
-                                  + v_edges_[curY - 1][curX].red
-                                  + L * v_edges_[curY - 1][curX].last_usage];
+            tmp = d1[curY][curX] + via + cost1;
           }
           tmpY = curY - 1;  // the bottom neighbor
           if (d1[tmpY][curX]
@@ -1606,29 +1627,41 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
         }
         // top
         if (curY < regionY2) {
-          float tmp;
+          float tmp, cost1, cost2;
+          const int pos1 = v_edges_[curY][curX].usage + v_edges_[curY][curX].red
+                           + L * v_edges_[curY][curX].last_usage;
+
+          if (pos1 < v_cost_table_.size())
+            cost1 = v_cost_table_.at(pos1);
+          else
+            cost1 = getCost(
+                pos1, logis_cof, cost_height, slope, v_capacity_, cost_type);
 
           if ((preX == curX) || (d1[curY][curX] == 0)) {
-            tmp = d1[curY][curX]
-                  + v_cost_table_[v_edges_[curY][curX].usage
-                                  + v_edges_[curY][curX].red
-                                  + L * v_edges_[curY][curX].last_usage];
+            tmp = d1[curY][curX] + cost1;
           } else {
             if (curY > regionY1 + 1) {
-              const int tmp_cost
-                  = d1[curY - 1][curX]
-                    + v_cost_table_[v_edges_[curY - 1][curX].usage
-                                    + v_edges_[curY - 1][curX].red
-                                    + L * v_edges_[curY - 1][curX].last_usage];
+              const int pos2 = v_edges_[curY - 1][curX].usage
+                               + v_edges_[curY - 1][curX].red
+                               + L * v_edges_[curY - 1][curX].last_usage;
+
+              if (pos2 < v_cost_table_.size())
+                cost2 = v_cost_table_.at(pos2);
+              else
+                cost2 = getCost(pos2,
+                                logis_cof,
+                                cost_height,
+                                slope,
+                                v_capacity_,
+                                cost_type);
+
+              const int tmp_cost = d1[curY - 1][curX] + cost2;
 
               if (tmp_cost < d1[curY][curX] + via) {
                 hyper_v_[curY][curX] = true;
               }
             }
-            tmp = d1[curY][curX] + via
-                  + v_cost_table_[v_edges_[curY][curX].usage
-                                  + v_edges_[curY][curX].red
-                                  + L * v_edges_[curY][curX].last_usage];
+            tmp = d1[curY][curX] + via + cost1;
           }
           tmpY = curY + 1;  // the top neighbor
           if (d1[tmpY][curX]
@@ -1769,10 +1802,10 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
                                            edge_n1A2);
           if (!route_ok) {
             if (verbose_)
-              logger_->warn(GRT,
-                            150,
-                            "Net {} has errors during updateRouteType1.",
-                            netName(nets_[netID]));
+              logger_->error(GRT,
+                             150,
+                             "Net {} has errors during updateRouteType1.",
+                             netName(nets_[netID]));
             reInitTree(netID);
             nidRPC--;
             break;
@@ -2057,6 +2090,39 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
   v_cost_table_.clear();
 }
 
+void FastRouteCore::getCongestionGrid(
+    std::vector<std::pair<GSegment, TileCongestion>>& congestionGridV,
+    std::vector<std::pair<GSegment, TileCongestion>>& congestionGridH)
+{
+  for (int i = 0; i < y_grid_; i++) {
+    for (int j = 0; j < x_grid_ - 1; j++) {
+      const int overflow = h_edges_[i][j].usage - h_edges_[i][j].cap;
+      if (overflow > 0) {
+        const int xreal = tile_size_ * (j + 0.5) + x_corner_;
+        const int yreal = tile_size_ * (i + 0.5) + y_corner_;
+        const GSegment segment = GSegment(xreal, yreal, 1, xreal, yreal, 1);
+        const int usage = h_edges_[i][j].usage;
+        const int capacity = h_edges_[i][j].cap;
+        congestionGridH.push_back({segment, {capacity, usage}});
+      }
+    }
+  }
+
+  for (int i = 0; i < y_grid_ - 1; i++) {
+    for (int j = 0; j < x_grid_; j++) {
+      const int overflow = v_edges_[i][j].usage - v_edges_[i][j].cap;
+      if (overflow > 0) {
+        const int xreal = tile_size_ * (j + 0.5) + x_corner_;
+        const int yreal = tile_size_ * (i + 0.5) + y_corner_;
+        GSegment segment = GSegment(xreal, yreal, 1, xreal, yreal, 1);
+        const int usage = v_edges_[i][j].usage;
+        const int capacity = v_edges_[i][j].cap;
+        congestionGridV.push_back({segment, {capacity, usage}});
+      }
+    }
+  }
+}
+
 int FastRouteCore::getOverflow2Dmaze(int* maxOverflow, int* tUsage)
 {
   int H_overflow = 0;
@@ -2069,13 +2135,11 @@ int FastRouteCore::getOverflow2Dmaze(int* maxOverflow, int* tUsage)
   check2DEdgesUsage();
 
   int total_usage = 0;
-  int total_cap = 0;
 
   for (int i = 0; i < y_grid_; i++) {
     for (int j = 0; j < x_grid_ - 1; j++) {
       total_usage += h_edges_[i][j].usage;
       const int overflow = h_edges_[i][j].usage - h_edges_[i][j].cap;
-      total_cap += h_edges_[i][j].cap;
       if (overflow > 0) {
         H_overflow += overflow;
         max_H_overflow = std::max(max_H_overflow, overflow);
@@ -2088,7 +2152,6 @@ int FastRouteCore::getOverflow2Dmaze(int* maxOverflow, int* tUsage)
     for (int j = 0; j < x_grid_; j++) {
       total_usage += v_edges_[i][j].usage;
       const int overflow = v_edges_[i][j].usage - v_edges_[i][j].cap;
-      total_cap += v_edges_[i][j].cap;
       if (overflow > 0) {
         V_overflow += overflow;
         max_V_overflow = std::max(max_V_overflow, overflow);
@@ -2139,13 +2202,11 @@ int FastRouteCore::getOverflow2D(int* maxOverflow)
   int numedges = 0;
 
   int total_usage = 0;
-  int total_cap = 0;
 
   for (int i = 0; i < y_grid_; i++) {
     for (int j = 0; j < x_grid_ - 1; j++) {
       total_usage += h_edges_[i][j].est_usage;
       const int overflow = h_edges_[i][j].est_usage - h_edges_[i][j].cap;
-      total_cap += h_edges_[i][j].cap;
       hCap += h_edges_[i][j].cap;
       if (overflow > 0) {
         H_overflow += overflow;
@@ -2159,7 +2220,6 @@ int FastRouteCore::getOverflow2D(int* maxOverflow)
     for (int j = 0; j < x_grid_; j++) {
       total_usage += v_edges_[i][j].est_usage;
       const int overflow = v_edges_[i][j].est_usage - v_edges_[i][j].cap;
-      total_cap += v_edges_[i][j].cap;
       vCap += v_edges_[i][j].cap;
       if (overflow > 0) {
         V_overflow += overflow;
@@ -2206,14 +2266,12 @@ int FastRouteCore::getOverflow3D()
   int max_V_overflow = 0;
 
   int total_usage = 0;
-  int cap = 0;
 
   for (int k = 0; k < num_layers_; k++) {
     for (int i = 0; i < y_grid_; i++) {
       for (int j = 0; j < x_grid_ - 1; j++) {
         total_usage += h_edges_3D_[k][i][j].usage;
         overflow = h_edges_3D_[k][i][j].usage - h_edges_3D_[k][i][j].cap;
-        cap += h_edges_3D_[k][i][j].cap;
 
         if (overflow > 0) {
           H_overflow += overflow;
@@ -2225,8 +2283,6 @@ int FastRouteCore::getOverflow3D()
       for (int j = 0; j < x_grid_; j++) {
         total_usage += v_edges_3D_[k][i][j].usage;
         overflow = v_edges_3D_[k][i][j].usage - v_edges_3D_[k][i][j].cap;
-        cap += v_edges_3D_[k][i][j].cap;
-
         if (overflow > 0) {
           V_overflow += overflow;
           max_V_overflow = std::max(max_V_overflow, overflow);

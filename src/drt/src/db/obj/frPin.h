@@ -53,7 +53,7 @@ class frPin : public frBlockObject
   int getNumPinAccess() const { return aps_.size(); }
   bool hasPinAccess() const { return !aps_.empty(); }
   frPinAccess* getPinAccess(int idx) const { return aps_[idx].get(); }
-
+  void clearPinAccess() { aps_.clear(); }
   // setters
   // cannot have setterm, must be available when creating
   void addPinFig(std::unique_ptr<frPinFig> in)
@@ -116,15 +116,6 @@ class frPin : public frBlockObject
   std::vector<std::unique_ptr<frPinAccess>>
       aps_;  // not copied in copy constructor
 
-  template <class Archive>
-  void serialize(Archive& ar, const unsigned int version)
-  {
-    (ar) & boost::serialization::base_object<frBlockObject>(*this);
-    (ar) & pinFigs_;
-    (ar) & aps_;
-  }
-
-  friend class boost::serialization::access;
 };
 
 }  // namespace fr

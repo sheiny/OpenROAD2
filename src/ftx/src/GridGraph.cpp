@@ -75,8 +75,7 @@ GridGraph::initGridUsingDimensions(odb::dbDatabase* db,
 {
   db_ = db;
   odb::dbBlock* block = db_->getChip()->getBlock();
-  odb::Rect core_area;
-  block->getCoreArea(core_area);
+  odb::Rect core_area = block->getCoreArea();
   std::vector<Utils::DBU> xTicks, yTicks;
 
   auto x_steps = 1 + ((core_area.dx()-1)/width);// if core_area.dx() != 0

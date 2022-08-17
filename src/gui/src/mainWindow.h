@@ -62,6 +62,7 @@ class DisplayControls;
 class Inspector;
 class TimingWidget;
 class DRCWidget;
+class BrowserWidget;
 
 // This is the main window for the GUI.  Currently we use a single
 // instance of this class.
@@ -140,6 +141,9 @@ class MainWindow : public QMainWindow, public ord::OpenRoad::Observer
   // Add the selections to the current selections
   void addSelected(const SelectionSet& selections);
 
+  // Sets and replaces the current selections
+  void setSelected(const SelectionSet& selections);
+
   // Remove a selection from the set of selections
   void removeSelected(const Selected& selection);
 
@@ -152,8 +156,17 @@ class MainWindow : public QMainWindow, public ord::OpenRoad::Observer
   // Add the selections to highlight set
   void addHighlighted(const SelectionSet& selection, int highlight_group = -1);
 
+  // Remove a selection from the set of highlights
+  void removeHighlighted(const Selected& selection);
+
   // Add Ruler to Layout View
-  std::string addRuler(int x0, int y0, int x1, int y1, const std::string& label = "", const std::string& name = "");
+  std::string addRuler(int x0,
+                       int y0,
+                       int x1,
+                       int y1,
+                       const std::string& label = "",
+                       const std::string& name = "",
+                       bool euclidian = true);
 
   // Delete Ruler to Layout View
   void deleteRuler(const std::string& name);
@@ -208,7 +221,8 @@ class MainWindow : public QMainWindow, public ord::OpenRoad::Observer
   void removeMenuItem(const std::string& name);
 
   // request for user input
-  const std::string requestUserInput(const QString& title, const QString& question);
+  const std::string requestUserInput(const QString& title,
+                                     const QString& question);
 
   bool anyObjectInSet(bool selection_set, odb::dbObjectType obj_type);
   void selectHighlightConnectedInsts(bool select_flag, int highlight_group = 0);
@@ -268,6 +282,7 @@ class MainWindow : public QMainWindow, public ord::OpenRoad::Observer
   LayoutScroll* scroll_;
   TimingWidget* timing_widget_;
   DRCWidget* drc_viewer_;
+  BrowserWidget* hierarchy_widget_;
 
   FindObjectDialog* find_dialog_;
 
@@ -290,6 +305,7 @@ class MainWindow : public QMainWindow, public ord::OpenRoad::Observer
   QAction* help_;
   QAction* build_ruler_;
   QAction* show_dbu_;
+  QAction* default_ruler_style_;
   QAction* font_;
 
   QLabel* location_;

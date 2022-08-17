@@ -86,10 +86,10 @@ Opendp::placeRowFillers(int row,
                         const char* prefix,
                         dbMasterSeq *filler_masters)
 {
-  dbOrientType orient = rowOrient(row);
   int j = 0;
   while (j < row_site_count_) {
     Pixel *pixel = gridPixel(j, row);
+    const dbOrientType orient = pixel->orient_;
     if (pixel->cell == nullptr
         && pixel->is_valid) {
       int k = j;
@@ -116,7 +116,8 @@ Opendp::placeRowFillers(int row,
           string inst_name = prefix + to_string(row) + "_" + to_string(k);
           // printf(" filler %s %d\n", inst_name.c_str(), master->getWidth() /
           // site_width_);
-          dbInst *inst = dbInst::create(block_, master, inst_name.c_str());
+          dbInst *inst = dbInst::create(block_, master, inst_name.c_str(),
+                                        /* physical_only */ true);
           int x = core_.xMin() + k * site_width_;
           int y = core_.yMin() + row * row_height_;
           inst->setOrient(orient);
@@ -180,6 +181,25 @@ Opendp::gapFillers(int gap,
     fillers.clear();
   }
   return fillers;
+}
+
+void Opendp::removeFillers()
+{
+  block_ = db_->getChip()->getBlock();
+  for (odb::dbInst* db_inst : block_->getInsts()) {
+    if (isFiller(db_inst)) {
+      odb::dbInst::destroy(db_inst);
+    }
+  }
+}
+
+bool 
+Opendp::isFiller(odb::dbInst *db_inst)
+{
+  dbMaster *db_master = db_inst->getMaster();
+  return db_master->getType() == odb::dbMasterType::CORE_SPACER
+    // Filter spacer cells used as tapcells.
+    && db_inst->getPlacementStatus() != odb::dbPlacementStatus::LOCKED;
 }
 
 }  // namespace opendp

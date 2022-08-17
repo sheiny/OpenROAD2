@@ -433,9 +433,7 @@ proc cluster_netlist { args } {
 
   par::generate_seeds 1
 
-    set currentId [par::run_3party_clustering]
-
-    return $currentId
+  return [par::run_clustering]
 }
 
 #--------------------------------------------------------------------
@@ -488,48 +486,22 @@ proc report_netlist_partitions { args } {
   par::report_netlist_partitions $partitioning_id
 }
 
-sta::define_cmd_args "read_partitioning" { [-read_file name] \
-  [-final_partitions] \
-}
+sta::define_cmd_args "read_partitioning" { -read_file name [-instance_map_file file_path] }
 
 proc read_partitioning { args } {
   sta::parse_key_args "read_partitioning" args \
     keys { -read_file \
-      -final_partitions \
+      -instance_map_file
     } flags { }
 
-  par::set_final_partitions $keys(-final_partitions)
-    if { ![info exists keys(-read_file)] } {
-      utl::error PAR 51 "Missing mandatory argument -read_file"
-    } else {
-      par::read_file $keys(-read_file)
-    }
-
-
-  if { ![info exists keys(-final_partitions)] } {
-    utl::error PAR 52 "Missing mandatory argument \"-final_partitions \[2, 32768\]\"."
-  } else {
+  if { ![info exists keys(-read_file)] } {
+    utl::error PAR 51 "Missing mandatory argument -read_file"
   }
-}
-
-sta::define_cmd_args "run_clustering" { [-scheme name] \
-}
-
-proc run_clustering { args } {
-  sta::parse_key_args "run_clustering" args \
-    keys {-scheme \
-    } flags {}
-
-# Tool
-  set schemes "hem scheme2 scheme3"
-    if { ![info exists keys(-scheme)] } {
-      utl::error PAR 53 "Missing mandatory argument -scheme"
-    } elseif { !($keys(-scheme) in $schemes) } {
-      utl::error PAR 54 "Invalid scheme. Use one of the following: $schemes."
-    } else {
-      par::set_clustering_scheme $keys(-scheme)
-    }
-  par::run_clustering
+  set instance_file ""
+  if { [info exists keys(-instance_map_file)] } {
+    set instance_file $keys(-instance_map_file)
+  }
+  return [par::read_file $keys(-read_file) $instance_file]
 }
 
 sta::define_cmd_args "report_partition_graph" { [-graph_model name
@@ -577,12 +549,13 @@ sta::define_cmd_args "partition_design" { [-max_num_macro max_num_macro] \
                                           [-timing_weight timing_weight] \
                                           [-std_cell_timing_flag std_cell_timing_flag] \
                                           [-report_directory report_file] \
+                                          [-keepin {llx lly urx ury}] \
                                           -report_file report_file \
                                         }
 proc partition_design { args } {
     sta::parse_key_args "partition_design" args keys {-max_num_macro -min_num_macro
                      -max_num_inst  -min_num_inst -net_threshold -virtual_weight -ignore_net_threshold
-                     -num_hop -timing_weight -report_directory -report_file -std_cell_timing_flag} flags {  }
+                     -num_hop -timing_weight -report_directory -report_file -std_cell_timing_flag -keepin} flags {  }
     if { ![info exists keys(-report_file)] } {
         utl::error PAR 70 "Missing mandatory argument -report_file."
     }
@@ -598,6 +571,11 @@ proc partition_design { args } {
     set num_hop 4
     set timing_weight 0
     set std_cell_timing_flag false
+    set keepin_lx  -1
+    set keepin_ly  -1
+    set keepin_ux  -1
+    set keepin_uy  -1
+    set keepin false
 
     if { [info exists keys(-max_num_macro)] } {
         set max_num_macro $keys(-max_num_macro)
@@ -643,8 +621,21 @@ proc partition_design { args } {
         set std_cell_timing_flag $keys(-std_cell_timing_flag)
     }
 
+    if { [info exists keys(-keepin)] } {
+        set keepin true 
+        set keepin_bbox $keys(-keepin)
+        if { [llength $keepin_bbox] != 4 } {
+            set keepin false
+        } else {
+            lassign $keepin_bbox keepin_lx keepin_ly keepin_ux keepin_uy 
+        }
+    }
+
+
 
     file mkdir $report_directory
 
-    par::partition_design_cmd $max_num_macro $min_num_macro $max_num_inst $min_num_inst $net_threshold $virtual_weight $ignore_net_threshold $num_hop $timing_weight $std_cell_timing_flag $report_directory $report_file
+    par::partition_design_cmd $max_num_macro $min_num_macro $max_num_inst $min_num_inst $net_threshold $virtual_weight \
+                              $ignore_net_threshold $num_hop $timing_weight $std_cell_timing_flag $report_directory $report_file \
+                              $keepin_lx $keepin_ly $keepin_ux $keepin_uy
 }

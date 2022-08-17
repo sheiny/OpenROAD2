@@ -386,8 +386,7 @@ FeatureExtractor::calculateDensity()
     Utils::AreaDBU cell_area = node_ptr->cellArea;
     total_area += (macro_area+cell_area);
   }
-  odb::Rect dieRect;
-  db_->getChip()->getBlock()->getDieArea(dieRect);
+  odb::Rect dieRect = db_->getChip()->getBlock()->getDieArea();
   auto die_area = dieRect.area();
   return (double)total_area/die_area;
 }
@@ -729,8 +728,7 @@ void
 FeatureExtractor::extractInstFeatures(odb::dbInst* inst)
 {
   odb::dbBox *box = inst->getBBox();
-  odb::Rect bbox_inst;
-  box->getBox(bbox_inst);
+  odb::Rect bbox_inst = box->getBox();
   std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
   odb::dbTransform transform;
   inst->getTransform(transform);

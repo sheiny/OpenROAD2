@@ -42,13 +42,17 @@
 namespace ord {
 // Defined in OpenRoad.i
 grt::GlobalRouter* getGlobalRouter();
-}  // namespace ord
+}
 
 using ord::getGlobalRouter;
 using sta::LibertyPort;
 %}
 
 %include "../../Exception.i"
+
+%import <stl.i>
+%import <std_vector.i>
+%template(vector_int) std::vector<int>;
 
 %inline %{
 
@@ -108,6 +112,11 @@ set_overflow_iterations(int iterations)
   getGlobalRouter()->setOverflowIterations(iterations);
 }
 
+void set_congestion_report_file (const char * file_name)
+{
+  getGlobalRouter()->setCongestionReportFile(file_name);
+}
+
 void
 set_grid_origin(int x, int y)
 {
@@ -134,6 +143,12 @@ set_macro_extension(int macroExtension)
 }
 
 void
+set_pin_offset(int pin_offset)
+{
+  getGlobalRouter()->setPinOffset(pin_offset);
+}
+
+void
 set_seed(int seed)
 {
   getGlobalRouter()->setSeed(seed);
@@ -152,9 +167,9 @@ set_perturbation_amount(int perturbation)
 }
 
 void
-run()
+global_route()
 {
-  getGlobalRouter()->globalRoute();
+  getGlobalRouter()->globalRoute(true);
 }
 
 void
@@ -163,22 +178,16 @@ estimate_rc()
   getGlobalRouter()->estimateRC();
 }
 
-void
-repair_antennas(LibertyPort* diodePort, int iterations)
+std::vector<int>
+route_layer_lengths(odb::dbNet* db_net)
 {
-  getGlobalRouter()->repairAntennas(diodePort, iterations);
+  return getGlobalRouter()->routeLayerLengths(db_net);
 }
 
 void
-clear()
+repair_antennas(odb::dbMTerm* diode_mterm, int iterations)
 {
-  getGlobalRouter()->clear();
-}
-
-void
-write_guides(char* fileName)
-{
-  getGlobalRouter()->writeGuides(fileName);
+  getGlobalRouter()->repairAntennas(diode_mterm, iterations);
 }
 
 void
@@ -193,7 +202,11 @@ read_guides(const char* fileName)
   getGlobalRouter()->readGuides(fileName);
 }
 
-void set_global_route_debug_cmd(const odb::dbNet *net, bool steinerTree, bool rectilinearSTree, bool tree2D, bool tree3D)
+void set_global_route_debug_cmd(const odb::dbNet *net,
+                                bool steinerTree,
+                                bool rectilinearSTree,
+                                bool tree2D,
+                                bool tree3D)
 {
   getGlobalRouter()->initDebugFastRoute();
   getGlobalRouter()->setDebugNet(net);
@@ -208,13 +221,17 @@ void create_wl_report_file(const char* file_name, bool verbose)
   getGlobalRouter()->createWLReportFile(file_name, verbose);
 }
 
-void report_net_wire_length(odb::dbNet *net, bool global_route, bool detailed_route, bool verbose, const char* file_name)
+void report_net_wire_length(odb::dbNet *net,
+                            bool global_route,
+                            bool detailed_route,
+                            bool verbose,
+                            const char* file_name)
 {
   getGlobalRouter()->reportNetWireLength(net, global_route, detailed_route, verbose, file_name);
 }
 
 void
-erase_routes()
+clear_route_guides()
 {
   getGlobalRouter()->clearRouteGui();
 }

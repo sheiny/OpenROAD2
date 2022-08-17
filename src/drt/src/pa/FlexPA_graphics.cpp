@@ -75,10 +75,13 @@ FlexPAGraphics::FlexPAGraphics(frDebugSettings* settings,
     }
     term_name_ = settings_->pinName.substr(pos + 1);
     auto inst_name = settings_->pinName.substr(0, pos);
+    logger_->info(DRT, 4000, "DEBUGGING inst {} term {}", inst_name, term_name_);
     if (inst_name == "PIN") {  // top level bterm
       inst_ = nullptr;
     } else {
       inst_ = design->getTopBlock()->getInst(inst_name);
+      if (!inst_)
+          logger_->warn(DRT, 5000, "INST NOT FOUND!");
     }
   }
 
@@ -113,9 +116,9 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
     Rect bbox;
     bool skip = false;
     if (via_def->getLayer1Num() == layerNum) {
-      via->getLayer1BBox(bbox);
+      bbox = via->getLayer1BBox();
     } else if (via_def->getLayer2Num() == layerNum) {
-      via->getLayer2BBox(bbox);
+      bbox = via->getLayer2BBox();
     } else {
       skip = true;
     }
@@ -128,8 +131,7 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
 
   for (auto seg : pa_segs_) {
     if (seg->getLayerNum() == layerNum) {
-      Rect bbox;
-      seg->getBBox(bbox);
+      Rect bbox = seg->getBBox();
       painter.setPen(layer, /* cosmetic */ true);
       painter.setBrush(layer);
       painter.drawRect({bbox.xMin(), bbox.yMin(), bbox.xMax(), bbox.yMax()});
@@ -141,9 +143,7 @@ void FlexPAGraphics::drawLayer(odb::dbTechLayer* layer, gui::Painter& painter)
     painter.setBrush(gui::Painter::transparent);
     for (auto& marker : *pa_markers_) {
       if (marker->getLayerNum() == layerNum) {
-        Rect bbox;
-        marker->getBBox(bbox);
-        painter.drawRect({bbox.xMin(), bbox.yMin(), bbox.xMax(), bbox.yMax()});
+        painter.drawRect(marker->getBBox());
       }
     }
   }
@@ -182,9 +182,7 @@ void FlexPAGraphics::startPin(frMPin* pin,
   pin_ = pin;
   inst_term_ = inst_term;
 
-  Rect box;
-  inst_term->getInst()->getBBox(box);
-  gui_->zoomTo({box.xMin(), box.yMin(), box.xMax(), box.yMax()});
+  gui_->zoomTo(inst_term->getInst()->getBBox());
   gui_->pause();
 }
 
@@ -266,8 +264,7 @@ void FlexPAGraphics::setViaAP(
   pa_segs_.clear();
   pa_markers_ = &markers;
   for (auto& marker : markers) {
-    Rect bbox;
-    marker->getBBox(bbox);
+    Rect bbox = marker->getBBox();
     logger_->info(DRT,
                   119,
                   "Marker ({}, {}) ({}, {}) on {}:",
@@ -302,8 +299,7 @@ void FlexPAGraphics::setPlanarAP(
   pa_segs_ = {seg};
   pa_markers_ = &markers;
   for (auto& marker : markers) {
-    Rect bbox;
-    marker->getBBox(bbox);
+    Rect bbox = marker->getBBox();
     logger_->info(DRT,
                   292,
                   "Marker {} at ({}, {}) ({}, {}).",
@@ -347,8 +343,7 @@ void FlexPAGraphics::setObjsAndMakers(
   }
   pa_markers_ = &markers;
   for (auto& marker : markers) {
-    Rect bbox;
-    marker->getBBox(bbox);
+    Rect bbox = marker->getBBox();
     logger_->info(DRT,
                   281,
                   "Marker {} at ({}, {}) ({}, {}).",

@@ -34,7 +34,7 @@
 namespace odb {
 class Point;
 class Rect;
-}
+}  // namespace odb
 
 namespace fr {
 using odb::Rect;
@@ -69,6 +69,7 @@ class frRegionQuery
   void addMarker(frMarker* in);
   void addGRObj(grShape* in);
   void addGRObj(grVia* in);
+  void addBlockObj(frBlockObject* obj);
 
   // Queries
   void query(const box_t& boostb,
@@ -116,6 +117,7 @@ class frRegionQuery
   void removeGRObj(grShape* in);
   void removeGRObj(grVia* in);
   void removeMarker(frMarker* in);
+  void removeBlockObj(frBlockObject* in);
 
   // init
   void init();
@@ -139,10 +141,6 @@ class frRegionQuery
 
   frRegionQuery();
 
-  template <class Archive>
-  void serialize(Archive& ar, const unsigned int version);
-  
-  friend class boost::serialization::access;
 };
 }  // namespace fr
 

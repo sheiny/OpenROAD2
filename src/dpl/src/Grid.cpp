@@ -41,6 +41,7 @@
 
 #include <cmath>
 #include <limits>
+#include <boost/polygon/polygon.hpp>
 
 #include "odb/dbTransform.h"
 #include "utl/Logger.h"
@@ -73,9 +74,15 @@ Opendp::initGrid()
       pixel.group_ = nullptr;
       pixel.util = 0.0;
       pixel.is_valid = false;
-      pixel.is_hopeless = true;
+      pixel.is_hopeless = false;
     }
   }
+
+  namespace gtl = boost::polygon;
+  using namespace gtl::operators;
+
+  gtl::polygon_90_set_data<int> hopeless;
+  hopeless += gtl::rectangle_data<int>{0, 0, row_site_count_, row_count_};
 
   // Fragmented row support; mark valid sites.
   for (auto db_row : block_->getRows()) {
@@ -87,7 +94,9 @@ Opendp::initGrid()
     const int y_row = (orig_y - core_.yMin()) / row_height_;
 
     for (int x = x_start; x < x_end; x++) {
-      grid_[y_row][x].is_valid = true;
+      Pixel& pixel = grid_[y_row][x];
+      pixel.is_valid = true;
+      pixel.orient_ = db_row->getOrient();
     }
 
     // The safety margin is to avoid having only a very few sites
@@ -98,9 +107,16 @@ Opendp::initGrid()
                             x_end + max_displacement_x_ - safety);
     const int yl = std::max(0, y_row - max_displacement_y_ + safety);
     const int yh = std::min(row_count_, y_row + max_displacement_y_ - safety);
-    for (int y = yl; y < yh; y++) {
-      for (int x = xl; x < xh; x++) {
-        grid_[y][x].is_hopeless = false;
+
+    hopeless -= gtl::rectangle_data<int>{xl, yl, xh, yh};
+  }
+
+  std::vector<gtl::rectangle_data<int>> rects;
+  hopeless.get_rectangles(rects);
+  for (const auto& rect : rects) {
+    for (int y = gtl::yl(rect); y < gtl::yh(rect); y++) {
+      for (int x = gtl::xl(rect); x < gtl::xh(rect); x++) {
+        grid_[y][x].is_hopeless = true;
       }
     }
   }
@@ -144,8 +160,7 @@ Opendp::visitCellPixels(Cell &cell,
     if (obs->getTechLayer()->getType() == odb::dbTechLayerType::Value::OVERLAP) {
       have_obstructions = true;
 
-      Rect rect;
-      obs->getBox(rect);
+      Rect rect = obs->getBox();
       dbTransform transform;
       inst->getTransform(transform);
       transform.apply(rect);
@@ -372,20 +387,9 @@ Opendp::paintPixel(Cell *cell, int grid_x, int grid_y)
       }
     }
   }
-  // This is most likely broken. -cherry
-  if (have_multi_row_cells_) {
-    if (grid_height % 2 == 1) {
-      if (rowTopPower(grid_y) != topPower(cell)) {
-        cell->orient_ = dbOrientType::MX;
-      }
-      else {
-        cell->orient_ = dbOrientType::R0;
-      }
-    }
-  }
-  else {
-    cell->orient_ = rowOrient(grid_y);
-  }
+
+  // This is most likely broken for multi-row cells
+  cell->orient_ = gridPixel(grid_x, grid_y)->orient_;
 }
 
 }  // namespace opendp

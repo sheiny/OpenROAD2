@@ -26,13 +26,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dr/FlexGridGraph.h"
-
 #include <fstream>
 #include <iostream>
 #include <map>
 
 #include "dr/FlexDR.h"
+#include "dr/FlexGridGraph.h"
 
 using namespace std;
 using namespace fr;
@@ -88,11 +87,56 @@ bool FlexGridGraph::outOfDieVia(frMIdx x,
                                 frMIdx z,
                                 const Rect& dieBox)
 {
-  frViaDef* via = getTech()->getLayer(getLayerNum(z) + 1)->getDefaultViaDef();
+  frLayerNum lNum = getLayerNum(z) + 1;
+  if (lNum > getTech()->getTopLayerNum())
+    return false;
+  frViaDef* via = getTech()->getLayer(lNum)->getDefaultViaDef();
   Rect viaBox(via->getLayer1ShapeBox());
   viaBox.merge(via->getLayer2ShapeBox());
   viaBox.moveDelta(xCoords_[x], yCoords_[y]);
   return !dieBox.contains(viaBox);
+}
+bool FlexGridGraph::hasOutOfDieViol(frMIdx x, frMIdx y, frMIdx z)
+{
+  const frLayerNum lNum = getLayerNum(z);
+  if (!getTech()->getLayer(lNum)->isUnidirectional()) {
+    return false;
+  }
+  Rect testBoxUp;
+  if (lNum + 1 <= getTech()->getTopLayerNum()) {
+    frViaDef* via = getTech()->getLayer(lNum + 1)->getDefaultViaDef();
+    if (via) {
+      testBoxUp = via->getLayer1ShapeBox();
+      testBoxUp.merge(via->getLayer2ShapeBox());
+      testBoxUp.moveDelta(xCoords_[x], yCoords_[y]);
+    } else {
+      // artificial value to indicate no via in test below
+      dieBox_.bloat(1, testBoxUp);
+    }
+  }
+  Rect testBoxDown;
+  if (lNum - 1 >= getTech()->getBottomLayerNum()) {
+    frViaDef* via = getTech()->getLayer(lNum - 1)->getDefaultViaDef();
+    if (via) {
+      testBoxDown = via->getLayer1ShapeBox();
+      testBoxDown.merge(via->getLayer2ShapeBox());
+      testBoxDown.moveDelta(xCoords_[x], yCoords_[y]);
+    } else {
+      // artificial value to indicate no via in test below
+      dieBox_.bloat(1, testBoxDown);
+    }
+  }
+  if (getTech()->getLayer(lNum)->isVertical()) {
+    return (testBoxUp.xMax() > dieBox_.xMax()
+            || testBoxUp.xMin() < dieBox_.xMin())
+           && (testBoxDown.xMax() > dieBox_.xMax()
+               || testBoxDown.xMin() < dieBox_.xMin());
+  }
+  // layer is horizontal
+  return (testBoxUp.yMax() > dieBox_.yMax()
+          || testBoxUp.yMin() < dieBox_.yMin())
+         && (testBoxDown.yMax() > dieBox_.yMax()
+             || testBoxDown.yMin() < dieBox_.yMin());
 }
 
 bool FlexGridGraph::isWorkerBorder(frMIdx v, bool isVert)
@@ -137,7 +181,7 @@ void FlexGridGraph::initEdges(
   getDim(xDim, yDim, zDim);
   // initialize grid graph
   frMIdx xIdx = 0, yIdx = 0, zIdx = 0;
-  design->getTopBlock()->getDieBox(dieBox_);
+  dieBox_ = design->getTopBlock()->getDieBox();
   for (const auto& [layerNum, dir] : zMap) {
     frLayerNum nonPrefLayerNum;
     const auto layer = getTech()->getLayer(layerNum);
@@ -165,23 +209,23 @@ void FlexGridGraph::initEdges(
         bool xFound2 = (xIt2 != xSubMap.end());
         bool xFound3 = (xIt3 != xSubMap.end());
         // add cost to out-of-die edge
-        bool outOfDiePlanar = false;
+        bool isOutOfDieVia = outOfDieVia(xIdx, yIdx, zIdx, dieBox_);
         // add edge for preferred direction
         if (dir == dbTechLayerDir::HORIZONTAL && yFound) {
           if (layerNum >= BOTTOM_ROUTING_LAYER
               && layerNum <= TOP_ROUTING_LAYER) {
-            if (layer->getLef58RightWayOnGridOnlyConstraint() == nullptr
-                || yIt->second != nullptr) {
+            if ((!isOutOfDieVia || !hasOutOfDieViol(xIdx, yIdx, zIdx))
+                && (layer->getLef58RightWayOnGridOnlyConstraint() == nullptr
+                    || yIt->second != nullptr)) {
               addEdge(xIdx, yIdx, zIdx, frDirEnum::E, bbox, initDR);
-              if (yIt->second == nullptr || outOfDiePlanar
-                  || isWorkerBorder(yIdx, false)) {
+              if (yIt->second == nullptr || isWorkerBorder(yIdx, false)) {
                 setGridCostE(xIdx, yIdx, zIdx);
               }
             }
           }
           // via to upper layer
           if (xFound2) {
-            if (!outOfDieVia(xIdx, yIdx, zIdx, dieBox_)) {
+            if (!isOutOfDieVia) {
               addEdge(xIdx, yIdx, zIdx, frDirEnum::U, bbox, initDR);
               bool condition
                   = (yIt->second == nullptr || xIt2->second == nullptr);
@@ -193,18 +237,18 @@ void FlexGridGraph::initEdges(
         } else if (dir == dbTechLayerDir::VERTICAL && xFound) {
           if (layerNum >= BOTTOM_ROUTING_LAYER
               && layerNum <= TOP_ROUTING_LAYER) {
-            if (layer->getLef58RightWayOnGridOnlyConstraint() == nullptr
-                || xIt->second != nullptr) {
+            if ((!isOutOfDieVia || !hasOutOfDieViol(xIdx, yIdx, zIdx))
+                && (layer->getLef58RightWayOnGridOnlyConstraint() == nullptr
+                    || xIt->second != nullptr)) {
               addEdge(xIdx, yIdx, zIdx, frDirEnum::N, bbox, initDR);
-              if (xIt->second == nullptr || outOfDiePlanar
-                  || isWorkerBorder(xIdx, true)) {
+              if (xIt->second == nullptr || isWorkerBorder(xIdx, true)) {
                 setGridCostN(xIdx, yIdx, zIdx);
               }
             }
           }
           // via to upper layer
           if (yFound2) {
-            if (!outOfDieVia(xIdx, yIdx, zIdx, dieBox_)) {
+            if (!isOutOfDieVia) {
               addEdge(xIdx, yIdx, zIdx, frDirEnum::U, bbox, initDR);
               bool condition
                   = (yIt2->second == nullptr || xIt->second == nullptr);
@@ -332,12 +376,13 @@ void FlexGridGraph::initTracks(
     dbTechLayerDir currPrefRouteDir = layer->getDir();
     for (auto& tp : design->getTopBlock()->getTrackPatterns(currLayerNum)) {
       // allow wrongway if global varialble and design rule allow
-      bool flag = (USENONPREFTRACKS && !layer->isUnidirectional())
-                      ? (tp->isHorizontal()
-                         && currPrefRouteDir == dbTechLayerDir::VERTICAL)
-                            || (!tp->isHorizontal()
-                                && currPrefRouteDir == dbTechLayerDir::HORIZONTAL)
-                      : true;
+      bool flag
+          = (USENONPREFTRACKS && !layer->isUnidirectional())
+                ? (tp->isHorizontal()
+                   && currPrefRouteDir == dbTechLayerDir::VERTICAL)
+                      || (!tp->isHorizontal()
+                          && currPrefRouteDir == dbTechLayerDir::HORIZONTAL)
+                : true;
       if (flag) {
         int trackNum = ((tp->isHorizontal() ? bbox.xMin() : bbox.yMin())
                         - tp->getStartCoord())

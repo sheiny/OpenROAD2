@@ -31,6 +31,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 
+#include "pin_alignment.h"
+
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
@@ -42,7 +44,6 @@
 #include <vector>
 
 #include "block_placement.h"
-#include "pin_alignment.h"
 #include "shape_engine.h"
 #include "util.h"
 #include "utl/Logger.h"
@@ -161,7 +162,7 @@ bool SimulatedAnnealingCore::IsFeasible() const
 {
   const float tolerance = 0.01;
   return width_ <= outline_width_ * (1 + tolerance)
-    && height_ <= outline_height_ * (1 + tolerance);
+         && height_ <= outline_height_ * (1 + tolerance);
 }
 
 void SimulatedAnnealingCore::WriteFloorplan(const std::string& file_name) const
@@ -238,10 +239,10 @@ void SimulatedAnnealingCore::PackFloorplan()
 
 void SimulatedAnnealingCore::SingleSwap(bool flag)
 {
-  int index1 = (int) (floor((distribution_) (generator_) *macros_.size()));
-  int index2 = (int) (floor((distribution_) (generator_) *macros_.size()));
+  int index1 = (int) (floor((distribution_)(generator_) *macros_.size()));
+  int index2 = (int) (floor((distribution_)(generator_) *macros_.size()));
   while (index1 == index2) {
-    index2 = (int) (floor((distribution_) (generator_) *macros_.size()));
+    index2 = (int) (floor((distribution_)(generator_) *macros_.size()));
   }
 
   if (flag)
@@ -252,10 +253,10 @@ void SimulatedAnnealingCore::SingleSwap(bool flag)
 
 void SimulatedAnnealingCore::DoubleSwap()
 {
-  int index1 = (int) (floor((distribution_) (generator_) *macros_.size()));
-  int index2 = (int) (floor((distribution_) (generator_) *macros_.size()));
+  int index1 = (int) (floor((distribution_)(generator_) *macros_.size()));
+  int index2 = (int) (floor((distribution_)(generator_) *macros_.size()));
   while (index1 == index2) {
-    index2 = (int) (floor((distribution_) (generator_) *macros_.size()));
+    index2 = (int) (floor((distribution_)(generator_) *macros_.size()));
   }
 
   swap(pos_seq_[index1], pos_seq_[index2]);
@@ -336,10 +337,10 @@ void SimulatedAnnealingCore::Perturb()
   pre_wirelength_ = wirelength_;
   pre_outline_penalty_ = outline_penalty_;
 
-  float op = (distribution_) (generator_);
+  float op = (distribution_)(generator_);
   if (op <= flip_prob_) {
     action_id_ = 1;
-    float prob = (distribution_) (generator_);
+    float prob = (distribution_)(generator_);
     if (prob <= 0.5)
       flip_flag_ = true;
     else
@@ -408,9 +409,9 @@ void SimulatedAnnealingCore::CalculateWirelength()
 
     for (int i = 0; i < blocks.size(); i++) {
       const float x = macros_[macro_map_[blocks[i]]].GetX()
-                + macros_[macro_map_[blocks[i]]].GetPinX();
+                      + macros_[macro_map_[blocks[i]]].GetPinX();
       const float y = macros_[macro_map_[blocks[i]]].GetY()
-                + macros_[macro_map_[blocks[i]]].GetPinY();
+                      + macros_[macro_map_[blocks[i]]].GetPinY();
       lx = min(lx, x);
       ly = min(ly, y);
       ux = max(ux, x);
@@ -428,7 +429,6 @@ void SimulatedAnnealingCore::CalculateWirelength()
 
     wirelength_ += (abs(ux - lx) + abs(uy - ly)) * weight;
   }
-
 }
 
 float SimulatedAnnealingCore::NormCost(float area,
@@ -495,10 +495,9 @@ void SimulatedAnnealingCore::FastSA()
   float pre_cost = NormCost(area_, wirelength_, outline_penalty_);
   float cost = pre_cost;
   float delta_cost = 0.0;
-  float best_cost = cost;
   float T = init_T_;
 
-  while (step <= max_num_step_) {  
+  while (step <= max_num_step_) {
     for (int i = 0; i < perturb_per_step_; i++) {
       Perturb();
       CalculateWirelength();
@@ -511,18 +510,19 @@ void SimulatedAnnealingCore::FastSA()
 
       if (delta_cost <= 0 || num <= prob) {
         pre_cost = cost;
-        if (cost < best_cost) 
-          best_cost = cost;
-      } else 
+      } else {
         Restore();
+      }
     }
     step++;
-    if(step == max_num_step_) {
-        flip_prob_ = 1.0; // force the agent to focus on flipping only
-        perturb_per_step_ = perturb_per_step_ * 10;
+
+    if (step == max_num_step_) {
+      flip_prob_ = 1.0;  // force the agent to focus on flipping only
+      perturb_per_step_ = perturb_per_step_ * 10;
     }
     T = T * cooling_rate_;
   }
+
   PackFloorplan();
 }
 
@@ -555,7 +555,7 @@ void ParseMacroFile(vector<Macro>& macros,
 }
 
 bool PinAlignmentSingleCluster(
-    const char *report_directory,
+    const char* report_directory,
     Cluster* cluster,
     const unordered_map<string, pair<float, float>>& terminal_position,
     const vector<Net*>& nets,
@@ -571,20 +571,21 @@ bool PinAlignmentSingleCluster(
   int max_num_step = 3000;
   int k = 5;
   float c = 100.0;
-  float alpha = 0.3;
-  float beta = 0.4;
+  float alpha = 0.5;
+  float beta = 0.2;
   float gamma = 0.3;
-  float flip_prob = 0.2;
-  float pos_swap_prob = 0.3;
-  float neg_swap_prob = 0.3;
-  float double_swap_prob = 0.2;
+  float flip_prob = 0.1;
+  float pos_swap_prob = 0.4;
+  float neg_swap_prob = 0.4;
+  float double_swap_prob = 0.1;
 
   string name = cluster->GetName();
   for (int j = 0; j < name.size(); j++)
     if (name[j] == '/')
       name[j] = '*';
 
-  logger->info(MPL, 3002, "Performing pin alignment on macro cluster {}.", name);
+  logger->info(
+      MPL, 3002, "Performing pin alignment on macro cluster {}.", name);
 
   const float lx = cluster->GetX();
   const float ly = cluster->GetY();
@@ -595,9 +596,10 @@ bool PinAlignmentSingleCluster(
 
   // deal with macros
   vector<Macro> macros = cluster->GetMacros();
-  const string macro_file = string(report_directory) + string("/") + name + string(".txt.block");
+  const string macro_file
+      = string(report_directory) + string("/") + name + string(".txt.block");
   ParseMacroFile(macros, halo_width, macro_file);
-  const int perturb_per_step = 5 * macros.size();
+  const int perturb_per_step = 10 * macros.size();
   std::mt19937 rand_generator(seed);
   vector<int> seed_list;
   for (int j = 0; j < num_thread; j++)
@@ -684,13 +686,15 @@ bool PinAlignmentSingleCluster(
 // Pin Alignment Engine
 bool PinAlignment(const vector<Cluster*>& clusters,
                   Logger* logger,
-                  const char *report_directory,
+                  const char* report_directory,
                   float halo_width,
                   int num_thread,
                   int num_run,
                   unsigned seed)
 {
   logger->info(MPL, 3001, "Starting pin alignment.");
+
+  num_run = 1;
 
   unordered_map<string, pair<float, float>> terminal_position;
   vector<Net*> nets;
@@ -719,24 +723,25 @@ bool PinAlignment(const vector<Cluster*>& clusters,
       }
 
       // deal with nets
-      const string net_file = string(report_directory) + string("/") + name + string(".txt.net");
+      const string net_file
+          = string(report_directory) + string("/") + name + string(".txt.net");
       block_placement::ParseNetFile(nets, terminal_position, net_file.c_str());
-        
+
       const bool flag = PinAlignmentSingleCluster(report_directory,
-                                            clusters[i],
-                                            terminal_position,
-                                            nets,
-                                            logger,
-                                            halo_width,
-                                            num_thread,
-                                            num_run,
-                                            seed);
+                                                  clusters[i],
+                                                  terminal_position,
+                                                  nets,
+                                                  logger,
+                                                  halo_width,
+                                                  num_thread,
+                                                  num_run,
+                                                  seed);
 
       if (flag == false)
         return false;
 
       terminal_position.clear();
-      for (int j = 0; j < nets.size(); j++) 
+      for (int j = 0; j < nets.size(); j++)
         delete nets[j];
 
       nets.clear();

@@ -93,6 +93,7 @@ bool rtl_macro_placer(const char* config_file,
                       const float macro_blockage_wt,
                       const float location_wt,
                       const float notch_wt,
+                      const float dead_space,
                       const float macro_halo,
                       const char* report_file,
                       const char* macro_blockage_file,
@@ -107,8 +108,7 @@ bool rtl_macro_placer(const char* config_file,
   //  Default for Parameters
   //
   // These parameters are related to shape engine
-  float min_aspect_ratio = 0.39;
-  float dead_space = 0.05;
+  float min_aspect_ratio = 0.29;
 
   string region_file = string(macro_blockage_file);
   string location_file = string(prefer_location_file);
@@ -133,7 +133,7 @@ bool rtl_macro_placer(const char* config_file,
   float macro_blockage_weight = macro_blockage_wt;  // weight for macro blockage
   float location_weight = location_wt;  // weight for preferred location
   float notch_weight = notch_wt;        // weight for notch
-  float halo_width = macro_halo;  // halo width around macros
+  float halo_width = macro_halo;        // halo width around macros
 
   float learning_rate
       = 0.00;  // learning rate for dynamic weight in cost function
@@ -154,7 +154,7 @@ bool rtl_macro_placer(const char* config_file,
   int k = 5000000;
   float c = 1000.0;
   int max_num_step = 4000;
-  int perturb_per_step = 300;
+  int perturb_per_step = 400;
 
   int snap_layer = 4;
 
@@ -166,7 +166,6 @@ bool rtl_macro_placer(const char* config_file,
     unordered_map<string, string> params = ParseConfigFile(config_file);
 
     get_param(params, "min_aspect_ratio", min_aspect_ratio, logger);
-    get_param(params, "dead_space", dead_space, logger);
     get_param(params, "learning_rate", learning_rate, logger);
     get_param(params, "shrink_factor", shrink_factor, logger);
     get_param(params, "shrink_freq", shrink_freq, logger);
@@ -240,6 +239,10 @@ bool rtl_macro_placer(const char* config_file,
                                                         num_thread,
                                                         num_run,
                                                         seed);
+
+  if (clusters.empty()) {
+    return true;  // nothing to place
+  }
 
   vector<Block> blocks = block_placement::Floorplan(clusters,
                                                     logger,
@@ -356,9 +359,9 @@ bool rtl_macro_placer(const char* config_file,
 
   file.close();
 
-  string invs_filename
+  string txt_filename
       = string("./") + string(report_directory) + "/macro_placement.txt";
-  file.open(invs_filename);
+  file.open(txt_filename);
   for (int i = 0; i < clusters.size(); i++) {
     if (clusters[i]->GetNumMacro() > 0) {
       float cluster_lx = clusters[i]->GetX();
@@ -431,6 +434,40 @@ bool rtl_macro_placer(const char* config_file,
 
   file.close();
 
+  // Write back to odb
+  auto block = db->getChip()->getBlock();
+  bool create_cluster_regions = false; // turned off till validation of flow through gpl and dpl/dpo
+  for (const auto cluster : clusters) {
+    if (cluster->GetNumMacro() > 0) {
+      float cluster_lx = cluster->GetX();
+      float cluster_ly = cluster->GetY();
+      vector<Macro> macros = cluster->GetMacros();
+      for (const auto& macro : macros) {
+        float lx = outline_lx + cluster_lx + macro.GetX() + halo_width;
+        float ly = outline_ly + cluster_ly + macro.GetY() + halo_width;
+        odb::dbOrientType orientation(macro.GetOrientation().c_str());
+        lx = round(lx / pitch_x) * pitch_x;
+        ly = round(ly / pitch_y) * pitch_y;
+
+        auto inst = block->findInst(macro.GetName().c_str());
+        inst->setOrient(orientation);
+        inst->setLocation(round(lx * dbu), round(ly * dbu));
+        inst->setPlacementStatus(odb::dbPlacementStatus::FIRM);
+      }
+    } else if (create_cluster_regions) {
+      auto region = odb::dbRegion::create(block, cluster->GetName().c_str());
+      odb::dbBox::create(region,
+                         cluster->GetX() * dbu,
+                         cluster->GetY() * dbu,
+                         (cluster->GetX() + cluster->GetWidth()) * dbu,
+                         (cluster->GetY() + cluster->GetHeight()) * dbu);
+      auto group = block->findGroup(cluster->GetName().c_str());
+      if (group) {
+        region->addGroup(group);
+      }
+    }
+  }
+
   logger->report("Finish RTL-MP");
 
   return true;
@@ -451,6 +488,7 @@ bool MacroPlacer2::place(const char* config_file,
                          const float macro_blockage_wt,
                          const float location_wt,
                          const float notch_wt,
+                         const float dead_space,
                          const float macro_halo,
                          const char* report_file,
                          const char* macro_blockage_file,
@@ -467,6 +505,7 @@ bool MacroPlacer2::place(const char* config_file,
                           macro_blockage_wt,
                           location_wt,
                           notch_wt,
+                          dead_space,
                           macro_halo,
                           report_file,
                           macro_blockage_file,

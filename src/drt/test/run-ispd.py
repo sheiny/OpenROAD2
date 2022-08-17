@@ -84,9 +84,8 @@ def gen_files(work_dir, ispd_year, design, drv):
             set_thread_count {threads}
             read_lef {bench_dir}/{design}/{design}.input.lef
             read_def {bench_dir}/{design}/{design}.input.def
-            detailed_route -guide {bench_dir}/{design}/{design}.input.guide \\
-                           -output_guide {design_dir}/{design}.output.guide.mod \\
-                           -output_maze {design_dir}/{design}.output.maze.log \\
+            read_guides {bench_dir}/{design}/{design}.input.guide 
+            detailed_route -output_maze {design_dir}/{design}.output.maze.log \\
                            -output_drc {design_dir}/{design}.output.drc.rpt \\
                            -verbose {verbose}
             write_def {design_dir}/{design}.output.def
@@ -105,7 +104,7 @@ def gen_files(work_dir, ispd_year, design, drv):
     print(f"Create run shell script for {design}")
     run_sh = os.path.join(design_dir, "run.sh")
     script = f"""
-            set -e
+            set -e -o pipefail
             echo Running {design}
             {args.program} -exit {design_dir}/run.tcl 2>&1 \\
                 | tee {design_dir}/run_{design}.log
@@ -134,8 +133,8 @@ def test_enabled(design, patterns):
 design_list_ispd18 = [
     ("ispd18_test1", 0),
     ("ispd18_test2", 0),
-    ("ispd18_test3", 14),
-    ("ispd18_test4", 6),
+    ("ispd18_test3", 0),
+    ("ispd18_test4", 0),
     ("ispd18_test5", 0),
     ("ispd18_test6", 0),
     ("ispd18_test7", 0),
@@ -153,7 +152,7 @@ design_list_ispd19 = [
     ("ispd19_test7", 0),
     ("ispd19_test8", 0),
     ("ispd19_test9", 0),
-    ("ispd19_test10", 19),
+    ("ispd19_test10", 20),
 ]
 
 os.makedirs(args.workspace, exist_ok=True)

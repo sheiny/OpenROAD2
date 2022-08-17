@@ -43,6 +43,7 @@
 #include "CtsOptions.h"
 #include "TechChar.h"
 #include "Util.h"
+#include "Graphics.h"
 
 namespace utl {
 class Logger;
@@ -50,19 +51,21 @@ class Logger;
 
 namespace cts {
 
+class Graphics;
+
 using utl::Logger;
 
 class Matching
 {
  public:
-  Matching(unsigned p0, unsigned p1) : _p0(p0), _p1(p1) {}
+  Matching(unsigned p0, unsigned p1) : p_0(p0), p_1(p1) {}
 
-  unsigned getP0() const { return _p0; }
-  unsigned getP1() const { return _p1; }
+  unsigned getP0() const { return p_0; }
+  unsigned getP1() const { return p_1; }
 
  private:
-  unsigned _p0;
-  unsigned _p1;
+  unsigned p_0;
+  unsigned p_1;
 };
 
 class SinkClustering
@@ -70,19 +73,20 @@ class SinkClustering
  public:
   SinkClustering(CtsOptions* options, TechChar* techChar);
 
-  void addPoint(double x, double y) { _points.emplace_back(x, y); }
-  void addCap(float cap) { _pointsCap.emplace_back(cap); }
+  void addPoint(double x, double y) { points_.emplace_back(x, y); }
+  void addCap(float cap) { pointsCap_.emplace_back(cap); }
   void run(unsigned groupSize, float maxDiameter, int scaleFactor);
-  unsigned getNumPoints() const { return _points.size(); }
+  unsigned getNumPoints() const { return points_.size(); }
 
-  const std::vector<Matching>& allMatchings() const { return _matchings; }
+  const std::vector<Matching>& allMatchings() const { return matchings_; }
 
   std::vector<std::vector<unsigned>> sinkClusteringSolution()
   {
-    return _bestSolution;
+    return bestSolution_;
   }
 
   double getWireLength(std::vector<Point<double>> points);
+  int getScaleFactor() const { return scaleFactor_; }
 
  private:
   void normalizePoints(float maxDiameter = 10);
@@ -91,6 +95,8 @@ class SinkClustering
   void writePlotFile();
   void findBestMatching(unsigned groupSize);
   void writePlotFile(unsigned groupSize);
+  void clusteringVisualizer(const std::vector<Point<double>>& points,
+                            unsigned groupSize);
 
   double computeTheta(double x, double y) const;
   unsigned numVertex(unsigned x, unsigned y) const;
@@ -99,28 +105,24 @@ class SinkClustering
                        double cost,
                        double capCost,
                        unsigned sizeLimit);
-  bool isOne(double pos) const
-  {
-    return (1 - pos) < std::numeric_limits<double>::epsilon();
-  }
-  bool isZero(double pos) const
-  {
-    return pos < std::numeric_limits<double>::epsilon();
-  }
+  static bool isOne(double pos);
+  static bool isZero(double pos);
 
-  CtsOptions* _options;
-  Logger* _logger;
-  TechChar* _techChar;
-  std::vector<Point<double>> _points;
-  std::vector<float> _pointsCap;
-  std::vector<std::pair<double, unsigned>> _thetaIndexVector;
-  std::vector<Matching> _matchings;
-  std::map<unsigned, std::vector<Point<double>>> _sinkClusters;
-  std::vector<std::vector<unsigned>> _bestSolution;
-  float _maxInternalDiameter;
-  float _capPerUnit;
-  bool _useMaxCapLimit;
-  int _scaleFactor;
+  CtsOptions* options_;
+  Logger* logger_;
+  TechChar* techChar_;
+  std::vector<Point<double>> points_;
+  std::vector<float> pointsCap_;
+  std::vector<std::pair<double, unsigned>> thetaIndexVector_;
+  std::vector<Matching> matchings_;
+  std::map<unsigned, std::vector<Point<double>>> sinkClusters_;
+  std::vector<std::vector<unsigned>> bestSolution_;
+  float maxInternalDiameter_;
+  float capPerUnit_;
+  bool useMaxCapLimit_;
+  int scaleFactor_;
+  static constexpr double max_cap__factor_ = 10;
+  std::unique_ptr<Graphics> graphics_;
 };
 
 }  // namespace cts

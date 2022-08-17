@@ -36,12 +36,11 @@
 #include "frBaseTypes.h"
 #include "db/obj/frMarker.h"
 
-extern std::string GUIDE_FILE;
-extern std::string OUTGUIDE_FILE;
 extern std::string DBPROCESSNODE;
 extern std::string OUT_MAZE_FILE;
 extern std::string DRC_RPT_FILE;
 extern std::string CMAP_FILE;
+extern std::string GUIDE_REPORT_FILE;
 // to be removed
 extern int OR_SEED;
 extern double OR_K;
@@ -62,19 +61,22 @@ extern bool USEMINSPACING_OBS;
 extern bool ENABLE_BOUNDARY_MAR_FIX;
 extern bool ENABLE_VIA_GEN;
 extern bool CLEAN_PATCHES;
+extern bool DO_PA;
+extern bool SINGLE_STEP_DR;
+extern bool SAVE_GUIDE_UPDATES;
 // extern int TEST;
 extern std::string VIAINPIN_BOTTOMLAYER_NAME;
 extern std::string VIAINPIN_TOPLAYER_NAME;
 extern fr::frLayerNum VIAINPIN_BOTTOMLAYERNUM;
 extern fr::frLayerNum VIAINPIN_TOPLAYERNUM;
-extern fr::frLayerNum VIAONLY_STDCELLPIN_BOTTOMLAYERNUM;
-extern fr::frLayerNum VIAONLY_STDCELLPIN_TOPLAYERNUM;
 
 extern fr::frLayerNum VIA_ACCESS_LAYERNUM;
 
 extern int MINNUMACCESSPOINT_MACROCELLPIN;
 extern int MINNUMACCESSPOINT_STDCELLPIN;
 extern int ACCESS_PATTERN_END_ITERATION_NUM;
+extern float CONGESTION_THRESHOLD;
+extern int MAX_CLIPSIZE_INCREASE;
 
 extern int END_ITERATION;
 
@@ -163,8 +165,6 @@ std::ostream& operator<<(std::ostream& os, const fr::frBTerm& termIn);
 //std::ostream& operator<<(std::ostream& os, const fr::frPin& pinIn);
 std::ostream& operator<<(std::ostream& os, const fr::frRect& pinFig);
 std::ostream& operator<<(std::ostream& os, const fr::frPolygon& pinFig);
-std::ostream& operator<<(std::ostream& os, const odb::Point& pIn);
-std::ostream& operator<<(std::ostream& os, const odb::Rect& box);
 std::ostream& operator<<(std::ostream& os, const fr::drConnFig& fig);
 std::ostream& operator<<(std::ostream& os, const frShape& fig);
 std::ostream& operator<<(std::ostream& os, const frConnFig& fig);

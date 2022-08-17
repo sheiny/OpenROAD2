@@ -72,7 +72,8 @@ class NesterovPlaceVars {
   
   static const int maxRecursionWlCoef = 10;
   static const int maxRecursionInitSLPCoef = 10;
-
+  
+  bool forceCPU;
   bool timingDrivenMode;
   bool routabilityDrivenMode;
   bool debug;
@@ -126,9 +127,6 @@ public:
   void setMaxIters(int limit) { npVars_.maxNesterovIter = limit; }
 
 private:
-#ifdef ENABLE_CIMG_LIB
-  void plot(const std::string& title, int iteration);
-#endif
   std::shared_ptr<PlacerBase> pb_;
   std::shared_ptr<NesterovBase> nb_;
   utl::Logger* log_;
