@@ -2,46 +2,9 @@
 
 #include "odb/db.h"
 
-#include <boost/geometry.hpp>
-#include <boost/geometry/index/rtree.hpp>
-#include <boost/graph/grid_graph.hpp>
-
-// Shortcuts for Boost namespace.
-namespace bg = boost::geometry;
-namespace bgi = boost::geometry::index;
-
-// Define a 2D cartesian point using geometry box of DBUs.
-typedef bg::model::point<Utils::DBU, 2, bg::cs::cartesian> point_t;
-typedef bg::model::box<point_t> box_t;
-
-// Define RTree type of DBU box using R-Star algorithm.
-typedef std::pair<box_t, ftx::vertexIndex> treeElement;
-typedef bgi::rtree<treeElement, bgi::rstar<16>> RTree;
-
-// Define a 2D Grid Graph with no wrapping.
-typedef boost::grid_graph<2> Graph;
-
 namespace ftx {
 
 enum Axis { x = 0, y = 1 };
-
-GridGraph::GridGraph() :
-  db_(nullptr),
-  graph_(nullptr),
-  rTree_(nullptr)
-{
-}
-
-GridGraph::~GridGraph()
-{
-  xGrid_.clear();
-  yGrid_.clear();
-  vertex2Node_.clear();
-  if( graph_ != nullptr)
-    delete (Graph*) graph_;
-  if( rTree_ != nullptr)
-    delete (RTree*) rTree_;
-}
 
 void
 GridGraph::initGridFromCoords(std::vector<Utils::DBU> xTicks,
@@ -87,10 +50,9 @@ GridGraph::initGridUsingDimensions(odb::dbDatabase* db,
 Node*
 GridGraph::intersectingNode(odb::Point point)
 {
-  RTree* rTree = (RTree*) rTree_;
   point_t query_point(point.x(), point.y());
   std::vector<treeElement> vertices_found;
-  rTree->query(bgi::intersects(query_point),
+  rTree_->query(bgi::intersects(query_point),
                std::back_inserter(vertices_found));
   if(vertices_found.empty())
     return nullptr;
@@ -100,12 +62,11 @@ GridGraph::intersectingNode(odb::Point point)
 std::vector<Node*>
 GridGraph::intersectingNodes(odb::Rect rect)
 {
-  RTree* rTree = (RTree*) rTree_;
   std::vector<Node*> result;
   box_t query_box({rect.xMin(), rect.yMin()},
                   {rect.xMax(), rect.yMax()});
   std::vector<treeElement> vertices_found;
-  rTree->query(bgi::intersects(query_box),
+  rTree_->query(bgi::intersects(query_box),
                std::back_inserter(vertices_found));
   result.reserve(vertices_found.size());
   for(auto tree_element : vertices_found)
@@ -205,10 +166,9 @@ GridGraph::adjacentNode(vertexIndex node_index,
                        unsigned int axis,
                        bool next)
 {
-  Graph *graph = (Graph*) graph_;
-  auto v = vertex(node_index, *graph);
-  auto adj = next ? graph->next(v, axis) : graph->previous(v, axis);
-  auto adj_id = get(boost::vertex_index, *graph, adj);
+  auto v = vertex(node_index, *graph_.get());
+  auto adj = next ? graph_->next(v, axis) : graph_->previous(v, axis);
+  auto adj_id = get(boost::vertex_index, *graph_.get(), adj);
   return adj_id == node_index ? nullptr : &vertex2Node_.at(adj_id);
 }
 
@@ -221,15 +181,13 @@ GridGraph::node(vertexIndex node_index)
 long unsigned int
 GridGraph::XLength() const
 {
-  Graph *graph = (Graph*) graph_;
-  return graph->length(Axis::x);
+  return graph_->length(Axis::x);
 }
 
 long unsigned int
 GridGraph::YLength() const
 {
-  Graph *graph = (Graph*) graph_;
-  return graph->length(Axis::y);
+  return graph_->length(Axis::y);
 }
 
 unsigned int
@@ -243,11 +201,11 @@ GridGraph::buildGraph()
 {
   boost::array<std::size_t, 2> lengths = {{xGrid_.size()-1, yGrid_.size()-1}};
   boost::array<bool, 2> wrapped = {{false, false}};
-  rTree_ = (void*) (new RTree);
-  graph_ = new Graph(lengths, wrapped);
+  rTree_ = std::make_unique<RTree>();
+  graph_ = std::make_unique<Graph>(lengths, wrapped);
+
   unsigned int num_nodes = (xGrid_.size()-1)*(yGrid_.size()-1);
   vertex2Node_.reserve(num_nodes);
-  RTree* rtree = (RTree*) rTree_;
   Utils::DBU prev_y = *yGrid_.rbegin();
   Utils::DBU prev_x = *xGrid_.begin();
   auto x_length = xGrid_.size()-1;
@@ -262,7 +220,7 @@ GridGraph::buildGraph()
       Node node(node_id, node_box);
       vertex2Node_.insert({node_id, node});
       box_t gcell_box({prev_x, *y_it}, {*x_it, prev_y});
-      rtree->insert({gcell_box, node_id});
+      rTree_->insert({gcell_box, node_id});
       prev_x = *x_it;
     }
     prev_x = *xGrid_.begin();

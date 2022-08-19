@@ -2,21 +2,35 @@
 
 #include "Node.h"
 #include "Types.h"
-#include <vector>
+#include <boost/geometry.hpp>
+#include <boost/geometry/index/rtree.hpp>
+#include <boost/graph/grid_graph.hpp>
+#include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace odb {
   class dbDatabase;
 }
 
+// Shortcuts for Boost namespace.
+namespace bg = boost::geometry;
+namespace bgi = boost::geometry::index;
+
 namespace ftx {
 
 class GridGraph
 {
+  private:
+  // Define a 2D cartesian point using geometry box of DBUs.
+  typedef bg::model::point<Utils::DBU, 2, bg::cs::cartesian> point_t;
+  typedef bg::model::box<point_t> box_t;
+  // Define RTree type of DBU box using R-Star algorithm.
+  typedef std::pair<box_t, ftx::vertexIndex> treeElement;
+  typedef bgi::rtree<treeElement, bgi::rstar<16>> RTree;
+  // Define a 2D Grid Graph with no wrapping.
+  typedef boost::grid_graph<2> Graph;
   public:
-    GridGraph();
-    ~GridGraph();
-
     //Builder functions
     void initGridFromCoords(std::vector<Utils::DBU> xTicks,
                             std::vector<Utils::DBU> yTicks);
@@ -62,8 +76,8 @@ class GridGraph
     //Do not modify this map outside the buildGraph function
     //Otherwise, all Node references might be invalidated.
     std::unordered_map<vertexIndex, Node> vertex2Node_;
-    void* graph_;
-    void* rTree_;
+    std::unique_ptr<Graph> graph_;
+    std::unique_ptr<RTree> rTree_;
 };
 
 }
