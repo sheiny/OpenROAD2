@@ -84,6 +84,71 @@ FeatureExtractor::~FeatureExtractor()
 }
 
 void
+FeatureExtractor::initGraph(int sizeInRowHeights)
+{
+  std::cout<<"FeatureExtractor::initGraph called."<<std::endl;
+  gridGraph_ = new ftx::GridGraph();
+  auto block = db_->getChip()->getBlock();
+  auto row = block->getRows().begin();
+  auto site = row->getSite();
+  auto height = site->getHeight();
+  auto tile_dim = height * sizeInRowHeights;
+  gridGraph_->initGridUsingDimensions(db_, tile_dim, tile_dim);
+}
+
+void
+FeatureExtractor::initGraphFromDef()
+{
+  std::cout<<"FeatureExtractor::initGraphFromDef called."<<std::endl;
+  gridGraph_ = new ftx::GridGraph();
+
+  odb::dbBlock* block = db_->getChip()->getBlock();
+  odb::dbGCellGrid* grid = block->getGCellGrid();
+  std::vector<Utils::DBU> xTicks, yTicks;
+  grid->getGridX(xTicks);
+  grid->getGridY(yTicks);
+  gridGraph_->initGridFromCoords(xTicks, yTicks);
+}
+
+void
+FeatureExtractor::initGraphFromCongestion(std::string file_path)
+{
+  std::cout<<"FeatureExtractor::initGraphFromCongestion called."<<std::endl;
+  gridGraph_ = new ftx::GridGraph();
+  std::vector<Utils::DBU> xTicks, yTicks;
+  ftx::CongestParser parser;
+  // Create grid
+  auto congestions = parser.parseCongestion(file_path);
+  for(auto congestion : congestions)
+  {
+    odb::Rect rect = congestion.rect;
+    xTicks.push_back(rect.xMin());
+    xTicks.push_back(rect.xMax());
+    yTicks.push_back(rect.yMin());
+    yTicks.push_back(rect.yMax());
+  }
+  gridGraph_->initGridFromCoords(xTicks, yTicks);
+
+  // Populate grid values
+  for(auto congestion : congestions)
+  {
+    odb::Rect rect = congestion.rect;
+    int xMid = (rect.xMin()+rect.xMax())/2;
+    int yMid = (rect.yMin()+rect.yMax())/2;
+    odb::Point center = odb::Point(xMid, yMid);
+    ftx::Node* node = gridGraph_->intersectingNode(center);
+    if(node == nullptr)
+      throw std::out_of_range("There is a gcell without any grid node overlap!!!");
+    node->vertical_overflow = congestion.v_overflow;
+    node->vertical_remain = congestion.v_remain;
+    node->vertical_tracks = congestion.v_tracks;
+    node->horizontal_overflow = congestion.h_overflow;
+    node->horizontal_remain = congestion.h_remain;
+    node->horizontal_tracks = congestion.h_tracks;
+  }
+}
+
+void
 FeatureExtractor::saveLocations(std::string file_path)
 {
   std::ofstream ofs(file_path, std::ofstream::out);
@@ -144,27 +209,6 @@ FeatureExtractor::loadLocations(std::string file_path)
   }
   double avgDipl = ((double)totalXdispl + (double)totalYdispl)/numInstFound;
   std::cout<<"The total displacement in placement units is: "<<avgDipl<<" for: "<<numInstFound<<" instances."<<std::endl;
-}
-
-void
-FeatureExtractor::initGraph(int sizeInRowHeights)
-{
-  std::cout<<"FeatureExtractor::initGraph called."<<std::endl;
-  gridGraph_ = new ftx::GridGraph();
-  auto block = db_->getChip()->getBlock();
-  auto row = block->getRows().begin();
-  auto site = row->getSite();
-  auto height = site->getHeight();
-  auto tile_dim = height * sizeInRowHeights;
-  gridGraph_->initGridUsingDimensions(db_, tile_dim, tile_dim);
-}
-
-void
-FeatureExtractor::initGraphFromDef()
-{
-  std::cout<<"FeatureExtractor::initGraphFromDef called."<<std::endl;
-  gridGraph_ = new ftx::GridGraph();
-  gridGraph_->initGridFromDEFGCells(db_);
 }
 
 void
@@ -241,43 +285,6 @@ FeatureExtractor::readCongestion(std::istream & isstream)
   }
 }
 
-void
-FeatureExtractor::initGraphFromCongestion(std::string file_path)
-{
-  std::cout<<"FeatureExtractor::initGraphFromCongestion called."<<std::endl;
-  gridGraph_ = new ftx::GridGraph();
-  std::vector<Utils::DBU> xTicks, yTicks;
-  ftx::CongestParser parser;
-  // Create grid
-  auto congestions = parser.parseCongestion(file_path);
-  for(auto congestion : congestions)
-  {
-    odb::Rect rect = congestion.rect;
-    xTicks.push_back(rect.xMin());
-    xTicks.push_back(rect.xMax());
-    yTicks.push_back(rect.yMin());
-    yTicks.push_back(rect.yMax());
-  }
-  gridGraph_->initGridFromCoords(xTicks, yTicks);
-
-  // Populate grid values
-  for(auto congestion : congestions)
-  {
-    odb::Rect rect = congestion.rect;
-    int xMid = (rect.xMin()+rect.xMax())/2;
-    int yMid = (rect.yMin()+rect.yMax())/2;
-    odb::Point center = odb::Point(xMid, yMid);
-    ftx::Node* node = gridGraph_->intersectingNode(center);
-    if(node == nullptr)
-      throw std::out_of_range("There is a gcell without any grid node overlap!!!");
-    node->vertical_overflow = congestion.v_overflow;
-    node->vertical_remain = congestion.v_remain;
-    node->vertical_tracks = congestion.v_tracks;
-    node->horizontal_overflow = congestion.h_overflow;
-    node->horizontal_remain = congestion.h_remain;
-    node->horizontal_tracks = congestion.h_tracks;
-  }
-}
 
 void
 FeatureExtractor::clear()
@@ -317,13 +324,15 @@ FeatureExtractor::writeCNNInputFile(std::string path,
   int validNeighborNodes = 0;
   for(auto node : container)
   {
-    std::string neighborhood;
-    bool validNeighborhood = gridGraph_->neighborhoodCongestion(node, neighborhoodSize, neighborhood);
-    if(validNeighborhood)
-    {
-      outViolating<<neighborhood<<std::endl;//write file
-      ++validNeighborNodes;
-    }
+    auto neighborhood = gridGraph_->neighborhood(node, neighborhoodSize);
+    if(neighborhood.empty())
+      continue;
+    std::string row;
+    for(auto node : neighborhood)
+      row += node->printCongestion();
+    row.pop_back();// remove last character (space)
+    outViolating<<row<<std::endl;//write file
+    ++validNeighborNodes;
   }
   outViolating.close();
   // it is very important to include in the name of the file the matrix

@@ -44,17 +44,6 @@ GridGraph::~GridGraph()
 }
 
 void
-GridGraph::initGridFromDEFGCells(odb::dbDatabase* db)
-{
-  db_ = db;
-  odb::dbBlock* block = db_->getChip()->getBlock();
-  odb::dbGCellGrid* grid = block->getGCellGrid();
-  grid->getGridX(xGrid_);
-  grid->getGridY(yGrid_);
-  buildGraph();
-}
-
-void
 GridGraph::initGridFromCoords(std::vector<Utils::DBU> xTicks,
                               std::vector<Utils::DBU> yTicks)
 {
@@ -78,12 +67,14 @@ GridGraph::initGridUsingDimensions(odb::dbDatabase* db,
   odb::Rect core_area = block->getCoreArea();
   std::vector<Utils::DBU> xTicks, yTicks;
 
-  auto x_steps = 1 + ((core_area.dx()-1)/width);// if core_area.dx() != 0
+  //round up positive integer division without oveflow.
+  auto x_steps = 1 + ((core_area.dx()-1)/width);
   xTicks.reserve(x_steps);
   for(auto i = 0; i <= x_steps; i++)
     xTicks.push_back(std::min(core_area.xMin()+i*width, core_area.xMax()));
 
-  auto y_steps = 1 + ((core_area.dy()-1)/height);// if core_area.dy() != 0
+  //round up positive integer division without oveflow.
+  auto y_steps = 1 + ((core_area.dy()-1)/height);
   yTicks.reserve(y_steps);
   for(auto i = 0; i <= y_steps; i++)
     yTicks.push_back(std::min(core_area.yMin()+i*height, core_area.yMax()));
@@ -182,67 +173,6 @@ GridGraph::neighborhood(Node* node, int distance)
     leftMostNode = downNode(leftMostNode->nodeID);
   }
   return result;
-}
-
-bool
-GridGraph::neighborhoodCongestion(Node* node, int size, std::string &result)
-{
-  // First check if we have a valid neighborhood (try to walk
-  // size times on each direction)
-  // Up
-  ftx::Node* upNeighbor = node;
-  for(int i = 0; i < size; ++i)
-  {
-    upNeighbor = upNode(upNeighbor->nodeID);
-    if (upNeighbor == nullptr)
-      return false;
-  }
-  // Down
-  ftx::Node* downNeighbor = node;
-  for(int i = 0; i < size; ++i)
-  {
-    downNeighbor = downNode(downNeighbor->nodeID);
-    if (downNeighbor == nullptr)
-      return false;
-  }
-  // Left
-  ftx::Node* leftNeighbor = node;
-  for(int i = 0; i < size; ++i)
-  {
-    leftNeighbor = leftNode(leftNeighbor->nodeID);
-    if (leftNeighbor == nullptr)
-      return false;
-  }
-  // Right
-  ftx::Node* rightNeighbor = node;
-  for(int i = 0; i < size; ++i)
-  {
-    rightNeighbor = rightNode(rightNeighbor->nodeID);
-    if (rightNeighbor == nullptr)
-      return false;
-  }
-  //Then move to the starting point to follow row-major order
-  // when printing congestion attributes
-  ftx::Node *upLeft = upNeighbor;
-  for(int i = 0; i < size; ++i)
-    upLeft = leftNode(upLeft->nodeID);
-
-  int numJumps = size*2;
-  ftx::Node *leftMostNode = upLeft;
-  //for columns
-  for(int i = 0; i <= numJumps; ++i)
-  {
-    //  for rows
-    ftx::Node *currentNode = leftMostNode;
-    for(int j = 0; j <= numJumps; ++j)
-    {
-      result += currentNode->printCongestion();
-      currentNode = rightNode(currentNode->nodeID);
-    }
-    leftMostNode = downNode(leftMostNode->nodeID);
-  }
-  result.pop_back();// remove last character (space)
-  return true;
 }
 
 Node*

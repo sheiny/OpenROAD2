@@ -36,21 +36,24 @@ class FeatureExtractor {
     FeatureExtractor();
     ~FeatureExtractor();
 
+    //Init GridGraph using a multiple of RowHeight (considers core area only).
+    void initGraph(int sizeInRowHeights = 3);
+
+    //Init GridGraph using DEF GCells description.
+    void initGraphFromDef();
+
+    //Init GridGraph using GR solution and its congestion information.
+    void initGraphFromCongestion(std::string file_path);
+
     void saveLocations(std::string file_path);
 
     void loadLocations(std::string file_path);
-
-    void initGraph(int sizeInRowHeights);
-
-    void initGraphFromDef();
 
     void readRPT(std::string file_path,
                  odb::dbLib* lib);
 
     void readCongestion(std::string file_path);
     void readCongestion(std::istream & isstream);
-
-    void initGraphFromCongestion(std::string file_path);
 
     void clear();
     void extractFeatures();
