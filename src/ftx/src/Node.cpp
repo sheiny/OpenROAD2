@@ -38,27 +38,27 @@ Node::Node(vertexIndex node_id, odb::Rect rect) :
   violation = false;
 }
 
-Node::~Node(){
-}
-
 std::string
-Node::debugInfo()
+Node::printPlacementFeatures(std::string separator, bool debug)
 {
-  std::string debug_info;
-  std::string separator = "\n";
-  debug_info+="NodeID: "+std::to_string(nodeID)+separator;
-  debug_info+="NumCells: "+std::to_string(numCells)+separator;
-  debug_info+="NumPins: "+std::to_string(numCellPins)+separator;
-  debug_info+="NumMacros: "+std::to_string(numMacros)+separator;
-  debug_info+="NumMacroPins: "+std::to_string(numMacroPins)+separator;
-  debug_info+="NumMacroPins: "+std::to_string(numMacroPins)+separator;
-  debug_info+="HorizontalCap: "+std::to_string(horizontal_capacity)+separator;
-  debug_info+="VerticalCap: "+std::to_string(vertical_capacity)+separator;
-  debug_info+="HorizontalDemand: "+std::to_string(horizontal_demand)+separator;
-  debug_info+="VerticalDemand: "+std::to_string(vertical_demand)+separator;
-  debug_info+="HorizontalOverflow: "+std::to_string((double)horizontal_demand/horizontal_capacity)+separator;
-  debug_info+="VerticalOverflow: "+std::to_string((double)vertical_demand/vertical_capacity)+separator;
-  return debug_info;
+  auto area = rect.area();
+  std::string result;
+  result += (debug?"numCells: ":"") + std::to_string(numCells) + separator;
+  result += (debug?"numCellPins: ":"") + std::to_string(numCellPins) + separator;
+  result += (debug?"numMacros: ":"") + std::to_string(numMacros) + separator;
+  result += (debug?"numMacroPins: ":"") + std::to_string(numMacroPins) + separator;
+  result += (debug?"HorizontalOverflow: ":"") + std::to_string((double)horizontal_demand/horizontal_capacity) + separator;
+  result += (debug?"VerticalOverflow: ":"") + std::to_string((double)vertical_demand/vertical_capacity) + separator;
+
+  result += (debug?"TileArea: ":"") + std::to_string(area) + separator;
+  result += (debug?"CellDensity: ":"") + std::to_string((double)cellArea/area) + separator;
+  result += (debug?"MacroDensity: ":"") + std::to_string((double)macroArea/area) + separator;
+  result += (debug?"MacroPinDensity: ":"") + std::to_string((double)macroPinArea/area) + separator;
+  result += (debug?"L1BlkgDensity: ":"") + std::to_string((double)l1BlockageArea/area) + separator;
+  result += (debug?"L2BlkgDensity: ":"") + std::to_string((double)l2BlockageArea/area) + separator;
+  result += (debug?"L1PinDensity: ":"") + std::to_string((double)l1PinArea/area) + separator;
+  result += (debug?"L2PinDensity: ":"") + std::to_string((double)l2PinArea/area) + separator;
+  return result;
 }
 
 std::string
@@ -71,29 +71,6 @@ Node::printCongestion()
   result += std::to_string(horizontal_overflow)+" ";
   result += std::to_string(horizontal_remain)+" ";
   result += std::to_string(horizontal_tracks)+" ";
-  return result;
-}
-
-std::string
-Node::printPlacementFeatures()
-{
-  auto area = rect.area();
-  std::string result;
-  result += std::to_string(numCells) + ", ";
-  result += std::to_string(numCellPins) + ", ";
-  result += std::to_string(numMacros) + ", ";
-  result += std::to_string(numMacroPins) + ", ";
-  result += std::to_string((double)horizontal_demand/horizontal_capacity) + ", ";
-  result += std::to_string((double)vertical_demand/vertical_capacity) + ", ";
-
-  result += std::to_string(area) + ", ";
-  result += std::to_string((double)cellArea/area) + ", ";
-  result += std::to_string((double)macroArea/area) + ", ";
-  result += std::to_string((double)macroPinArea/area) + ", ";
-  result += std::to_string((double)l1BlockageArea/area) + ", ";
-  result += std::to_string((double)l2BlockageArea/area) + ", ";
-  result += std::to_string((double)l1PinArea/area) + ", ";
-  result += std::to_string((double)l2PinArea/area) + ", ";
   return result;
 }
 

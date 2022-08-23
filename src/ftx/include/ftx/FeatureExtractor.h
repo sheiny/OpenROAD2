@@ -55,7 +55,6 @@ class FeatureExtractor {
     void readCongestion(std::string file_path);
     void readCongestion(std::istream & isstream);
 
-    void clear();
     void extractFeatures();
 
     void extractCNNFeatures(std::string outputPath,
@@ -101,7 +100,7 @@ class FeatureExtractor {
     void extractRoutingFeatures(odb::dbNet* net);
 
     odb::dbDatabase *db_;
-    ftx::GridGraph *gridGraph_;//TODO use a unique pointer
+    std::unique_ptr<GridGraph> gridGraph_;
     stt::SteinerTreeBuilder *stt_;
     utl::Logger *logger_;
     std::unique_ptr<DRVRenderer> drvRenderer_;

@@ -78,16 +78,13 @@ FeatureExtractor::FeatureExtractor()
   stt_ = ord::OpenRoad::openRoad()->getSteinerTreeBuilder();
 }
 
-FeatureExtractor::~FeatureExtractor()
-{
-  //clear();
-}
+FeatureExtractor::~FeatureExtractor() = default;
 
 void
 FeatureExtractor::initGraph(int sizeInRowHeights)
 {
   std::cout<<"FeatureExtractor::initGraph called."<<std::endl;
-  gridGraph_ = new ftx::GridGraph();
+  gridGraph_ = std::make_unique<ftx::GridGraph>();
   auto block = db_->getChip()->getBlock();
   auto row = block->getRows().begin();
   auto site = row->getSite();
@@ -100,8 +97,7 @@ void
 FeatureExtractor::initGraphFromDef()
 {
   std::cout<<"FeatureExtractor::initGraphFromDef called."<<std::endl;
-  gridGraph_ = new ftx::GridGraph();
-
+  gridGraph_ = std::make_unique<ftx::GridGraph>();
   odb::dbBlock* block = db_->getChip()->getBlock();
   odb::dbGCellGrid* grid = block->getGCellGrid();
   std::vector<Utils::DBU> xTicks, yTicks;
@@ -114,7 +110,7 @@ void
 FeatureExtractor::initGraphFromCongestion(std::string file_path)
 {
   std::cout<<"FeatureExtractor::initGraphFromCongestion called."<<std::endl;
-  gridGraph_ = new ftx::GridGraph();
+  gridGraph_ = std::make_unique<ftx::GridGraph>();
   std::vector<Utils::DBU> xTicks, yTicks;
   ftx::CongestParser parser;
   // Create grid
@@ -283,16 +279,6 @@ FeatureExtractor::readCongestion(std::istream & isstream)
       n->horizontal_tracks += c.h_tracks;
     }
   }
-}
-
-
-void
-FeatureExtractor::clear()
-{
-  db_ = nullptr;
-  stt_ = nullptr;
-  if (gridGraph_ != nullptr)
-    delete gridGraph_;
 }
 
 void
@@ -488,7 +474,7 @@ FeatureExtractor::writeCSV(std::string file_path, int distance)
     //print node ID
     ofs<<std::to_string(node_ptr->nodeID)<<", ";
     for(Node* node : neighborhood)//this follows the major order
-      ofs<<node->printPlacementFeatures();
+      ofs<<node->printPlacementFeatures(", ", false);
     //print node info
     //print neighborhood folowing row major order print node infos
     //print node violation info
@@ -539,7 +525,7 @@ FeatureExtractor::drawDRVs()
   if (drvRenderer_ == nullptr)
   {
     gui::Gui* gui = gui::Gui::get();
-    drvRenderer_ = std::make_unique<DRVRenderer>(db_, gridGraph_);
+    drvRenderer_ = std::make_unique<DRVRenderer>(db_, gridGraph_.get());
     gui->registerRenderer(drvRenderer_.get());
     gui->redraw();
   }
@@ -581,10 +567,10 @@ GridRender::drawObjects(gui::Painter &painter)
 void
 FeatureExtractor::drawGrid()
 {
-  if (drvRenderer_ == nullptr)
+  if (gridRenderer_ == nullptr)
   {
     gui::Gui* gui = gui::Gui::get();
-    gridRenderer_ = std::make_unique<GridRender>(db_, gridGraph_);
+    gridRenderer_ = std::make_unique<GridRender>(db_, gridGraph_.get());
     gui->registerRenderer(gridRenderer_.get());
     gui->redraw();
   }
@@ -705,7 +691,7 @@ void FeatureExtractor::paintNodes(std::string file_path)
   if (nodePainter_ == nullptr)
   {
     gui::Gui* gui = gui::Gui::get();
-    nodePainter_ = std::make_unique<NodePainter>(gridGraph_, nodeIds);
+    nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get(), nodeIds);
     gui->registerRenderer(nodePainter_.get());
     gui->redraw();
   }
@@ -718,7 +704,7 @@ FeatureExtractor::paintNode(unsigned int id)
   if (nodePainter_ == nullptr)
   {
     std::unordered_set<int> nodeIds;
-    nodePainter_ = std::make_unique<NodePainter>(gridGraph_, nodeIds);
+    nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get(), nodeIds);
     gui->registerRenderer(nodePainter_.get());
   }
   nodePainter_->addNode(id);
@@ -730,7 +716,7 @@ FeatureExtractor::printNodeDebugInfo(unsigned int id)
 {
   ftx::Node *node_ptr = gridGraph_->node(id);
   std::cout<<"PrintNodeDebugInfo for node id: "<<id<<std::endl
-           <<node_ptr->debugInfo()<<std::endl;
+           <<node_ptr->printPlacementFeatures("\n", true)<<std::endl;
 }
 
 void

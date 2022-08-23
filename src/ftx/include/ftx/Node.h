@@ -10,13 +10,10 @@ namespace ftx {
 
 struct Node {
     Node(vertexIndex node_id, odb::Rect rect);
-    ~Node();
 
-    std::string debugInfo();
+    std::string printPlacementFeatures(std::string separator, bool debug);
 
     std::string printCongestion();
-
-    std::string printPlacementFeatures();
 
     std::string printDRVs();
 
