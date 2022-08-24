@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Types.h"
-#include <string>
 #include <iosfwd>
-
+#include <limits>
 #include <memory>
+#include <string>
 
 namespace odb {
   class dbDatabase;
@@ -96,7 +96,9 @@ class FeatureExtractor {
                               Node* node, odb::dbTransform transform);
     void extractMacroPins(odb::dbMaster* master, Node* node,
                           odb::dbTransform transform);
-    void initRoutingCapacity();
+    //Consider routing cap from Metal1 up to maxRoutingLevel
+    void initRoutingCapacity(int minRoutingLevel = 1,
+                             int maxRoutingLevel = std::numeric_limits<int>::max());
     void extractRoutingFeatures(odb::dbNet* net);
 
     odb::dbDatabase *db_;

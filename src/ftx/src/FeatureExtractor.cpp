@@ -302,7 +302,7 @@ FeatureExtractor::extractFeatures()
 
   // Routing features
   block->setDrivingItermsforNets();
-  initRoutingCapacity();
+  initRoutingCapacity(2, 3);//PinAccess: consider only layer 2 and 3
   for(auto net : block->getNets())
     extractRoutingFeatures(net);
 }
@@ -585,7 +585,7 @@ FeatureExtractor::drawGrid()
 }
 
 void
-FeatureExtractor::initRoutingCapacity()
+FeatureExtractor::initRoutingCapacity(int minRoutingLevel, int maxRoutingLevel)
 {
   odb::dbBlock *block = db_->getChip()->getBlock();
   odb::dbSet<odb::dbTrackGrid> grids = block->getTrackGrids();
@@ -593,6 +593,9 @@ FeatureExtractor::initRoutingCapacity()
   for(auto trackGrid : grids)
   {
     odb::dbTechLayer *techLayer = trackGrid->getTechLayer();
+    const int routingLevel = techLayer->getRoutingLevel();
+    if(routingLevel < minRoutingLevel || routingLevel > maxRoutingLevel)
+      continue;
     odb::dbTechLayerDir layerDirection = techLayer->getDirection();
     if(layerDirection.getValue() == odb::dbTechLayerDir::Value::NONE)
       continue;
