@@ -9,6 +9,7 @@
 #include "odb/dbTransform.h"
 #include "stt/SteinerTreeBuilder.h"
 
+#include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -288,15 +289,22 @@ FeatureExtractor::extractFeatures()
   auto block = db_->getChip()->getBlock();
   // Placement features
   for(auto inst : block->getInsts())
+  {
+    std::string instName = inst->getName();
+    odb::dbMaster *master = inst->getMaster();
+    std::string masterName = master->getName();
+    if(master->isFiller() ||
+       boost::icontains(instName, "fill") ||
+       boost::icontains(masterName, "fill"))
+      continue;
     extractInstFeatures(inst);
+  }
 
   // Routing features
   block->setDrivingItermsforNets();
   initRoutingCapacity();
   for(auto net : block->getNets())
-  {
     extractRoutingFeatures(net);
-  }
 }
 
 void
