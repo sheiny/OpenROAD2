@@ -47,8 +47,10 @@ Node::printPlacementFeatures(std::string separator, bool debug)
   result += (debug?"numCellPins: ":"") + std::to_string(numCellPins) + separator;
   result += (debug?"numMacros: ":"") + std::to_string(numMacros) + separator;
   result += (debug?"numMacroPins: ":"") + std::to_string(numMacroPins) + separator;
-  result += (debug?"HorizontalOverflow: ":"") + std::to_string((double)horizontal_demand/horizontal_capacity) + separator;
-  result += (debug?"VerticalOverflow: ":"") + std::to_string((double)vertical_demand/vertical_capacity) + separator;
+  double horizontalOverflow = (horizontal_capacity == 0? 0 : (double)horizontal_demand/horizontal_capacity);
+  result += (debug?"HorizontalOverflow: ":"") + std::to_string(horizontalOverflow) + separator;
+  double verticalOverflow = (vertical_capacity == 0? 0 : (double)vertical_demand/vertical_capacity);
+  result += (debug?"VerticalOverflow: ":"") + std::to_string(verticalOverflow) + separator;
 
   result += (debug?"TileArea: ":"") + std::to_string(area) + separator;
   result += (debug?"CellDensity: ":"") + std::to_string((double)cellArea/area) + separator;
