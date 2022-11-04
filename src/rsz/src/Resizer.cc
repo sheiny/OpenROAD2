@@ -175,7 +175,8 @@ Resizer::Resizer() :
   resize_count_(0),
   inserted_buffer_count_(0),
   buffer_moved_into_core_(false),
-  max_wire_length_(0)
+  max_wire_length_(0),
+  worst_slack_nets_percent_(10)
 {
 }
 
@@ -934,13 +935,13 @@ Resizer::findResizeSlacks1()
   }
 
   // Find the nets with the worst slack.
-  double worst_percent = .1;
+
   //  sort(nets.begin(), nets.end(). [&](const Net *net1,
   sort(nets, [this](const Net *net1,
                  const Net *net2)
              { return resizeNetSlack(net1) < resizeNetSlack(net2); });
   worst_slack_nets_.clear();
-  for (int i = 0; i < nets.size() * worst_percent; i++)
+  for (int i = 0; i < nets.size() * worst_slack_nets_percent_ / 100.0; i++)
     worst_slack_nets_.push_back(nets[i]);
 }
 
@@ -2295,7 +2296,8 @@ Resizer::journalMakeBuffer(Instance *buffer)
 {
   debugPrint(logger_, RSZ, "journal", 1, "journal make_buffer {}",
              network_->pathName(buffer));
-  inserted_buffers_.insert(buffer);
+  inserted_buffers_.push_back(buffer);
+  inserted_buffer_set_.insert(buffer);
 }
 
 void
@@ -2304,7 +2306,7 @@ Resizer::journalRestore(int &resize_count,
 {
   for (auto inst_cell : resized_inst_map_) {
     Instance *inst = inst_cell.first;
-    if (!inserted_buffers_.hasKey(inst)) {
+    if (!inserted_buffer_set_.hasKey(inst)) {
       LibertyCell *lib_cell = inst_cell.second;
       debugPrint(logger_, RSZ, "journal", 1, "journal restore {} ({})",
                  network_->pathName(inst),
@@ -2313,12 +2315,15 @@ Resizer::journalRestore(int &resize_count,
       resize_count--;
     }
   }
-  for (Instance *buffer : inserted_buffers_) {
+  while (!inserted_buffers_.empty()) {
+  Instance *buffer = inserted_buffers_.back();
     debugPrint(logger_, RSZ, "journal", 1, "journal remove {}",
                network_->pathName(buffer));
     removeBuffer(buffer);
+    inserted_buffers_.pop_back();
     inserted_buffer_count--;
   }
+  inserted_buffer_set_.clear();
 }
 
 ////////////////////////////////////////////////////////////////
@@ -2454,6 +2459,12 @@ void
 Resizer::setDebugPin(const Pin *pin)
 {
   debug_pin_ = pin;
+}
+
+void
+Resizer::setWorstSlackNetsPercent(float percent)
+{
+  worst_slack_nets_percent_ = percent;
 }
 
 } // namespace

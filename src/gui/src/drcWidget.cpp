@@ -109,15 +109,24 @@ void DRCViolation::computeBBox()
 
 void DRCViolation::paint(Painter& painter)
 {
-  for (const auto& shape : shapes_) {
-    if (auto s = std::get_if<DRCLine>(&shape)) {
-      const odb::Point& p1 = (*s).first;
-      const odb::Point& p2 = (*s).second;
-      painter.drawLine(p1.x(), p1.y(), p2.x(), p2.y());
-    } else if (auto s = std::get_if<DRCRect>(&shape)) {
-      painter.drawRect(*s);
-    } else if (auto s = std::get_if<DRCPoly>(&shape)) {
-      painter.drawPolygon(*s);
+  const int min_box = 20.0 / painter.getPixelsPerDBU();
+
+  const odb::Rect& box = getBBox();
+  if (box.maxDXDY() < min_box) {
+    // box is too small to be useful, so draw X instead
+    odb::Point center(box.xMin() + box.dx() / 2, box.yMin() + box.dy() / 2);
+    painter.drawX(center.x(), center.y(), min_box);
+  } else {
+    for (const auto& shape : shapes_) {
+      if (auto s = std::get_if<DRCLine>(&shape)) {
+        const odb::Point& p1 = (*s).first;
+        const odb::Point& p2 = (*s).second;
+        painter.drawLine(p1.x(), p1.y(), p2.x(), p2.y());
+      } else if (auto s = std::get_if<DRCRect>(&shape)) {
+        painter.drawRect(*s);
+      } else if (auto s = std::get_if<DRCPoly>(&shape)) {
+        painter.drawPolygon(*s);
+      }
     }
   }
 }
@@ -171,7 +180,7 @@ Descriptor::Properties DRCDescriptor::getProperties(std::any object) const
   auto srcs = vio->getSources();
   if (!srcs.empty()) {
     SelectionSet sources;
-    for (auto src : srcs) {
+    for (auto& src : srcs) {
       auto select = gui->makeSelected(src);
       if (select) {
         sources.insert(select);
@@ -239,7 +248,7 @@ QVariant DRCItemModel::data(const QModelIndex& index, int role) const
 DRCWidget::DRCWidget(QWidget* parent)
     : QDockWidget("DRC Viewer", parent),
       logger_(nullptr),
-      view_(new QTreeView(this)),
+      view_(new ObjectTree(this)),
       model_(new DRCItemModel(this)),
       block_(nullptr),
       load_(new QPushButton("Load...", this)),
@@ -273,7 +282,33 @@ DRCWidget::DRCWidget(QWidget* parent)
       SLOT(selectionChanged(const QItemSelection&, const QItemSelection&)));
   connect(load_, SIGNAL(released()), this, SLOT(selectReport()));
 
+  view_->setMouseTracking(true);
+  connect(view_,
+          SIGNAL(entered(const QModelIndex&)),
+          this,
+          SLOT(focusIndex(const QModelIndex&)));
+
+  connect(view_, SIGNAL(viewportEntered()), this, SLOT(defocus()));
+  connect(view_, SIGNAL(mouseExited()), this, SLOT(defocus()));
+
   Gui::get()->registerDescriptor<DRCViolation*>(new DRCDescriptor(violations_));
+}
+
+void DRCWidget::focusIndex(const QModelIndex& focus_index)
+{
+  defocus();
+
+  QStandardItem* item = model_->itemFromIndex(focus_index);
+  QVariant data = item->data();
+  if (data.isValid()) {
+    DRCViolation* violation = data.value<DRCViolation*>();
+    emit focus(Gui::get()->makeSelected(violation));
+  }
+}
+
+void DRCWidget::defocus()
+{
+  emit focus(Selected());
 }
 
 void DRCWidget::setLogger(utl::Logger* logger)
@@ -315,8 +350,10 @@ void DRCWidget::toggleParent(QStandardItem* child)
     states.push_back(pchild->checkState() == Qt::Checked);
   }
 
-  const bool all_on = std::all_of(states.begin(), states.end(), [](bool v){return v;});
-  const bool any_on = std::any_of(states.begin(), states.end(), [](bool v){return v;});
+  const bool all_on
+      = std::all_of(states.begin(), states.end(), [](bool v) { return v; });
+  const bool any_on
+      = std::any_of(states.begin(), states.end(), [](bool v) { return v; });
 
   if (all_on) {
     parent->setCheckState(Qt::Checked);
@@ -327,7 +364,9 @@ void DRCWidget::toggleParent(QStandardItem* child)
   }
 }
 
-bool DRCWidget::setVisibleDRC(QStandardItem* item, bool visible, bool announce_parent)
+bool DRCWidget::setVisibleDRC(QStandardItem* item,
+                              bool visible,
+                              bool announce_parent)
 {
   QVariant data = item->data();
   if (data.isValid()) {
@@ -432,7 +471,8 @@ void DRCWidget::updateModel()
           = makeItem(QString::number(violation_idx++));
       violation_index->setData(QVariant::fromValue(violation));
       violation_index->setCheckable(true);
-      violation_index->setCheckState(violation->isVisible() ? Qt::Checked : Qt::Unchecked);
+      violation_index->setCheckState(violation->isVisible() ? Qt::Checked
+                                                            : Qt::Unchecked);
 
       type_group->appendRow({violation_index, violation_item});
     }
@@ -780,7 +820,6 @@ DRCRenderer::DRCRenderer(
 
 void DRCRenderer::drawObjects(Painter& painter)
 {
-  int min_box = 20.0 / painter.getPixelsPerDBU();
   Painter::Color pen_color = Painter::white;
   Painter::Color brush_color = pen_color;
   brush_color.a = 50;
@@ -791,14 +830,7 @@ void DRCRenderer::drawObjects(Painter& painter)
     if (!violation->isVisible()) {
       continue;
     }
-    const odb::Rect& box = violation->getBBox();
-    if (std::max(box.dx(), box.dy()) < min_box) {
-      // box is too small to be useful, so draw X instead
-      odb::Point center(box.xMin() + box.dx() / 2, box.yMin() + box.dy() / 2);
-      painter.drawX(center.x(), center.y(), min_box);
-    } else {
-      violation->paint(painter);
-    }
+    violation->paint(painter);
   }
 }
 

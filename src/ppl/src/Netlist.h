@@ -42,6 +42,7 @@
 #include <vector>
 
 #include "odb/db.h"
+#include "ppl/IOPlacer.h"
 
 namespace ppl {
 
@@ -59,15 +60,6 @@ enum class Orientation
   south,
   east,
   west
-};
-
-enum class Direction
-{
-  input,
-  output,
-  inout,
-  feedthru,
-  invalid
 };
 
 class InstancePin
@@ -133,6 +125,7 @@ class IOPin
   Direction getDirection() const { return direction_; }
   odb::Point getLowerBound() const { return lower_bound_; };
   odb::Point getUpperBound() const { return upper_bound_; };
+  int getArea() const;
   std::string getNetName() const { return bterm_->getNet()->getName(); }
   odb::dbPlacementStatus getPlacementStatus() const
   {

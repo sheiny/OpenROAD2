@@ -80,6 +80,9 @@ class Fixture
 
   void makeSpacingConstraint(frLayerNum layer_num);
 
+  void makeMetalWidthViaMap(frLayerNum layer_num,
+                            odb::dbMetalWidthViaMap* rule);
+
   void makeMinStepConstraint(frLayerNum layer_num);
 
   void makeMinStep58Constraint(frLayerNum layer_num);
@@ -195,6 +198,7 @@ class Fixture
   std::unique_ptr<fr::Logger> logger;
   std::unique_ptr<frDesign> design;
   frUInt4 numBlockages, numTerms, numMasters, numInsts;
+  odb::dbTech* db_tech;
 };
 
 // BOOST_TEST wants an operator<< for any type it compares.  We

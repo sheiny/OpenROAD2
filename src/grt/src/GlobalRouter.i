@@ -137,6 +137,12 @@ set_clock_layer_range(int minLayer, int maxLayer)
 }
 
 void
+set_critical_nets_percentage(float criticalNetsPercentage)
+{
+  getGlobalRouter()->setCriticalNetsPercentage(criticalNetsPercentage);
+}
+
+void
 set_macro_extension(int macroExtension)
 {
   getGlobalRouter()->setMacroExtension(macroExtension);
@@ -214,6 +220,11 @@ void set_global_route_debug_cmd(const odb::dbNet *net,
   getGlobalRouter()->setDebugRectilinearSTree(rectilinearSTree);
   getGlobalRouter()->setDebugTree2D(tree2D);
   getGlobalRouter()->setDebugTree3D(tree3D);
+}
+
+void set_global_route_debug_stt_input_filename(const char* file_name)
+{
+  getGlobalRouter()->setSttInputFilename(file_name);
 }
 
 void create_wl_report_file(const char* file_name, bool verbose)
