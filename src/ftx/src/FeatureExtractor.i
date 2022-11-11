@@ -76,7 +76,7 @@ extract_cnn_features(char* outputPath, char* circuitName, int neighborhoodSize=1
 }
 
 void
-write_csv(char* fileName, int distance=0)
+write_csv(char* fileName, int distance=1)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->writeCSV(fileName, distance);

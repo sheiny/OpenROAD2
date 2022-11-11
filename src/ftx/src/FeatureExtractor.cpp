@@ -56,6 +56,7 @@ extractSegments(const stt::Tree &tree, bool horizontal)
     const int x2 = neighbor.x;
     const int y2 = neighbor.y;
 
+    //Consider both options for each segment
     if(horizontal)
     {
       result.push_back({x1, x2, y1, y1});
@@ -441,55 +442,97 @@ FeatureExtractor::calculateABU()
 void
 FeatureExtractor::writeCSV(std::string file_path, int distance)
 {
+  distance = std::max(distance, 1); //otherwise surround nodes would be empty
   int neighborhoodSize = (distance*2+1)*(distance*2+1);
-  std::cout<<"FeatureExtractor::writeCSV called."<<std::endl;
-  std::ofstream ofs(file_path, std::ofstream::out);
-  ofs<<"NodeID,";
-
-  //window features
-  std::vector<std::string> placementFeatures = {"#Cells,", "#CellPins,", "#Macros,",
+  std::string header = "NodeID,";
+  std::vector<std::string> features = {"#Cells,", "#CellPins,", "#Macros,",
     "#MacroPins,", "HorizontalOverflow,", "VerticalOverflow,", "TileArea,",
     "CellDensity,", "MacroDensity,", "MacroPinDensity,", "Layer1BlkgDensity,",
     "Layer2BlkgDensity,", "Layer1PinDensity,", "Layer2PinDensity,"};
   for(int i = 0; i < neighborhoodSize; i++)
-  {
-    for(std::string feature : placementFeatures)
-    {
-      ofs<<std::to_string(i)+"_"+feature;
-    }
-  }
+    for(std::string feature : features)
+      header += std::to_string(i)+"_"+feature;
   //drv types
-  ofs<<"AdjacentCutSpacing,"
-     <<"SameLayerCutSpacing,"
-     <<"EndOfLine,"
-     <<"FloatingPatch,"
-     <<"MinArea,"
-     <<"MinWidth,"
-     <<"NonSuficientMetalOverlap,"
-     <<"CutShort,"
-     <<"MetalShort,"
-     <<"OutOfDieShort,"
-     <<"CornerSpacing,"
-     <<"ParallelRunLength,"
+  header += "AdjacentCutSpacing,SameLayerCutSpacing,EndOfLine,FloatingPatch,";
+  header += "MinArea,MinWidth,NonSuficientMetalOverlap,CutShort,MetalShort,";
+  header += "OutOfDieShort,CornerSpacing,ParallelRunLength,HasDetailedRoutingViolation";
   //count global routing neighbor features
-     <<"HasDetailedRoutingViolation"<<std::endl;
+  std::cout<<"FeatureExtractor::writeCSV called."<<std::endl
+           <<"Writing nodes with violation into "+file_path+"_viol.csv"<<std::endl;
+  std::ofstream ofsViol(file_path+"_viol.csv", std::ofstream::out);
+  ofsViol<<header<<std::endl;
+
+  std::unordered_set<Node*> surroundingNodes;
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
-    ftx::Node *node_ptr = gridGraph_->node(node_id);
-    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
-    if(neighborhood.empty())//invalide neighborhood padding is required
+    Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->violation == false)//skip nonViol nodes
       continue;
-    //print node ID
-    ofs<<std::to_string(node_ptr->nodeID)<<", ";
-    for(Node* node : neighborhood)//this follows the major order
-      ofs<<node->printPlacementFeatures(", ", false);
+
+    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
+    if(neighborhood.empty())//invalid neighborhood padding is required
+      continue;
+
+    ofsViol<<std::to_string(node_ptr->nodeID)<<", ";
+    for(Node* neighbor : neighborhood)//this follows the major order
+    {
+      ofsViol<<neighbor->printPlacementFeatures(", ", false);
+      if(neighbor->violation == false)
+        surroundingNodes.insert(neighbor);
+    }
     //print node info
     //print neighborhood folowing row major order print node infos
     //print node violation info
-    ofs<<node_ptr->printDRVs();
+    ofsViol<<node_ptr->printDRVs();
   }
+  ofsViol.close();
 
-  ofs.close();
+
+  std::cout<<"Writing nodes surrounded by violations into "+file_path+"_surround.csv"<<std::endl;
+  std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
+  ofsSurround<<header<<std::endl;
+  for(Node* node : surroundingNodes)
+  {
+    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node, distance);
+    if(neighborhood.empty())//invalid neighborhood padding is required
+      continue;
+
+    ofsSurround<<std::to_string(node->nodeID)<<", ";
+    for(Node* neighbor : neighborhood)//this follows the major order
+      ofsSurround<<neighbor->printPlacementFeatures(", ", false);
+    //print node info
+    //print neighborhood folowing row major order print node infos
+    //print node violation info
+    ofsSurround<<node->printDRVs();
+  }
+  ofsSurround.close();
+
+
+  std::cout<<"Writing non violating nodes into "+file_path+"_nonViol.csv"<<std::endl;
+  std::ofstream ofsNonViol(file_path+"_nonViol.csv", std::ofstream::out);
+  ofsNonViol<<header<<std::endl;
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->violation == true)//skip viol nodes
+      continue;
+
+    if(surroundingNodes.find(node_ptr) != surroundingNodes.end())//skip surround nodes
+      continue;
+
+    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
+    if(neighborhood.empty())//invalid neighborhood padding is required
+      continue;
+
+    ofsNonViol<<std::to_string(node_ptr->nodeID)<<", ";
+    for(Node* neighbor : neighborhood)//this follows the major order
+      ofsNonViol<<neighbor->printPlacementFeatures(", ", false);
+    //print node info
+    //print neighborhood folowing row major order print node infos
+    //print node violation info
+    ofsNonViol<<node_ptr->printDRVs();
+  }
+  ofsNonViol.close();
 }
 
 class DRVRenderer : public gui::Renderer
@@ -864,7 +907,7 @@ FeatureExtractor::extractRoutingFeatures(odb::dbNet* net)
 
   const int driverID = net->getDrivingITerm();
   if(driverID == 0 || driverID == -1)
-    return; //throw std::logic_error("Error, net without a driver (should we skip it?).");
+    return;//throw std::logic_error("Error, net without a driver: "+net->getName());
 
   // Get pin coords and driver
   std::vector<int> xcoords, ycoords;
