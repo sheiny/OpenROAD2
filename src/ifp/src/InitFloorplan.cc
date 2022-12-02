@@ -407,6 +407,13 @@ void InitFloorplan::insertTiecells(odb::dbMTerm* tie_term,
 
   auto* port = network_->dbToSta(tie_term);
   auto* lib_port = network_->libertyPort(port);
+  if (!lib_port) {
+    logger_->error(utl::IFP,
+                   39,
+                   "Liberty cell or port {}/{} not found.",
+                   master->getName(),
+                   tie_term->getName());
+  }
   auto func_operation = lib_port->function()->op();
   const bool is_zero = func_operation == sta::FuncExpr::op_zero;
   const bool is_one = func_operation == sta::FuncExpr::op_one;
@@ -478,10 +485,6 @@ void InitFloorplan::makeTracks(odb::dbTechLayer* layer,
   v.check_positive("y_pitch", y_pitch, 42);
 
   Rect die_area = block_->getDieArea();
-  auto grid = block_->findTrackGrid(layer);
-  if (!grid) {
-    grid = dbTrackGrid::create(block_, layer);
-  }
 
   if (x_offset == 0) {
     x_offset = x_pitch;
@@ -505,6 +508,11 @@ void InitFloorplan::makeTracks(odb::dbTechLayer* layer,
         "Track pattern for {} will be skipped due to y_offset > die height.",
         layer->getName());
     return;
+  }
+
+  auto grid = block_->findTrackGrid(layer);
+  if (!grid) {
+    grid = dbTrackGrid::create(block_, layer);
   }
 
   int layer_min_width = layer->getMinWidth();

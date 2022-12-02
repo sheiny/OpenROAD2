@@ -310,7 +310,7 @@ LocationType Tapcell::getLocationType(const int x,
   if (!in_above && in_below) {
     return BelowMacro;
   }
-  return None;
+  return NoMacro;
 }
 
 odb::dbMaster* Tapcell::pickCornerMaster(LocationType top_bottom,
@@ -441,7 +441,7 @@ bool Tapcell::checkIfFilled(int x,
     x_end = x + width;
   }
 
-  for (auto placement : row_insts) {
+  for (const auto& placement : row_insts) {
     if (x_end > placement[0] && x_start < placement[1]) {
       int left_x = placement[0] - width;
       int right_x = placement[1];
