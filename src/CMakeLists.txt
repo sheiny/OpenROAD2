@@ -250,7 +250,6 @@ add_subdirectory(cts)
 add_subdirectory(grt)
 add_subdirectory(tap)
 add_subdirectory(mpl)
-add_subdirectory(mpl2)
 add_subdirectory(rcx)
 add_subdirectory(psm)
 add_subdirectory(par)
@@ -327,12 +326,6 @@ target_link_libraries(openroad
   ${CMAKE_THREAD_LIBS_INIT}
 )
 
-if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  # mpl2 aborts with link error on darwin so do not link it.
-  target_link_libraries(openroad mpl2)
-else()
-  message(STATUS "Removing MPL2 to avoid run time fatal error.")
-endif()
 
 # tclReadline
 if (TCL_READLINE_LIBRARY AND TCL_READLINE_H)
