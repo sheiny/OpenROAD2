@@ -10,7 +10,6 @@ swig_lib(NAME      ftx
 
 target_sources(ftx
   PRIVATE
-    src/CongestParser.cpp
     src/FeatureExtractor.cpp
     src/GridGraph.cpp
     src/MakeFeatureExtractor.cpp

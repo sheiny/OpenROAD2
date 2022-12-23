@@ -30,6 +30,7 @@ class GridGraph;
 class GridRender;
 struct Node;
 class NodePainter;
+class RectRender;
 
 class FeatureExtractor {
   public:
@@ -42,9 +43,6 @@ class FeatureExtractor {
     //Init GridGraph using DEF GCells description.
     void initGraphFromDef();
 
-    //Init GridGraph using GR solution and its congestion information.
-    void initGraphFromCongestion(std::string file_path);
-
     void saveLocations(std::string file_path);
 
     void loadLocations(std::string file_path);
@@ -52,14 +50,11 @@ class FeatureExtractor {
     void readRPT(std::string file_path,
                  odb::dbLib* lib);
 
-    void readCongestion(std::string file_path);
-    void readCongestion(std::istream & isstream);
+    void readGuide(std::string file_path);
 
     void extractFeatures();
 
-    void extractCNNFeatures(std::string outputPath,
-                            std::string circuitName,
-                            int neighborhoodSize=11);
+    void extractCNNFeatures();
 
     double calculateDensity();
 
@@ -67,6 +62,8 @@ class FeatureExtractor {
     void calculateABU();
 
     void writeCSV(std::string file_path, int distance);
+
+    void writeCNNCSV(std::string file_path, int distance);
 
     void drawDRVs();
 
@@ -76,13 +73,8 @@ class FeatureExtractor {
 
     void paintNode(unsigned int id);
 
-    void printNodeDebugInfo(unsigned int id);
   private:
-    void writeCNNInputFile(std::string path,
-                           std::string circuitName,
-                           std::string fileName,
-                           auto container,
-                           int neighborhoodSize);
+    std::string nodeHyperImage(Node* node, int distance);
 
     void extractInstFeatures(odb::dbInst* inst);
     void extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,
@@ -97,8 +89,7 @@ class FeatureExtractor {
     void extractMacroPins(odb::dbMaster* master, Node* node,
                           odb::dbTransform transform);
     //Consider routing cap from Metal1 up to maxRoutingLevel
-    void initRoutingCapacity(int minRoutingLevel = 1,
-                             int maxRoutingLevel = std::numeric_limits<int>::max());
+    void initRoutingCapacity();
     void extractRoutingFeatures(odb::dbNet* net);
 
     odb::dbDatabase *db_;
@@ -108,6 +99,7 @@ class FeatureExtractor {
     std::unique_ptr<DRVRenderer> drvRenderer_;
     std::unique_ptr<GridRender> gridRenderer_;
     std::unique_ptr<NodePainter> nodePainter_;
+    std::unique_ptr<RectRender> rectRender_;
   };
 }
 

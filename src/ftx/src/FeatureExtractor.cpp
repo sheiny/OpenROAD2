@@ -1,6 +1,5 @@
 #include "ftx/FeatureExtractor.h"
 #include "gui/gui.h"
-#include "ftx/CongestParser.h"
 #include "ftx/GridGraph.h"
 #include "ftx/Utils.h"
 #include "ftx/RptParser.h"
@@ -16,18 +15,41 @@
 #include <stdexcept>
 #include <unordered_set>
 
+#if 0
+//Code for test numberOfTracksBetween
+std::vector<int> elements = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+std::vector<std::tuple<int, int, int>> tests = {{80, 95, 1}, {85, 95, 1}, {5, 35, 3},
+  {5, 30, 3}, {0, 100, 10}, {0, 110, 10}, {99, 110, 1}, {5, 7, 0}, {89, 110, 2}, {89, 90, 1}};
+for(auto t : tests)
+{
+  int result = numberOfTracksBetween(elements, std::get<0>(t), std::get<1>(t));
+  if(result != std::get<2>(t))
+  {
+    std::cout<<"Test fail for lb= "<<std::get<0>(t)<<" up= "<<std::get<1>(t)<<std::endl;
+    std::cout<<"dist= "<<result<<" should be "<<std::get<2>(t)<<std::endl;
+  }
+}
+#endif
+int
+numberOfTracksBetween(const std::vector<int> &elements, int lowerBound, int upperBound)
+{
+    auto itlb = std::lower_bound(elements.begin(), elements.end(), lowerBound);
+    auto itub = itlb;
+    int distance = 0;
+    while(*itub <= upperBound && itub != elements.end())
+    {
+      itub++;
+      distance++;
+    }
+    if(*itlb == lowerBound)
+      distance--;
+    return distance;
+}
 
 struct TrackGrid
 {
-  int step, offset;
-  bool horizontal;
-
-  void init(int _step, int _offset, bool _horizontal)
-  {
-    step = _step;
-    offset = _offset;
-    horizontal = _horizontal;
-  }
+  int routing_level;
+  std::vector<int> xTicks, yTicks;
 };
 
 struct Segment
@@ -39,6 +61,19 @@ struct Segment
     y2(ye)
   {};
   int x1, x2, y1, y2;
+};
+
+struct GuideSegment
+{
+  int layerIndex;
+  odb::Rect rect;
+  bool horizontal;
+};
+
+struct RoutingGuide
+{
+  std::string netName;
+  std::vector<GuideSegment> guides;
 };
 
 std::vector<Segment>
@@ -93,6 +128,7 @@ FeatureExtractor::initGraph(int sizeInRowHeights)
   auto height = site->getHeight();
   auto tile_dim = height * sizeInRowHeights;
   gridGraph_->initGridUsingDimensions(db_, tile_dim, tile_dim);
+  initRoutingCapacity();
 }
 
 void
@@ -106,44 +142,7 @@ FeatureExtractor::initGraphFromDef()
   grid->getGridX(xTicks);
   grid->getGridY(yTicks);
   gridGraph_->initGridFromCoords(xTicks, yTicks);
-}
-
-void
-FeatureExtractor::initGraphFromCongestion(std::string file_path)
-{
-  std::cout<<"FeatureExtractor::initGraphFromCongestion called."<<std::endl;
-  gridGraph_ = std::make_unique<ftx::GridGraph>();
-  std::vector<Utils::DBU> xTicks, yTicks;
-  ftx::CongestParser parser;
-  // Create grid
-  auto congestions = parser.parseCongestion(file_path);
-  for(auto congestion : congestions)
-  {
-    odb::Rect rect = congestion.rect;
-    xTicks.push_back(rect.xMin());
-    xTicks.push_back(rect.xMax());
-    yTicks.push_back(rect.yMin());
-    yTicks.push_back(rect.yMax());
-  }
-  gridGraph_->initGridFromCoords(xTicks, yTicks);
-
-  // Populate grid values
-  for(auto congestion : congestions)
-  {
-    odb::Rect rect = congestion.rect;
-    int xMid = (rect.xMin()+rect.xMax())/2;
-    int yMid = (rect.yMin()+rect.yMax())/2;
-    odb::Point center = odb::Point(xMid, yMid);
-    ftx::Node* node = gridGraph_->intersectingNode(center);
-    if(node == nullptr)
-      throw std::out_of_range("There is a gcell without any grid node overlap!!!");
-    node->vertical_overflow = congestion.v_overflow;
-    node->vertical_remain = congestion.v_remain;
-    node->vertical_tracks = congestion.v_tracks;
-    node->horizontal_overflow = congestion.h_overflow;
-    node->horizontal_remain = congestion.h_remain;
-    node->horizontal_tracks = congestion.h_tracks;
-  }
+  initRoutingCapacity();
 }
 
 void
@@ -240,47 +239,7 @@ FeatureExtractor::readRPT(std::string file_path,
       ++num_violating_nodes;
     }
   }
-  std::cout<<"Nodes with DRVs: "<<num_violating_nodes<<" of "<<gridGraph_->sizeNodes()<<", on Metal1/Metal2/Metal3 Layers."<<std::endl;
-}
-
-void
-FeatureExtractor::readCongestion(std::string file_path)
-{
-  std::cout<<"FeatureExtractor::readCongestion called."<<std::endl;
-  std::ifstream file(file_path);
-  readCongestion(file);
-}
-
-void
-FeatureExtractor::readCongestion(std::istream & isstream)
-{
-  ftx::CongestParser parser;
-  auto congestions = parser.parseCongestion(isstream);
-
-  for(auto c : congestions)
-  {
-    auto nodes = gridGraph_->intersectingNodes(c.rect);
-    int i = 0;
-    ftx::Node * n;
-    for(auto node_ptr : nodes)
-    {
-      auto intersection = node_ptr->rect.intersect(c.rect);
-      if(intersection.area() > 0)
-      {
-        n = node_ptr;
-        i += 1;
-      }
-    }
-    if(i == 1)// There is a misalignment between congest and GCells
-    {
-      n->vertical_overflow += c.v_overflow;
-      n->vertical_remain += c.v_remain;
-      n->vertical_tracks += c.v_tracks;
-      n->horizontal_overflow += c.h_overflow;
-      n->horizontal_remain += c.h_remain;
-      n->horizontal_tracks += c.h_tracks;
-    }
-  }
+  std::cout<<"Nodes with DRVs: "<<num_violating_nodes<<" of "<<gridGraph_->sizeNodes()<<" total nodes."<<std::endl;
 }
 
 void
@@ -303,80 +262,69 @@ FeatureExtractor::extractFeatures()
 
   // Routing features
   block->setDrivingItermsforNets();
-  initRoutingCapacity(2, 3);//PinAccess: consider only layer 2 and 3
   for(auto net : block->getNets())
     extractRoutingFeatures(net);
 }
 
 void
-FeatureExtractor::writeCNNInputFile(std::string path,
-                                    std::string circuitName,
-                                    std::string fileName,
-                                    auto container,
-                                    int neighborhoodSize)
+FeatureExtractor::extractCNNFeatures()
 {
-  std::ofstream outViolating(path+"/temp.txt");
-  int validNeighborNodes = 0;
-  for(auto node : container)
+  auto block = db_->getChip()->getBlock();
+  for(auto inst : block->getInsts())
   {
-    auto neighborhood = gridGraph_->neighborhood(node, neighborhoodSize);
-    if(neighborhood.empty())
+		if(inst->isCore() == false)
+			continue;
+    std::string instName = inst->getName();
+    odb::dbMaster *master = inst->getMaster();
+    std::string masterName = master->getName();
+    if(master->isFiller() ||
+       boost::icontains(instName, "fill") ||
+       boost::icontains(masterName, "fill"))
       continue;
-    std::string row;
-    for(auto node : neighborhood)
-      row += node->printCongestion();
-    row.pop_back();// remove last character (space)
-    outViolating<<row<<std::endl;//write file
-    ++validNeighborNodes;
-  }
-  outViolating.close();
-  // it is very important to include in the name of the file the matrix
-  // shape it should be X_23_23_6
-  std::rename(std::string(path+"/temp.txt").c_str(),
-              std::string(path+"/"+circuitName+"_"+fileName+"_"+
-              std::to_string(validNeighborNodes)+"_"+
-              std::to_string(neighborhoodSize*2+1)+"_"+
-              std::to_string(neighborhoodSize*2+1)+"_6.txt").c_str());
-}
 
-void
-FeatureExtractor::extractCNNFeatures(std::string outputPath,
-                                     std::string circuitName,
-                                     int neighborhoodSize)
-{
-  std::vector<ftx::Node*> violatingNodes;
-  std::unordered_set<ftx::Node*> surroundingViolNodes;
-  std::vector<ftx::Node*> nonViolatingNodes;
-  //Get violating nodes and their surrounded by violating neighbors.
-  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
-  {
-    ftx::Node *node_ptr = gridGraph_->node(node_id);
-    if(node_ptr->violation)
-    {
-      std::vector<ftx::Node*> neighborhood = gridGraph_->neighborhood(node_ptr, 1);
-      if(neighborhood.empty())//invalid neighborhood padding is required
+		odb::Rect bbox_inst = inst->getBBox()->getBox();
+		std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
+		odb::dbTransform transform;
+		inst->getTransform(transform);
+		for(auto node : nodes)
+		{
+			odb::Rect node_rect = node->rect;
+			odb::Rect intersection;
+			node_rect.intersection(bbox_inst, intersection);
+			auto area = intersection.area();
+			if(area == 0)
         continue;
-      violatingNodes.push_back(node_ptr);
-      for(ftx::Node* neighbor : neighborhood)
-      {
-        if(neighbor->violation == false)
-          surroundingViolNodes.insert(neighbor);
-      }
-    }
+
+			for(auto term : master->getMTerms())
+			{
+				if(term->getName() == "VSS" || term->getName() == "VDD")
+					continue;
+				for(auto pin : term->getMPins())
+				{
+					odb::Rect pinIntersection;
+					odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
+          for(auto box : boxes)
+					{
+						odb::Rect pinRect = box->getBox();
+						transform.apply(pinRect);
+			      node_rect.intersection(pinRect, pinIntersection);
+						if(pinIntersection.area() > 0)
+              break;
+					}
+          if(pinIntersection.area() > 0)
+						node->numPins += 1;
+				}
+			}
+		}
   }
-  //Get the free violation nodes (excluding the surrounding ones)
-  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
-  {
-    ftx::Node *node_ptr = gridGraph_->node(node_id);
-    if(node_ptr->violation == false &&
-       surroundingViolNodes.find(node_ptr) == surroundingViolNodes.end())
-    {
-      nonViolatingNodes.push_back(node_ptr);
-    }
-  }
-  writeCNNInputFile(outputPath, circuitName, "violatingNodes", violatingNodes, neighborhoodSize);
-  writeCNNInputFile(outputPath, circuitName, "surroundingViolNodes", surroundingViolNodes, neighborhoodSize);
-  writeCNNInputFile(outputPath, circuitName, "nonViolatingNodes", nonViolatingNodes, neighborhoodSize);
+	for(int node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+	{
+		ftx::Node *node = gridGraph_->node(node_id);
+    std::vector<Node*> neighbors = gridGraph_->neighborhood(node, 1);
+    for(auto neighbor : neighbors)
+		  node->numNeighborPins+=neighbor->numPins;
+		node->numNeighborPins-=node->numPins;
+	}
 }
 
 double
@@ -535,6 +483,129 @@ FeatureExtractor::writeCSV(std::string file_path, int distance)
   ofsNonViol.close();
 }
 
+std::string
+FeatureExtractor::nodeHyperImage(Node*node, int distance)
+{
+  std::string result;
+  std::vector<Node*> neighbors = gridGraph_->neighborhood(node, distance);
+	for(auto neighbor : neighbors)
+		result+=std::to_string(neighbor->numPins)+",";
+	for(auto neighbor : neighbors)
+		result+=std::to_string(neighbor->numNeighborPins)+",";
+  int numLayers = node->v_cap.size();
+
+  //horizontal overflow
+  for(int l = 0; l<numLayers; ++l)
+    for(auto neighbor : neighbors)
+		{
+			double hOverflow = double(neighbor->h_demand.at(l))/neighbor->h_cap.at(l);
+			std::ostringstream ost;// Create an output string stream
+			ost << std::fixed;// Set Fixed -Point Notation
+			ost << std::setprecision(2);// Set precision to 2 digits
+			ost << hOverflow;//Add double to stream
+			ost.str();// Get string from output string stream
+			result+=ost.str()+",";
+		}
+
+  //vertical overflow
+  for(int l = 0; l<numLayers; ++l)
+    for(auto neighbor : neighbors)
+		{
+			double vOverflow = double(neighbor->v_demand.at(l))/neighbor->v_cap.at(l);
+			std::ostringstream ost;// Create an output string stream
+			ost << std::fixed;// Set Fixed -Point Notation
+			ost << std::setprecision(2);// Set precision to 2 digits
+			ost << vOverflow;//Add double to stream
+			ost.str();// Get string from output string stream
+			result+=ost.str()+",";
+		}
+  if(node->drvs.find(DRVType::metalShort) != node->drvs.end())
+	  result+="1";
+	else
+	  result+="0";
+  return result;
+}
+
+void
+FeatureExtractor::writeCNNCSV(std::string file_path, int distance)
+{
+  distance = std::max(distance, 16); //otherwise surround nodes would be empty
+
+  std::unordered_set<Node*> surroundingNodes;
+  std::vector<Node*> violatingNodes;
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->drvs.find(DRVType::metalShort) == node_ptr->drvs.end())//skip nonShortViol nodes
+      continue;
+
+    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
+    if(neighborhood.empty())//invalid neighborhood padding is required
+      continue;
+
+    for(Node* neighbor : neighborhood)//this follows the major order
+      if(neighbor->violation == false && !gridGraph_->neighborhood(neighbor, distance).empty())
+        surroundingNodes.insert(neighbor);
+    violatingNodes.push_back(node_ptr);
+  }
+
+  std::vector<Node*> nonViolatingNodes;
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->violation == true)//skip viol nodes
+      continue;
+    if(surroundingNodes.find(node_ptr) != surroundingNodes.end())//skip surround nodes
+      continue;
+
+    if(gridGraph_->neighborhood(node_ptr, distance).empty())//invalid neighborhood padding is required
+      continue;
+    nonViolatingNodes.push_back(node_ptr);
+  }
+
+  std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
+  for(auto node : violatingNodes)
+    ofsviol<<nodeHyperImage(node, distance)<<std::endl;
+  ofsviol.close();
+
+  std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
+  for(auto node : nonViolatingNodes)
+    ofsNonviol<<nodeHyperImage(node, distance)<<std::endl;
+  ofsNonviol.close();
+
+  std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
+  for(auto node : surroundingNodes)
+    ofsSurround<<nodeHyperImage(node, distance)<<std::endl;
+  ofsSurround.close();
+}
+
+class RectRender : public gui::Renderer
+{
+public:
+  RectRender(odb::dbDatabase* db) :
+    db_(db)
+  {
+  }
+
+  void addRect(odb::Rect r){ rects_.push_back(r); };
+
+  virtual void drawObjects(gui::Painter& /* painter */) override;
+
+private:
+  odb::dbDatabase* db_;
+  std::vector<odb::Rect> rects_;
+};
+
+void
+RectRender::drawObjects(gui::Painter &painter)
+{
+  for(auto rect : rects_)
+	{
+		painter.setBrush(gui::Painter::dark_red);
+		painter.drawRect(rect);
+	}
+}
+
 class DRVRenderer : public gui::Renderer
 {
 public:
@@ -560,7 +631,7 @@ DRVRenderer::drawObjects(gui::Painter &painter)
     for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
     {
       auto node_ptr = gridGraph_->node(node_id);
-      if (node_ptr->violation)
+      if (node_ptr->drvs.find(DRVType::metalShort) != node_ptr->drvs.end())
       {
         odb::Rect node_rect = node_ptr->rect;
         painter.setBrush(gui::Painter::dark_red);
@@ -628,70 +699,44 @@ FeatureExtractor::drawGrid()
 }
 
 void
-FeatureExtractor::initRoutingCapacity(int minRoutingLevel, int maxRoutingLevel)
+FeatureExtractor::initRoutingCapacity()
 {
   odb::dbBlock *block = db_->getChip()->getBlock();
+  std::vector<TrackGrid> trackGrids;
   odb::dbSet<odb::dbTrackGrid> grids = block->getTrackGrids();
-  std::vector<TrackGrid> layerToGrid;
   for(auto trackGrid : grids)
   {
     odb::dbTechLayer *techLayer = trackGrid->getTechLayer();
-    const int routingLevel = techLayer->getRoutingLevel();
-    if(routingLevel < minRoutingLevel || routingLevel > maxRoutingLevel)
+    TrackGrid t_grid;
+    t_grid.routing_level = techLayer->getRoutingLevel();
+    if(t_grid.routing_level == 0)
       continue;
     odb::dbTechLayerDir layerDirection = techLayer->getDirection();
     if(layerDirection.getValue() == odb::dbTechLayerDir::Value::NONE)
       continue;
-
-    if(trackGrid->getNumGridPatternsX() != 1 || trackGrid->getNumGridPatternsY() != 1)
-      throw std::out_of_range("There are more than one grid track pattern for a same routing layer.");
-
-    std::vector<int> grid;
-    bool horizontal;
-    if(layerDirection.getValue() == odb::dbTechLayerDir::Value::HORIZONTAL)
-    {
-      trackGrid->getGridY(grid);
-      horizontal = true;
-    }
-    else if(layerDirection.getValue() == odb::dbTechLayerDir::Value::VERTICAL)
-    {
-      trackGrid->getGridX(grid);
-      horizontal = false;
-    }
-    const int step = *std::next(grid.begin()) - grid.front();
-    const int offset = grid.front();
-    TrackGrid t_grid;
-    t_grid.init(step, offset, horizontal);
-    layerToGrid.push_back(t_grid);
+    trackGrid->getGridX(t_grid.xTicks);
+    trackGrid->getGridY(t_grid.yTicks);
+    trackGrids.push_back(t_grid);
   }
+  int numRoutingLayers = trackGrids.size();
   for(int node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
-    int h_capacity = 0, v_capacity = 0;
     ftx::Node *node = gridGraph_->node(node_id);
+    node->h_cap.resize(numRoutingLayers);
+    node->v_cap.resize(numRoutingLayers);
+    node->h_demand.resize(numRoutingLayers);
+    node->v_demand.resize(numRoutingLayers);
     odb::Rect rect =  node->rect;
-    for(auto grid : layerToGrid)
+    for(auto grid : trackGrids)
     {
-      int edge_length = 0, edge_origin = 0;
-      if(grid.horizontal)
-      {
-        edge_origin = rect.yMin();
-        edge_length = rect.dy();
-      }
-      else
-      {
-        edge_origin = rect.xMin();
-        edge_length = rect.dx();
-      }
-      const bool aligned = (edge_origin-grid.offset)%grid.step == 0;
-      const int capacity = (edge_length/grid.step) + aligned;
-
-      if(grid.horizontal)
-        h_capacity += capacity;
-      else
-        v_capacity += capacity;
-    }
-    node->horizontal_capacity = h_capacity;
-    node->vertical_capacity = v_capacity;
+      node->v_cap.at(grid.routing_level-1) = numberOfTracksBetween(grid.xTicks, rect.xMin(), rect.xMax());
+      node->h_cap.at(grid.routing_level-1) = numberOfTracksBetween(grid.yTicks, rect.yMin(), rect.yMax());
+		}
+    for(int l=0;l<numRoutingLayers;++l)
+		{
+      node->horizontal_capacity+=node->h_cap.at(l);
+      node->vertical_capacity+=node->v_cap.at(l);
+		}
   }
 }
 
@@ -763,14 +808,6 @@ FeatureExtractor::paintNode(unsigned int id)
   }
   nodePainter_->addNode(id);
   gui->redraw();
-}
-
-void
-FeatureExtractor::printNodeDebugInfo(unsigned int id)
-{
-  ftx::Node *node_ptr = gridGraph_->node(id);
-  std::cout<<"PrintNodeDebugInfo for node id: "<<id<<std::endl
-           <<node_ptr->printPlacementFeatures("\n", true)<<std::endl;
 }
 
 void
@@ -950,6 +987,92 @@ FeatureExtractor::extractRoutingFeatures(odb::dbNet* net)
     node->horizontal_demand += 1;
   for(auto node : verticalNodes)
     node->vertical_demand += 1;
+}
+
+void
+FeatureExtractor::readGuide(std::string file_path)
+{
+  std::ifstream iss;
+  iss.open(file_path);
+  std::string line;
+  std::vector<RoutingGuide> guides;
+  int dbus_per_micron = db_->getLibs().begin()->getDbUnitsPerMicron();
+  while(std::getline(iss, line))
+  {
+    RoutingGuide rguide;
+    if(line.find("routeGuideNet") != std::string::npos)
+    {
+      std::string netName = line.substr(line.find(" ")+1, line.length());
+      rguide.netName = netName;
+      while(std::getline(iss, line) && line.find("wire") != std::string::npos)
+      {
+        std::istringstream values(line);
+        std::string value;
+        double x1, y1, x2, y2;
+        values >> value;
+        values >> x1;
+        values >> y1;
+        values >> x2;
+        values >> y2;
+        values >> value;
+        bool horizontal = value == "H";
+        values >> value;
+        values >> value;
+        values >> value;
+        int layer = std::stoi(value);
+        GuideSegment gsegment;
+        gsegment.horizontal = horizontal;
+        gsegment.rect = odb::Rect(x1*dbus_per_micron, y1*dbus_per_micron, x2*dbus_per_micron, y2*dbus_per_micron);
+        if(gsegment.rect.area() > 0)
+					throw std::out_of_range("There is a guide rectangle that is not from eGR (area greater than zero).");
+        gsegment.layerIndex = layer;
+        rguide.guides.push_back(gsegment);
+      }
+    }
+    guides.push_back(rguide);
+  }
+
+  int numLayers = gridGraph_->node(0)->h_demand.size();
+  for(auto rguide : guides)
+  {
+    std::vector<std::unordered_set<Node*>> horizontalNodes;
+    horizontalNodes.resize(numLayers);
+    for(auto guideSegment : rguide.guides)
+    {
+      if(!guideSegment.horizontal)
+        continue;
+      std::vector<Node*> nodes = gridGraph_->intersectingNodes(guideSegment.rect);
+      for(auto node : nodes)
+      {
+				if(guideSegment.rect.yMin() == node->rect.yMin())
+          continue;//touching horizontal botton edge
+        horizontalNodes.at(guideSegment.layerIndex-1).insert(node);
+      }
+    }
+
+    std::vector<std::unordered_set<Node*>> verticalNodes;
+    verticalNodes.resize(numLayers);
+    for(auto guideSegment : rguide.guides)
+		{
+      if(guideSegment.horizontal)
+        continue;
+      std::vector<Node*> nodes = gridGraph_->intersectingNodes(guideSegment.rect);
+      for(auto node : nodes)
+      {
+			  if(guideSegment.rect.xMin() == node->rect.xMin())
+				  continue;//touching vertical left edge
+        verticalNodes.at(guideSegment.layerIndex-1).insert(node);
+      }
+		}
+
+    for(int i = 0; i<horizontalNodes.size(); i++)
+      for(auto node : horizontalNodes.at(i))
+        node->h_demand.at(i)++;
+
+    for(int i = 0; i<verticalNodes.size(); i++)
+      for(auto node : verticalNodes.at(i))
+        node->v_demand.at(i)++;
+  }
 }
 
 }

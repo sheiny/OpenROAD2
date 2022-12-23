@@ -13,8 +13,6 @@ struct Node {
 
     std::string printPlacementFeatures(std::string separator, bool debug);
 
-    std::string printCongestion();
-
     std::string printDRVs();
 
     //Graph attributes
@@ -27,11 +25,10 @@ struct Node {
     //Global Routing Features
     int horizontal_capacity, vertical_capacity,
         horizontal_demand, vertical_demand;
-    //CNN features
-    int vertical_overflow, vertical_remain, vertical_tracks,
-        horizontal_overflow, horizontal_remain, horizontal_tracks;
     //labels
     bool violation;
+    int numPins, numNeighborPins;
+    std::vector<int> h_cap, v_cap, h_demand, v_demand;
     std::unordered_set<DRVType> drvs;
 };
 }

@@ -13,19 +13,11 @@ Node::Node(vertexIndex node_id, odb::Rect rect) :
   numMacros = 0;
   numMacroPins = 0;
 
-  //GR features
+  //Routing features
   horizontal_capacity = 0;
   vertical_capacity = 0;
   horizontal_demand = 0;
   vertical_demand = 0;
-
-  //CNN features
-  vertical_overflow = 0;
-  vertical_remain = 0;
-  vertical_tracks = 0;
-  horizontal_overflow = 0;
-  horizontal_remain = 0;
-  horizontal_tracks = 0;
 
   cellArea = 0;
   l1BlockageArea = 0;
@@ -35,6 +27,8 @@ Node::Node(vertexIndex node_id, odb::Rect rect) :
   macroArea = 0;
   macroPinArea = 0;
 
+  numPins = 0;
+  numNeighborPins = 0;
   violation = false;
 }
 
@@ -60,19 +54,6 @@ Node::printPlacementFeatures(std::string separator, bool debug)
   result += (debug?"L2BlkgDensity: ":"") + std::to_string((double)l2BlockageArea/area) + separator;
   result += (debug?"L1PinDensity: ":"") + std::to_string((double)l1PinArea/area) + separator;
   result += (debug?"L2PinDensity: ":"") + std::to_string((double)l2PinArea/area) + separator;
-  return result;
-}
-
-std::string
-Node::printCongestion()
-{
-  std::string result;
-  result += std::to_string(vertical_overflow)+" ";
-  result += std::to_string(vertical_remain)+" ";
-  result += std::to_string(vertical_tracks)+" ";
-  result += std::to_string(horizontal_overflow)+" ";
-  result += std::to_string(horizontal_remain)+" ";
-  result += std::to_string(horizontal_tracks)+" ";
   return result;
 }
 

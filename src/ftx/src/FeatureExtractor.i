@@ -41,24 +41,10 @@ init_graph(int sizeInRowHeights = 3)
 }
 
 void
-init_graph_from_congest(char* fileName)
-{
-  FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->initGraphFromCongestion(fileName);
-}
-
-void
 init_graph_from_GCells()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->initGraphFromDef();
-}
-
-void
-read_congestion(char* fileName)
-{
-  FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->readCongestion(fileName);
 }
 
 void
@@ -69,10 +55,10 @@ run()
 }
 
 void
-extract_cnn_features(char* outputPath, char* circuitName, int neighborhoodSize=11)
+runCNN()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->extractCNNFeatures(outputPath, circuitName, neighborhoodSize);
+  featureExt->extractCNNFeatures();
 }
 
 void
@@ -83,6 +69,13 @@ write_csv(char* fileName, int distance=1)
 }
 
 void
+write_cnn_csv(char* fileName, int distance=16)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->writeCNNCSV(fileName, distance);
+}
+
+void
 read_rpt(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
@@ -90,6 +83,13 @@ read_rpt(char* fileName)
   auto db_ptr = openroad->getDb();
   auto lib_ptr = db_ptr->getLibs().begin();
   featureExt->readRPT(fileName, *lib_ptr);
+}
+
+void
+read_guide(char* fileName)
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->readGuide(fileName);
 }
 
 void
@@ -121,10 +121,9 @@ Paint_Nodes(char* fileName)
 }
 
 void
-debug_node(int id)
+Paint_Node(int id)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->printNodeDebugInfo(id);
   featureExt->paintNode(id);
 }
 
