@@ -484,10 +484,9 @@ FeatureExtractor::writeCSV(std::string file_path, int distance)
 }
 
 std::string
-FeatureExtractor::nodeHyperImage(Node*node, int distance)
+FeatureExtractor::nodeHyperImage(Node*node, const std::vector<Node*>& neighbors)
 {
   std::string result;
-  std::vector<Node*> neighbors = gridGraph_->neighborhood(node, distance);
 	for(auto neighbor : neighbors)
 		result+=std::to_string(neighbor->numPins)+",";
 	for(auto neighbor : neighbors)
@@ -530,6 +529,22 @@ void
 FeatureExtractor::writeCNNCSV(std::string file_path, int distance)
 {
   distance = std::max(distance, 16); //otherwise surround nodes would be empty
+  std::ofstream ofsviol(file_path+".csv", std::ofstream::out);
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    Node *node_ptr = gridGraph_->node(node_id);
+    std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
+    if(neighborhood.empty())//invalid neighborhood padding is required
+      continue;
+    ofsviol<<nodeHyperImage(node_ptr, neighborhood)<<std::endl;
+  }
+  ofsviol.close();
+}
+
+void
+FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
+{
+  distance = std::max(distance, 16); //otherwise surround nodes would be empty
 
   std::unordered_set<Node*> surroundingNodes;
   std::vector<Node*> violatingNodes;
@@ -565,17 +580,17 @@ FeatureExtractor::writeCNNCSV(std::string file_path, int distance)
 
   std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
   for(auto node : violatingNodes)
-    ofsviol<<nodeHyperImage(node, distance)<<std::endl;
+    ofsviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
   ofsviol.close();
 
   std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
   for(auto node : nonViolatingNodes)
-    ofsNonviol<<nodeHyperImage(node, distance)<<std::endl;
+    ofsNonviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
   ofsNonviol.close();
 
   std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
   for(auto node : surroundingNodes)
-    ofsSurround<<nodeHyperImage(node, distance)<<std::endl;
+    ofsSurround<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
   ofsSurround.close();
 }
 

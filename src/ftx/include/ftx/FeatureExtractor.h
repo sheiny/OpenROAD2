@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace odb {
   class dbDatabase;
@@ -63,6 +64,8 @@ class FeatureExtractor {
 
     void writeCSV(std::string file_path, int distance);
 
+    void writeCNNCSVs(std::string file_path, int distance);
+
     void writeCNNCSV(std::string file_path, int distance);
 
     void drawDRVs();
@@ -74,7 +77,7 @@ class FeatureExtractor {
     void paintNode(unsigned int id);
 
   private:
-    std::string nodeHyperImage(Node* node, int distance);
+    std::string nodeHyperImage(Node* node, const std::vector<Node*>& neighbors);
 
     void extractInstFeatures(odb::dbInst* inst);
     void extractCellFeatures(odb::dbInst* inst, odb::Rect bbox_inst,

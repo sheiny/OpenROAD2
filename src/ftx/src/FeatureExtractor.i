@@ -72,7 +72,7 @@ void
 write_cnn_csv(char* fileName, int distance=16)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->writeCNNCSV(fileName, distance);
+  featureExt->writeCNNCSVs(fileName, distance);
 }
 
 void
