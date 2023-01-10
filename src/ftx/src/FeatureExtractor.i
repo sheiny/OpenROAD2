@@ -127,6 +127,13 @@ Paint_Node(int id)
   featureExt->paintNode(id);
 }
 
+void
+Sanity_Check()
+{
+  FeatureExtractor* featureExt = getFeatureExtractor();
+  featureExt->sanityCheck();
+}
+
 } // namespace
 
 %} // inline

@@ -44,11 +44,8 @@ class GridGraph
     //WARNING: This function returns nodes with zero intersection area.
     std::vector<Node*> intersectingNodes(odb::Rect rect);
 
-    //Given a node index, this function returns the four horizontal
-    // and vertical adjacent nodes.
-    std::vector<Node*> neighbors(vertexIndex node_index);
-
     //Given a node index, this function returns the distance adjacent nodes.
+    //Important this function DOES include the node itself in result.
     //Ex: distance 1 = eight adjacent nodes
     //Width = distance*2+1 and Height = distance*2+1
     std::vector<Node*> neighborhood(Node* node, int distance);

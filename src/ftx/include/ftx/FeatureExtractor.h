@@ -76,6 +76,8 @@ class FeatureExtractor {
 
     void paintNode(unsigned int id);
 
+    void sanityCheck();
+
   private:
     std::string nodeHyperImage(Node* node, const std::vector<Node*>& neighbors);
 

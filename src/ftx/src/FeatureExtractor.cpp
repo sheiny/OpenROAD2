@@ -497,7 +497,9 @@ FeatureExtractor::nodeHyperImage(Node*node, const std::vector<Node*>& neighbors)
   for(int l = 0; l<numLayers; ++l)
     for(auto neighbor : neighbors)
 		{
-			double hOverflow = double(neighbor->h_demand.at(l))/neighbor->h_cap.at(l);
+      double hOverflow = 0;
+      if(neighbor->h_cap.at(l) != 0)
+			  hOverflow = double(neighbor->h_demand.at(l))/neighbor->h_cap.at(l);
 			std::ostringstream ost;// Create an output string stream
 			ost << std::fixed;// Set Fixed -Point Notation
 			ost << std::setprecision(2);// Set precision to 2 digits
@@ -510,7 +512,9 @@ FeatureExtractor::nodeHyperImage(Node*node, const std::vector<Node*>& neighbors)
   for(int l = 0; l<numLayers; ++l)
     for(auto neighbor : neighbors)
 		{
-			double vOverflow = double(neighbor->v_demand.at(l))/neighbor->v_cap.at(l);
+			double vOverflow = 0;
+      if(neighbor->v_cap.at(l) != 0)
+			  vOverflow = double(neighbor->v_demand.at(l))/neighbor->v_cap.at(l);
 			std::ostringstream ost;// Create an output string stream
 			ost << std::fixed;// Set Fixed -Point Notation
 			ost << std::setprecision(2);// Set precision to 2 digits
@@ -555,11 +559,12 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
       continue;
 
     std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
-    if(neighborhood.empty())//invalid neighborhood padding is required
+    if(neighborhood.empty())//skip invalid neighborhood padding is required
       continue;
 
-    for(Node* neighbor : neighborhood)//this follows the major order
-      if(neighbor->violation == false && !gridGraph_->neighborhood(neighbor, distance).empty())
+    std::vector<Node*> surroudingNeighborhood = gridGraph_->neighborhood(node_ptr, 1);
+    for(Node* neighbor : surroudingNeighborhood)
+      if(neighbor != node_ptr && neighbor->violation == false && !gridGraph_->neighborhood(neighbor, distance).empty())
         surroundingNodes.insert(neighbor);
     violatingNodes.push_back(node_ptr);
   }
@@ -572,26 +577,30 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
       continue;
     if(surroundingNodes.find(node_ptr) != surroundingNodes.end())//skip surround nodes
       continue;
-
     if(gridGraph_->neighborhood(node_ptr, distance).empty())//invalid neighborhood padding is required
       continue;
     nonViolatingNodes.push_back(node_ptr);
   }
 
-  std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
-  for(auto node : violatingNodes)
-    ofsviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
-  ofsviol.close();
+  if(violatingNodes.size() > 0) // We dont want to train on DRV free circuits
+  {
+		std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
+		for(auto node : violatingNodes)
+			ofsviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
+		ofsviol.close();
 
-  std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
-  for(auto node : nonViolatingNodes)
-    ofsNonviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
-  ofsNonviol.close();
+#if 0
+		std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
+		for(auto node : nonViolatingNodes)
+			ofsNonviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
+		ofsNonviol.close();
+#endif
 
-  std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
-  for(auto node : surroundingNodes)
-    ofsSurround<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
-  ofsSurround.close();
+		std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
+		for(auto node : surroundingNodes)
+			ofsSurround<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
+		ofsSurround.close();
+  }
 }
 
 class RectRender : public gui::Renderer
@@ -1087,6 +1096,30 @@ FeatureExtractor::readGuide(std::string file_path)
     for(int i = 0; i<verticalNodes.size(); i++)
       for(auto node : verticalNodes.at(i))
         node->v_demand.at(i)++;
+  }
+}
+
+void
+FeatureExtractor::sanityCheck()
+{
+  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    Node *node_ptr = gridGraph_->node(node_id);
+    for(int i=0; i<node_ptr->h_cap.size(); ++i)
+		{
+			if(node_ptr->h_cap.at(i) <= 0)
+				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid HCap: "<<node_ptr->h_cap.at(i)<<" at index: "<<i<<std::endl;
+			if(node_ptr->h_cap.at(i) <= 0 && node_ptr->h_demand.at(i) > 0)
+				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid HDemand: "<<node_ptr->h_demand.at(i)<<" at index: "<<i<<std::endl;
+		}
+
+    for(int i=0; i<node_ptr->v_cap.size(); ++i)
+		{
+			if(node_ptr->v_cap.at(i) <= 0)
+				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid VCap: "<<node_ptr->v_cap.at(i)<<" at index: "<<i<<std::endl;
+			if(node_ptr->v_cap.at(i) <= 0 && node_ptr->v_demand.at(i) > 0)
+				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid VDemand: "<<node_ptr->v_demand.at(i)<<" at index: "<<i<<std::endl;
+		}
   }
 }
 
