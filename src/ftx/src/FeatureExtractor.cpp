@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <random>
 #include <stdexcept>
 #include <unordered_set>
 
@@ -533,16 +534,16 @@ void
 FeatureExtractor::writeCNNCSV(std::string file_path, int distance)
 {
   distance = std::max(distance, 16); //otherwise surround nodes would be empty
-  std::ofstream ofsviol(file_path+".csv", std::ofstream::out);
+  std::ofstream ofs(file_path+".csv", std::ofstream::out);
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     Node *node_ptr = gridGraph_->node(node_id);
     std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
     if(neighborhood.empty())//invalid neighborhood padding is required
       continue;
-    ofsviol<<nodeHyperImage(node_ptr, neighborhood)<<std::endl;
+    ofs<<nodeHyperImage(node_ptr, neighborhood)<<std::endl;
   }
-  ofsviol.close();
+  ofs.close();
 }
 
 void
@@ -562,7 +563,7 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
     if(neighborhood.empty())//skip invalid neighborhood padding is required
       continue;
 
-    std::vector<Node*> surroudingNeighborhood = gridGraph_->neighborhood(node_ptr, 1);
+    std::vector<Node*> surroudingNeighborhood = gridGraph_->neighborhood(node_ptr, 2);
     for(Node* neighbor : surroudingNeighborhood)
       if(neighbor != node_ptr && neighbor->violation == false && !gridGraph_->neighborhood(neighbor, distance).empty())
         surroundingNodes.insert(neighbor);
@@ -582,6 +583,10 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
     nonViolatingNodes.push_back(node_ptr);
   }
 
+  std::cout<<"Writing CNNCSVs, class distribution:"<<std::endl;
+  std::cout<<"violatingNodes: "<<violatingNodes.size()<<std::endl;
+  std::cout<<"nonViolatingNodes: "<<nonViolatingNodes.size()<<std::endl;
+  std::cout<<"surroundingNodes: "<<surroundingNodes.size()<<std::endl;
   if(violatingNodes.size() > 0) // We dont want to train on DRV free circuits
   {
 		std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
@@ -589,17 +594,21 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
 			ofsviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
 		ofsviol.close();
 
-#if 0
-		std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
-		for(auto node : nonViolatingNodes)
-			ofsNonviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
-		ofsNonviol.close();
-#endif
-
 		std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
 		for(auto node : surroundingNodes)
 			ofsSurround<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
 		ofsSurround.close();
+
+    int numNViolToPrint = 10000 - (violatingNodes.size() + surroundingNodes.size());
+    numNViolToPrint = std::min(numNViolToPrint, int(nonViolatingNodes.size()));
+    auto rd = std::random_device {};
+    auto rng = std::default_random_engine { rd() };
+		std::shuffle(nonViolatingNodes.begin(), nonViolatingNodes.end(), rng);
+
+		std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
+    for(int i = 0; i < numNViolToPrint; i++)
+			ofsNonviol<<nodeHyperImage(nonViolatingNodes.at(i), gridGraph_->neighborhood(nonViolatingNodes.at(i), distance))<<std::endl;
+		ofsNonviol.close();
   }
 }
 
