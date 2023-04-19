@@ -528,7 +528,9 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
 
     std::vector<Node*> surroudingNeighborhood = gridGraph_->neighborhood(node_ptr, 2);
     for(Node* neighbor : surroudingNeighborhood)
-      if(neighbor != node_ptr && neighbor->violation == false && !gridGraph_->neighborhood(neighbor, distance).empty())
+      if(neighbor != node_ptr &&
+         neighbor->drvs.find(DRVType::metalShort) == neighbor->drvs.end() &&
+         !gridGraph_->neighborhood(neighbor, distance).empty())
         surroundingNodes.insert(neighbor);
     violatingNodes.push_back(node_ptr);
   }
@@ -539,7 +541,7 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
     Node *node_ptr = gridGraph_->node(node_id);
     if(node_ptr->rect.area() == 0)//ignore padding nodes
       continue;
-    if(node_ptr->violation == true)//skip viol nodes
+    if(node_ptr->drvs.find(DRVType::metalShort) != node_ptr->drvs.end())
       continue;
     if(surroundingNodes.find(node_ptr) != surroundingNodes.end())//skip surround nodes
       continue;
