@@ -7,20 +7,6 @@ namespace ftx {
 enum Axis { x = 0, y = 1 };
 
 void
-GridGraph::initGridFromCoords(std::vector<Utils::DBU> xTicks,
-                              std::vector<Utils::DBU> yTicks)
-{
-  //sorted grid without duplicates.
-  xGrid_ = xTicks;
-  std::sort(xGrid_.begin(), xGrid_.end());
-  xGrid_.erase(std::unique(xGrid_.begin(), xGrid_.end()), xGrid_.end());
-  yGrid_ = yTicks;
-  std::sort(yGrid_.begin(), yGrid_.end());
-  yGrid_.erase(std::unique(yGrid_.begin(), yGrid_.end()), yGrid_.end());
-  buildGraph();
-}
-
-void
 GridGraph::initGridUsingDimensions(odb::dbDatabase* db,
                                    Utils::DBU width,
                                    Utils::DBU height)
@@ -42,9 +28,7 @@ GridGraph::initGridUsingDimensions(odb::dbDatabase* db,
   for(auto i = 0; i <= y_steps; i++)
     yTicks.push_back(std::min(core_area.yMin()+i*height, core_area.yMax()));
 
-  xGrid_ = xTicks;
-  yGrid_ = yTicks;
-  buildGraph();
+  buildGraph(xTicks, yTicks);
 }
 
 Node*
@@ -197,8 +181,11 @@ GridGraph::sizeNodes() const
 }
 
 void
-GridGraph::buildGraph()
+GridGraph::buildGraph(std::vector<Utils::DBU> xGrid,
+                      std::vector<Utils::DBU> yGrid)
 {
+  xGrid_ = xGrid;
+  yGrid_ = yGrid;
   boost::array<std::size_t, 2> lengths = {{xGrid_.size()-1, yGrid_.size()-1}};
   boost::array<bool, 2> wrapped = {{false, false}};
   rTree_ = std::make_unique<RTree>();
@@ -219,8 +206,11 @@ GridGraph::buildGraph()
       odb::Rect node_box(prev_x, *y_it, *x_it, prev_y);
       Node node(node_id, node_box);
       vertex2Node_.insert({node_id, node});
-      box_t gcell_box({prev_x, *y_it}, {*x_it, prev_y});
-      rTree_->insert({gcell_box, node_id});
+      if(node_box.area() != 0)//check if node isn't a padding node.
+      {
+        box_t gcell_box({prev_x, *y_it}, {*x_it, prev_y});
+        rTree_->insert({gcell_box, node_id});
+      }
       prev_x = *x_it;
     }
     prev_x = *xGrid_.begin();

@@ -42,7 +42,7 @@ class FeatureExtractor {
     void initGraph(int sizeInRowHeights = 3);
 
     //Init GridGraph using DEF GCells description.
-    void initGraphFromDef();
+    void initGraphFromDef(const int paddingSize = 0);
 
     void saveLocations(std::string file_path);
 
@@ -56,11 +56,6 @@ class FeatureExtractor {
     void extractFeatures();
 
     void extractCNNFeatures();
-
-    double calculateDensity();
-
-    //Ignore nodes completely overlapped by macros!
-    void calculateABU();
 
     void writeCSV(std::string file_path, int distance);
 

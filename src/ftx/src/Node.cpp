@@ -4,34 +4,6 @@
 
 namespace ftx {
 
-Node::Node(vertexIndex node_id, odb::Rect rect) :
-  nodeID(node_id),
-  rect(rect)
-{
-  numCells = 0;
-  numCellPins = 0;
-  numMacros = 0;
-  numMacroPins = 0;
-
-  //Routing features
-  horizontal_capacity = 0;
-  vertical_capacity = 0;
-  horizontal_demand = 0;
-  vertical_demand = 0;
-
-  cellArea = 0;
-  l1BlockageArea = 0;
-  l2BlockageArea = 0;
-  l1PinArea = 0;
-  l2PinArea = 0;
-  macroArea = 0;
-  macroPinArea = 0;
-
-  numPins = 0;
-  numNeighborPins = 0;
-  violation = false;
-}
-
 std::string
 Node::printPlacementFeatures(std::string separator, bool debug)
 {

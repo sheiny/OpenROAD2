@@ -20,31 +20,31 @@ using ftx::FeatureExtractor;
 namespace ftx {
 
 void
-save_locations(char* fileName)
+saveLocations(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->saveLocations(fileName);
 }
 
 void
-load_locations(char* fileName)
+loadLocations(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->loadLocations(fileName);
 }
 
 void
-init_graph(int sizeInRowHeights = 3)
+initGraph(int sizeInRowHeights = 3)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->initGraph(sizeInRowHeights);
 }
 
 void
-init_graph_from_GCells()
+initGraphFromDef(int paddingSize=0)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->initGraphFromDef();
+  featureExt->initGraphFromDef(paddingSize);
 }
 
 void
@@ -62,28 +62,28 @@ runCNN()
 }
 
 void
-write_csv(char* fileName, int distance=1)
+writeCSV(char* fileName, int distance=1)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->writeCSV(fileName, distance);
 }
 
 void
-write_cnn_csvs(char* fileName, int distance=16)
+writeCNNCSVFiles(char* fileName, int distance=16)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->writeCNNCSVs(fileName, distance);
 }
 
 void
-write_cnn_csv(char* fileName, int distance=16)
+writeCNNCSV(char* fileName, int distance=16)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->writeCNNCSV(fileName, distance);
 }
 
 void
-read_rpt(char* fileName)
+readRPT(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   ord::OpenRoad *openroad = ord::getOpenRoad();
@@ -93,49 +93,42 @@ read_rpt(char* fileName)
 }
 
 void
-read_guide(char* fileName)
+readGuide(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->readGuide(fileName);
 }
 
 void
-calculate_ABU()
-{
-  FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->calculateABU();
-}
-
-void
-Draw_DRVs()
+DrawDRVs()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->drawDRVs();
 }
 
 void
-Draw_Grid()
+DrawGrid()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->drawGrid();
 }
 
 void
-Paint_Nodes(char* fileName)
+PaintNodes(char* fileName)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->paintNodes(fileName);
 }
 
 void
-Paint_Node(int id)
+PaintNode(int id)
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->paintNode(id);
 }
 
 void
-Sanity_Check()
+SanityCheck()
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
   featureExt->sanityCheck();

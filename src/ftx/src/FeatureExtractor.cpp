@@ -133,7 +133,7 @@ FeatureExtractor::initGraph(int sizeInRowHeights)
 }
 
 void
-FeatureExtractor::initGraphFromDef()
+FeatureExtractor::initGraphFromDef(const int paddingSize)
 {
   std::cout<<"FeatureExtractor::initGraphFromDef called."<<std::endl;
   gridGraph_ = std::make_unique<ftx::GridGraph>();
@@ -142,7 +142,26 @@ FeatureExtractor::initGraphFromDef()
   std::vector<Utils::DBU> xTicks, yTicks;
   grid->getGridX(xTicks);
   grid->getGridY(yTicks);
-  gridGraph_->initGridFromCoords(xTicks, yTicks);
+
+  std::vector<Utils::DBU> newxTicks, newyTicks;
+  newxTicks.reserve(xTicks.size() + paddingSize*2);
+  newyTicks.reserve(yTicks.size() + paddingSize*2);
+
+  for(int i = 0; i<paddingSize; ++i)
+  {
+    newxTicks.push_back(xTicks.front());
+    newyTicks.push_back(yTicks.front());
+  }
+  std::copy(xTicks.begin(), xTicks.end(), std::back_inserter(newxTicks));
+  std::copy(yTicks.begin(), yTicks.end(), std::back_inserter(newyTicks));
+
+  for(int i = 0; i<paddingSize; ++i)
+  {
+    newxTicks.push_back(xTicks.back());
+    newyTicks.push_back(yTicks.back());
+  }
+
+  gridGraph_->buildGraph(newxTicks, newyTicks);
   initRoutingCapacity();
 }
 
@@ -328,66 +347,6 @@ FeatureExtractor::extractCNNFeatures()
 	}
 }
 
-double
-FeatureExtractor::calculateDensity()
-{
-  Utils::AreaDBU total_area = 0.0;
-  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
-  {
-    ftx::Node *node_ptr = gridGraph_->node(node_id);
-    Utils::AreaDBU macro_area = node_ptr->macroArea;
-    Utils::AreaDBU cell_area = node_ptr->cellArea;
-    total_area += (macro_area+cell_area);
-  }
-  odb::Rect dieRect = db_->getChip()->getBlock()->getDieArea();
-  auto die_area = dieRect.area();
-  return (double)total_area/die_area;
-}
-
-void
-FeatureExtractor::calculateABU()
-{
-  std::vector<double> densities;
-  for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
-  {
-    ftx::Node *node_ptr = gridGraph_->node(node_id);
-    auto node_area = node_ptr->rect.area();
-    Utils::AreaDBU macro_area = node_ptr->macroArea;
-    if(macro_area == node_area)
-      continue;
-
-    Utils::AreaDBU cell_area = node_ptr->cellArea;
-    double density = (macro_area+cell_area)/node_area;
-    densities.push_back(density);
-  }
-  std::sort(densities.begin(), densities.end());
-
-  std::cout << std::setprecision(2);
-  std::cout<<"['"<<db_->getChip()->getBlock()->getName()
-    <<"', '"<<calculateDensity();
-
-  auto thresholds = {0.01, 0.02, 0.05, 0.1, 0.2, 0.5};
-  for(auto threshold : thresholds)
-  {
-    int i = 0;
-    double density = 0;
-    int limit = densities.size()*threshold;
-    for(auto density_it = densities.rbegin();
-        density_it != densities.rend();
-        density_it++)
-    {
-      density += *density_it;
-      i++;
-      if(i == limit)
-        break;
-    }
-    density /= i;
-    //std::cout<<"Threshold: "<<threshold<<" density: "<<density<<std::endl;
-    std::cout<<"', '"<<density;
-  }
-  std::cout<<"']"<<std::endl;
-}
-
 void
 FeatureExtractor::writeCSV(std::string file_path, int distance)
 {
@@ -487,7 +446,7 @@ FeatureExtractor::writeCSV(std::string file_path, int distance)
 std::string
 FeatureExtractor::nodeHyperImage(Node*node, const std::vector<Node*>& neighbors)
 {
-  std::string result;
+  std::string result = std::to_string(node->nodeID)+",";
 	for(auto neighbor : neighbors)
 		result+=std::to_string(neighbor->numPins)+",";
 	for(auto neighbor : neighbors)
@@ -538,6 +497,8 @@ FeatureExtractor::writeCNNCSV(std::string file_path, int distance)
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->rect.area() == 0)//ignore padding nodes
+      continue;
     std::vector<Node*> neighborhood = gridGraph_->neighborhood(node_ptr, distance);
     if(neighborhood.empty())//invalid neighborhood padding is required
       continue;
@@ -556,6 +517,8 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->rect.area() == 0)//ignore padding nodes
+      continue;
     if(node_ptr->drvs.find(DRVType::metalShort) == node_ptr->drvs.end())//skip nonShortViol nodes
       continue;
 
@@ -574,6 +537,8 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     Node *node_ptr = gridGraph_->node(node_id);
+    if(node_ptr->rect.area() == 0)//ignore padding nodes
+      continue;
     if(node_ptr->violation == true)//skip viol nodes
       continue;
     if(surroundingNodes.find(node_ptr) != surroundingNodes.end())//skip surround nodes

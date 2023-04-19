@@ -32,11 +32,11 @@ class GridGraph
   typedef boost::grid_graph<2> Graph;
   public:
     //Builder functions
-    void initGridFromCoords(std::vector<Utils::DBU> xTicks,
-                            std::vector<Utils::DBU> yTicks);
     void initGridUsingDimensions(odb::dbDatabase* db,
                                  Utils::DBU width,
                                  Utils::DBU height);
+    void buildGraph(std::vector<Utils::DBU> xGrid,
+                    std::vector<Utils::DBU> yGrid);
 
     //This function returns a nullptr when there is no intersecting node.
     Node* intersectingNode(odb::Point point);
@@ -62,7 +62,6 @@ class GridGraph
     unsigned int sizeNodes() const;
 
   private:
-    void buildGraph();
     Node* adjacentNode(vertexIndex node_index,
                        unsigned int axis,
                        bool next);
