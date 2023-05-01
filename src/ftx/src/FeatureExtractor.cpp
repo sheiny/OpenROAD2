@@ -745,17 +745,17 @@ public:
     else if (color == "yellow")
       node.color = gui::Painter::yellow;
     else
-		{
+    {
       std::cout<<"Warning, couldn't find color: '"<<color<<"' using darkBlue instead."<<std::endl;
       node.color = gui::Painter::dark_blue;
-		}
+    }
 
     auto result = nodesToPaint_.insert(node);
-		if (!result.second)//override current colors.
-		{
-			nodesToPaint_.erase(result.first);
-			nodesToPaint_.insert(node);
-		}
+    if (!result.second)//override current colors.
+    {
+      nodesToPaint_.erase(result.first);
+      nodesToPaint_.insert(node);
+    }
   };
 
   virtual void drawObjects(gui::Painter& /* painter */) override;
@@ -782,16 +782,16 @@ NodePainter::drawObjects(gui::Painter &painter)
 
 void FeatureExtractor::paintNodes(std::string file_path, std::string color)
 {
-	gui::Gui* gui = gui::Gui::get();
+  gui::Gui* gui = gui::Gui::get();
   if (gui)
   {
-		std::ifstream infile(file_path);
-		std::unordered_set<int> nodeIds;
-		int nodeId;
-		while (infile >> nodeId)
-		{
-			nodeIds.insert(nodeId);
-		}
+    std::ifstream infile(file_path);
+    std::unordered_set<int> nodeIds;
+    int nodeId;
+    while (infile >> nodeId)
+    {
+      nodeIds.insert(nodeId);
+    }
 
     if (nodePainter_ == nullptr)
     {
@@ -812,15 +812,15 @@ FeatureExtractor::paintNode(unsigned int nodeId, std::string color)
 {
   gui::Gui* gui = gui::Gui::get();
   if (gui)
-	{
-		if (nodePainter_ == nullptr)
-		{
-			nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get());
-			gui->registerRenderer(nodePainter_.get());
-		}
-		nodePainter_->addNode(nodeId, color);
-		gui->redraw();
-	}
+  {
+    if (nodePainter_ == nullptr)
+    {
+      nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get());
+      gui->registerRenderer(nodePainter_.get());
+    }
+    nodePainter_->addNode(nodeId, color);
+    gui->redraw();
+  }
 }
 
 void
