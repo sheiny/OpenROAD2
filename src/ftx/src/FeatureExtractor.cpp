@@ -292,8 +292,8 @@ FeatureExtractor::extractCNNFeatures()
   auto block = db_->getChip()->getBlock();
   for(auto inst : block->getInsts())
   {
-		if(inst->isCore() == false)
-			continue;
+    if(inst->isCore() == false)
+      continue;
     std::string instName = inst->getName();
     odb::dbMaster *master = inst->getMaster();
     std::string masterName = master->getName();
@@ -302,49 +302,49 @@ FeatureExtractor::extractCNNFeatures()
        boost::icontains(masterName, "fill"))
       continue;
 
-		odb::Rect bbox_inst = inst->getBBox()->getBox();
-		std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
-		odb::dbTransform transform;
-		inst->getTransform(transform);
-		for(auto node : nodes)
-		{
-			odb::Rect node_rect = node->rect;
-			odb::Rect intersection;
-			node_rect.intersection(bbox_inst, intersection);
-			auto area = intersection.area();
-			if(area == 0)
+    odb::Rect bbox_inst = inst->getBBox()->getBox();
+    std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
+    odb::dbTransform transform;
+    inst->getTransform(transform);
+    for(auto node : nodes)
+    {
+      odb::Rect node_rect = node->rect;
+      odb::Rect intersection;
+      node_rect.intersection(bbox_inst, intersection);
+      auto area = intersection.area();
+      if(area == 0)
         continue;
 
-			for(auto term : master->getMTerms())
-			{
-				if(term->getName() == "VSS" || term->getName() == "VDD")
-					continue;
-				for(auto pin : term->getMPins())
-				{
-					odb::Rect pinIntersection;
-					odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
+      for(auto term : master->getMTerms())
+      {
+        if(term->getName() == "VSS" || term->getName() == "VDD")
+          continue;
+        for(auto pin : term->getMPins())
+        {
+          odb::Rect pinIntersection;
+          odb::dbSet<odb::dbBox> boxes = pin->getGeometry();
           for(auto box : boxes)
-					{
-						odb::Rect pinRect = box->getBox();
-						transform.apply(pinRect);
-			      node_rect.intersection(pinRect, pinIntersection);
-						if(pinIntersection.area() > 0)
+          {
+            odb::Rect pinRect = box->getBox();
+            transform.apply(pinRect);
+            node_rect.intersection(pinRect, pinIntersection);
+            if(pinIntersection.area() > 0)
               break;
-					}
+          }
           if(pinIntersection.area() > 0)
-						node->numPins += 1;
-				}
-			}
-		}
+            node->numPins += 1;
+        }
+      }
+    }
   }
-	for(int node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
-	{
-		ftx::Node *node = gridGraph_->node(node_id);
+  for(int node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
+  {
+    ftx::Node *node = gridGraph_->node(node_id);
     std::vector<Node*> neighbors = gridGraph_->neighborhood(node, 1);
     for(auto neighbor : neighbors)
-		  node->numNeighborPins+=neighbor->numPins;
-		node->numNeighborPins-=node->numPins;
-	}
+      node->numNeighborPins+=neighbor->numPins;
+    node->numNeighborPins-=node->numPins;
+  }
 }
 
 void
@@ -447,45 +447,45 @@ std::string
 FeatureExtractor::nodeHyperImage(Node*node, const std::vector<Node*>& neighbors)
 {
   std::string result = std::to_string(node->nodeID)+",";
-	for(auto neighbor : neighbors)
-		result+=std::to_string(neighbor->numPins)+",";
-	for(auto neighbor : neighbors)
-		result+=std::to_string(neighbor->numNeighborPins)+",";
+  for(auto neighbor : neighbors)
+    result+=std::to_string(neighbor->numPins)+",";
+  for(auto neighbor : neighbors)
+    result+=std::to_string(neighbor->numNeighborPins)+",";
   int numLayers = node->v_cap.size();
 
   //horizontal overflow
   for(int l = 0; l<numLayers; ++l)
     for(auto neighbor : neighbors)
-		{
+    {
       double hOverflow = 0;
       if(neighbor->h_cap.at(l) != 0)
-			  hOverflow = double(neighbor->h_demand.at(l))/neighbor->h_cap.at(l);
-			std::ostringstream ost;// Create an output string stream
-			ost << std::fixed;// Set Fixed -Point Notation
-			ost << std::setprecision(2);// Set precision to 2 digits
-			ost << hOverflow;//Add double to stream
-			ost.str();// Get string from output string stream
-			result+=ost.str()+",";
-		}
+        hOverflow = double(neighbor->h_demand.at(l))/neighbor->h_cap.at(l);
+      std::ostringstream ost;// Create an output string stream
+      ost << std::fixed;// Set Fixed -Point Notation
+      ost << std::setprecision(2);// Set precision to 2 digits
+      ost << hOverflow;//Add double to stream
+      ost.str();// Get string from output string stream
+      result+=ost.str()+",";
+    }
 
   //vertical overflow
   for(int l = 0; l<numLayers; ++l)
     for(auto neighbor : neighbors)
-		{
-			double vOverflow = 0;
+    {
+      double vOverflow = 0;
       if(neighbor->v_cap.at(l) != 0)
-			  vOverflow = double(neighbor->v_demand.at(l))/neighbor->v_cap.at(l);
-			std::ostringstream ost;// Create an output string stream
-			ost << std::fixed;// Set Fixed -Point Notation
-			ost << std::setprecision(2);// Set precision to 2 digits
-			ost << vOverflow;//Add double to stream
-			ost.str();// Get string from output string stream
-			result+=ost.str()+",";
-		}
+        vOverflow = double(neighbor->v_demand.at(l))/neighbor->v_cap.at(l);
+      std::ostringstream ost;// Create an output string stream
+      ost << std::fixed;// Set Fixed -Point Notation
+      ost << std::setprecision(2);// Set precision to 2 digits
+      ost << vOverflow;//Add double to stream
+      ost.str();// Get string from output string stream
+      result+=ost.str()+",";
+    }
   if(node->drvs.find(DRVType::metalShort) != node->drvs.end())
-	  result+="1";
-	else
-	  result+="0";
+    result+="1";
+  else
+    result+="0";
   return result;
 }
 
@@ -556,54 +556,27 @@ FeatureExtractor::writeCNNCSVs(std::string file_path, int distance)
   std::cout<<"surroundingNodes: "<<surroundingNodes.size()<<std::endl;
   if(violatingNodes.size() > 0) // We dont want to train on DRV free circuits
   {
-		std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
-		for(auto node : violatingNodes)
-			ofsviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
-		ofsviol.close();
+    std::ofstream ofsviol(file_path+"_viol.csv", std::ofstream::out);
+    for(auto node : violatingNodes)
+      ofsviol<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
+    ofsviol.close();
 
-		std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
-		for(auto node : surroundingNodes)
-			ofsSurround<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
-		ofsSurround.close();
+    std::ofstream ofsSurround(file_path+"_surround.csv", std::ofstream::out);
+    for(auto node : surroundingNodes)
+      ofsSurround<<nodeHyperImage(node, gridGraph_->neighborhood(node, distance))<<std::endl;
+    ofsSurround.close();
 
     int numNViolToPrint = 10000 - (violatingNodes.size() + surroundingNodes.size());
     numNViolToPrint = std::min(numNViolToPrint, int(nonViolatingNodes.size()));
     auto rd = std::random_device {};
     auto rng = std::default_random_engine { rd() };
-		std::shuffle(nonViolatingNodes.begin(), nonViolatingNodes.end(), rng);
+    std::shuffle(nonViolatingNodes.begin(), nonViolatingNodes.end(), rng);
 
-		std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
+    std::ofstream ofsNonviol(file_path+"_nonViol.csv", std::ofstream::out);
     for(int i = 0; i < numNViolToPrint; i++)
-			ofsNonviol<<nodeHyperImage(nonViolatingNodes.at(i), gridGraph_->neighborhood(nonViolatingNodes.at(i), distance))<<std::endl;
-		ofsNonviol.close();
+      ofsNonviol<<nodeHyperImage(nonViolatingNodes.at(i), gridGraph_->neighborhood(nonViolatingNodes.at(i), distance))<<std::endl;
+    ofsNonviol.close();
   }
-}
-
-class RectRender : public gui::Renderer
-{
-public:
-  RectRender(odb::dbDatabase* db) :
-    db_(db)
-  {
-  }
-
-  void addRect(odb::Rect r){ rects_.push_back(r); };
-
-  virtual void drawObjects(gui::Painter& /* painter */) override;
-
-private:
-  odb::dbDatabase* db_;
-  std::vector<odb::Rect> rects_;
-};
-
-void
-RectRender::drawObjects(gui::Painter &painter)
-{
-  for(auto rect : rects_)
-	{
-		painter.setBrush(gui::Painter::dark_red);
-		painter.drawRect(rect);
-	}
 }
 
 class DRVRenderer : public gui::Renderer
@@ -731,34 +704,64 @@ FeatureExtractor::initRoutingCapacity()
     {
       node->v_cap.at(grid.routing_level-1) = numberOfTracksBetween(grid.xTicks, rect.xMin(), rect.xMax());
       node->h_cap.at(grid.routing_level-1) = numberOfTracksBetween(grid.yTicks, rect.yMin(), rect.yMax());
-		}
+    }
     for(int l=0;l<numRoutingLayers;++l)
-		{
+    {
       node->horizontal_capacity+=node->h_cap.at(l);
       node->vertical_capacity+=node->v_cap.at(l);
-		}
+    }
   }
+}
+
+struct PaintingNode
+{
+    int id;
+    gui::Painter::Color color;
+};
+
+bool operator<(const PaintingNode& lhs, const PaintingNode& rhs)
+{
+    return lhs.id < rhs.id;
 }
 
 class NodePainter : public gui::Renderer
 {
 public:
-  NodePainter(ftx::GridGraph * gridGraph,
-              std::unordered_set<int> nodeIds) :
-    gridGraph_(gridGraph),
-    nodeIds_(nodeIds)
+  NodePainter(ftx::GridGraph * gridGraph) :
+    gridGraph_(gridGraph)
   {
   }
 
-  void addNode(int id)
+  void addNode(int id, std::string color)
   {
-    nodeIds_.insert(id);
+    PaintingNode node;
+    node.id = id;
+    if (color == "red")
+      node.color = gui::Painter::red;
+    else if (color == "green")
+      node.color = gui::Painter::green;
+    else if (color == "blue")
+      node.color = gui::Painter::blue;
+    else if (color == "yellow")
+      node.color = gui::Painter::yellow;
+    else
+		{
+      std::cout<<"Warning, couldn't find color: '"<<color<<"' using darkBlue instead."<<std::endl;
+      node.color = gui::Painter::dark_blue;
+		}
+
+    auto result = nodesToPaint_.insert(node);
+		if (!result.second)//override current colors.
+		{
+			nodesToPaint_.erase(result.first);
+			nodesToPaint_.insert(node);
+		}
   };
 
   virtual void drawObjects(gui::Painter& /* painter */) override;
 
 private:
-  std::unordered_set<int> nodeIds_;
+  std::set<PaintingNode> nodesToPaint_;
   ftx::GridGraph * gridGraph_;
 };
 
@@ -767,47 +770,57 @@ NodePainter::drawObjects(gui::Painter &painter)
 {
   if (gridGraph_)
   {
-    for (auto node_id : nodeIds_)
+    for (auto n : nodesToPaint_)
     {
-      ftx::Node *node_ptr = gridGraph_->node(node_id);
+      ftx::Node *node_ptr = gridGraph_->node(n.id);
       odb::Rect node_rect = node_ptr->rect;
-      painter.setBrush(gui::Painter::dark_blue);
+      painter.setBrush(n.color);
       painter.drawRect(node_rect);
     }
   }
 }
 
-void FeatureExtractor::paintNodes(std::string file_path)
+void FeatureExtractor::paintNodes(std::string file_path, std::string color)
 {
-  std::ifstream infile(file_path);
-  std::unordered_set<int> nodeIds;
-  int nodeId;
-  while (infile >> nodeId)
+	gui::Gui* gui = gui::Gui::get();
+  if (gui)
   {
-    nodeIds.insert(nodeId);
-  }
+		std::ifstream infile(file_path);
+		std::unordered_set<int> nodeIds;
+		int nodeId;
+		while (infile >> nodeId)
+		{
+			nodeIds.insert(nodeId);
+		}
 
-  if (nodePainter_ == nullptr)
-  {
-    gui::Gui* gui = gui::Gui::get();
-    nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get(), nodeIds);
-    gui->registerRenderer(nodePainter_.get());
+    if (nodePainter_ == nullptr)
+    {
+      nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get());
+      gui->registerRenderer(nodePainter_.get());
+    }
+    for(int nodeId : nodeIds)
+    {
+      nodePainter_->addNode(nodeId, color);
+    }
+
     gui->redraw();
   }
 }
 
 void
-FeatureExtractor::paintNode(unsigned int id)
+FeatureExtractor::paintNode(unsigned int nodeId, std::string color)
 {
   gui::Gui* gui = gui::Gui::get();
-  if (nodePainter_ == nullptr)
-  {
-    std::unordered_set<int> nodeIds;
-    nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get(), nodeIds);
-    gui->registerRenderer(nodePainter_.get());
-  }
-  nodePainter_->addNode(id);
-  gui->redraw();
+  if (gui)
+	{
+		if (nodePainter_ == nullptr)
+		{
+			nodePainter_ = std::make_unique<NodePainter>(gridGraph_.get());
+			gui->registerRenderer(nodePainter_.get());
+		}
+		nodePainter_->addNode(nodeId, color);
+		gui->redraw();
+	}
 }
 
 void
@@ -1024,7 +1037,7 @@ FeatureExtractor::readGuide(std::string file_path)
         gsegment.horizontal = horizontal;
         gsegment.rect = odb::Rect(x1*dbus_per_micron, y1*dbus_per_micron, x2*dbus_per_micron, y2*dbus_per_micron);
         if(gsegment.rect.area() > 0)
-					throw std::out_of_range("There is a guide rectangle that is not from eGR (area greater than zero).");
+          throw std::out_of_range("There is a guide rectangle that is not from eGR (area greater than zero).");
         gsegment.layerIndex = layer;
         rguide.guides.push_back(gsegment);
       }
@@ -1044,7 +1057,7 @@ FeatureExtractor::readGuide(std::string file_path)
       std::vector<Node*> nodes = gridGraph_->intersectingNodes(guideSegment.rect);
       for(auto node : nodes)
       {
-				if(guideSegment.rect.yMin() == node->rect.yMin())
+        if(guideSegment.rect.yMin() == node->rect.yMin())
           continue;//touching horizontal botton edge
         horizontalNodes.at(guideSegment.layerIndex-1).insert(node);
       }
@@ -1053,17 +1066,17 @@ FeatureExtractor::readGuide(std::string file_path)
     std::vector<std::unordered_set<Node*>> verticalNodes;
     verticalNodes.resize(numLayers);
     for(auto guideSegment : rguide.guides)
-		{
+    {
       if(guideSegment.horizontal)
         continue;
       std::vector<Node*> nodes = gridGraph_->intersectingNodes(guideSegment.rect);
       for(auto node : nodes)
       {
-			  if(guideSegment.rect.xMin() == node->rect.xMin())
-				  continue;//touching vertical left edge
+        if(guideSegment.rect.xMin() == node->rect.xMin())
+          continue;//touching vertical left edge
         verticalNodes.at(guideSegment.layerIndex-1).insert(node);
       }
-		}
+    }
 
     for(int i = 0; i<horizontalNodes.size(); i++)
       for(auto node : horizontalNodes.at(i))
@@ -1082,20 +1095,20 @@ FeatureExtractor::sanityCheck()
   {
     Node *node_ptr = gridGraph_->node(node_id);
     for(int i=0; i<node_ptr->h_cap.size(); ++i)
-		{
-			if(node_ptr->h_cap.at(i) <= 0)
-				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid HCap: "<<node_ptr->h_cap.at(i)<<" at index: "<<i<<std::endl;
-			if(node_ptr->h_cap.at(i) <= 0 && node_ptr->h_demand.at(i) > 0)
-				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid HDemand: "<<node_ptr->h_demand.at(i)<<" at index: "<<i<<std::endl;
-		}
+    {
+      if(node_ptr->h_cap.at(i) <= 0)
+        std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid HCap: "<<node_ptr->h_cap.at(i)<<" at index: "<<i<<std::endl;
+      if(node_ptr->h_cap.at(i) <= 0 && node_ptr->h_demand.at(i) > 0)
+        std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid HDemand: "<<node_ptr->h_demand.at(i)<<" at index: "<<i<<std::endl;
+    }
 
     for(int i=0; i<node_ptr->v_cap.size(); ++i)
-		{
-			if(node_ptr->v_cap.at(i) <= 0)
-				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid VCap: "<<node_ptr->v_cap.at(i)<<" at index: "<<i<<std::endl;
-			if(node_ptr->v_cap.at(i) <= 0 && node_ptr->v_demand.at(i) > 0)
-				std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid VDemand: "<<node_ptr->v_demand.at(i)<<" at index: "<<i<<std::endl;
-		}
+    {
+      if(node_ptr->v_cap.at(i) <= 0)
+        std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid VCap: "<<node_ptr->v_cap.at(i)<<" at index: "<<i<<std::endl;
+      if(node_ptr->v_cap.at(i) <= 0 && node_ptr->v_demand.at(i) > 0)
+        std::cout<<"Warning NodeId: "<<node_ptr->nodeID<<" invalid VDemand: "<<node_ptr->v_demand.at(i)<<" at index: "<<i<<std::endl;
+    }
   }
 }
 

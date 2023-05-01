@@ -31,7 +31,6 @@ class GridGraph;
 class GridRender;
 struct Node;
 class NodePainter;
-class RectRender;
 
 class FeatureExtractor {
   public:
@@ -67,9 +66,9 @@ class FeatureExtractor {
 
     void drawGrid();
 
-    void paintNodes(std::string file_path);
+    void paintNodes(std::string file_path, std::string color);
 
-    void paintNode(unsigned int id);
+    void paintNode(unsigned int nodeId, std::string color);
 
     void sanityCheck();
 
@@ -99,7 +98,6 @@ class FeatureExtractor {
     std::unique_ptr<DRVRenderer> drvRenderer_;
     std::unique_ptr<GridRender> gridRenderer_;
     std::unique_ptr<NodePainter> nodePainter_;
-    std::unique_ptr<RectRender> rectRender_;
   };
 }
 

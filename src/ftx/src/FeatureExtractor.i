@@ -114,17 +114,17 @@ DrawGrid()
 }
 
 void
-PaintNodes(char* fileName)
+PaintNodes(char* fileName, char* color="blue")
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->paintNodes(fileName);
+  featureExt->paintNodes(fileName, color);
 }
 
 void
-PaintNode(int id)
+PaintNode(int nodeId, char* color="blue")
 {
   FeatureExtractor* featureExt = getFeatureExtractor();
-  featureExt->paintNode(id);
+  featureExt->paintNode(nodeId, color);
 }
 
 void
