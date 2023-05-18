@@ -251,15 +251,19 @@ FeatureExtractor::readRPT(std::string file_path,
   }
 
   int num_violating_nodes = 0;
+  int num_valid_nodes = 0;
   for(auto node_id = 0; node_id != gridGraph_->sizeNodes(); node_id++)
   {
     auto node_ptr = gridGraph_->node(node_id);
-    if (node_ptr->violation)
+    if (node_ptr->rect.area() == 0)
+      continue;
+    if (node_ptr->drvs.find(DRVType::metalShort) != node_ptr->drvs.end())
     {
-      ++num_violating_nodes;
+      num_violating_nodes++;
     }
+    num_valid_nodes++;
   }
-  std::cout<<"Nodes with DRVs: "<<num_violating_nodes<<" of "<<gridGraph_->sizeNodes()<<" total nodes."<<std::endl;
+  std::cout<<"Nodes with short DRVs: "<<num_violating_nodes<<" of "<<num_valid_nodes<<" total nodes."<<std::endl;
 }
 
 void
