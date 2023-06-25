@@ -31,8 +31,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef __REPLACE_HEADER__
-#define __REPLACE_HEADER__
+#pragma once
 
 #include <memory>
 #include <vector>
@@ -59,7 +58,9 @@ class Logger;
 
 namespace gpl {
 
+class PlacerBaseCommon;
 class PlacerBase;
+class NesterovBaseCommon;
 class NesterovBase;
 class RouteBase;
 class TimingBase;
@@ -74,18 +75,15 @@ class Replace
   Replace();
   ~Replace();
 
-  void init();
+  void init(odb::dbDatabase* odb,
+            rsz::Resizer* resizer,
+            grt::GlobalRouter* router,
+            utl::Logger* logger);
   void reset();
-
-  void setDb(odb::dbDatabase* odb);
-  void setResizer(rsz::Resizer* resizer);
-  void setGlobalRouter(grt::GlobalRouter* fr);
-  void setLogger(utl::Logger* log);
 
   void doIncrementalPlace();
   void doInitialPlace();
 
-  bool initNesterovPlace();
   int doNesterovPlace(int start_iter = 0);
 
   // Initial Place param settings
@@ -97,8 +95,7 @@ class Replace
 
   void setNesterovPlaceMaxIter(int iter);
 
-  void setBinGridCntX(int binGridCntX);
-  void setBinGridCntY(int binGridCntY);
+  void setBinGridCnt(int binGridCntX, int binGridCntY);
 
   void setTargetDensity(float density);
   void setUniformTargetDensityMode(bool mode);
@@ -145,13 +142,17 @@ class Replace
                 odb::dbInst* inst = nullptr);
 
  private:
+  bool initNesterovPlace();
+
   odb::dbDatabase* db_;
   rsz::Resizer* rs_;
   grt::GlobalRouter* fr_;
   utl::Logger* log_;
 
-  std::shared_ptr<PlacerBase> pb_;
-  std::shared_ptr<NesterovBase> nb_;
+  std::shared_ptr<PlacerBaseCommon> pbc_;
+  std::shared_ptr<NesterovBaseCommon> nbc_;
+  std::vector<std::shared_ptr<PlacerBase>> pbVec_;
+  std::vector<std::shared_ptr<NesterovBase>> nbVec_;
   std::shared_ptr<RouteBase> rb_;
   std::shared_ptr<TimingBase> tb_;
 
@@ -164,6 +165,8 @@ class Replace
   int initialPlaceMaxFanout_;
   float initialPlaceNetWeightScale_;
   bool forceCPU_;
+
+  int total_placeable_insts_;
 
   int nesterovPlaceMaxIter_;
   int binGridCntX_;
@@ -209,5 +212,3 @@ class Replace
   odb::dbInst* gui_debug_inst_;
 };
 }  // namespace gpl
-
-#endif

@@ -39,13 +39,17 @@
 #include "dbTable.h"
 #include "dbTable.hpp"
 #include "dbTypes.h"
+#include "utl/Logger.h"
 
 //#define NEW_TRACKS
 
 #include "dbShape.h"
 namespace odb {
 
-dbBlockSearch::dbBlockSearch(dbBlock* blk, dbTech* tech)
+using utl::ODB;
+
+dbBlockSearch::dbBlockSearch(dbBlock* blk, dbTech* tech, utl::Logger* logger)
+    : logger_(logger)
 {
   _block = blk;
   _tech = tech;
@@ -240,8 +244,8 @@ uint dbBlockSearch::makeInstSearchDb()
 
     dbBox* bb = inst->getBBox();
 
-    minWidth = MIN(minWidth, bb->getDX());
-    minHeight = MIN(minHeight, bb->getDY());
+    minWidth = std::min(minWidth, bb->getDX());
+    minHeight = std::min(minHeight, bb->getDY());
 
     Rect r = bb->getBox();
     maxRect.merge(r);
@@ -792,70 +796,7 @@ void dbBlockSearch::getInstShapes(bool vias, bool pins, bool obs)
     addInstShapes(inst, vias, pinFlag, obsFlag);
   }
 }
-/*
-void dbBlockSearch::white(Ath__zui *zui, Ath__hierType hier, bool ignoreFlag)
-{
-        if (!ignoreFlag && !zui->getDbFlag("inst/white"))
-                return;
 
-        if (_dbInstSearch==NULL)
-                return;
-
-        Ath__searchBox bb(zui->getBbox(), 0, 0);
-        zui->getIdTable()->resetCnt();
-        _dbInstSearch->white(&bb, 0, 0, zui->getIdTable(), false); //single grid
-
-        while (uint id= zui->getNextId())
-        {
-                Ath__wire *w= _dbInstSearch->getWirePtr(id);
-
-                Ath__searchBox bb;
-                w->getCoords(&bb);
-                bb.setLevel(5);
-
-                zui->addBox(&bb, Ath_hier__block, Ath_box__white, id);
-
-                _dbInstSearch->releaseWire(id);
-        }
-}
-void dbBlockSearch::getWireIds(Ath__array1D<uint> *wireIdTable,
-Ath__array1D<uint> *idtable)
-{
-        // remove duplicate entries
-
-        for (uint ii= 0; ii<wireIdTable->getCnt(); ii++)
-        {
-                uint wid= wireIdTable->get(ii);
-                Ath__wire *w= _dbNetWireSearch->getWirePtr(wid);
-
-                uint srcId= w->getSrcId();
-                if (srcId>0) {
-                        w= _dbNetWireSearch->getWirePtr(srcId);
-                }
-                if (w->_ext>0)
-                        continue;
-
-                w->_ext= 1;
-                idtable->add(w->_id);
-        }
-
-        for (uint jj= 0; jj<wireIdTable->getCnt(); jj++)
-        {
-                Ath__wire *w= _dbNetWireSearch->getWirePtr( wireIdTable->get(jj)
-);
-
-                w->_ext= 0;
-        }
-}
-uint dbBlockSearch::getDbBoxId(uint wid, uint wireType)
-{
-        Ath__wire *w= _dbNetWireSearch->getWirePtr(wid);
-        if (w->_flags!=wireType)
-                return 0;
-
-        return w->getBoxId();
-}
-*/
 int dbBlockSearch::getShapeLevel(dbSBox* s, bool wireVia)
 {
   if (s->isVia()) {
@@ -1042,7 +983,6 @@ uint dbBlockSearch::addViaBoxes(dbShape& sVia,
 
     cnt += _dcr->addBox(id, subMenuId, menuId, level, x1, y1, x2, y2, shapeId);
   }
-  notice(0, "_skipCutBoxes=%d\n", _skipCutBoxes);
   if (_skipCutBoxes)
     return cnt;
   for (shape_itr = shapes.begin(); shape_itr != shapes.end(); ++shape_itr) {
@@ -1098,7 +1038,6 @@ uint dbBlockSearch::addViaBoxes(dbBox* viaBox,
     cnt += _dcr->addBox(
         netId, subMenuId, menuId, level, x1, y1, x2, y2, shapeId);
   }
-  notice(0, "_skipCutBoxes=%d\n", _skipCutBoxes);
   if (_skipCutBoxes)
     return cnt;
 
@@ -1294,10 +1233,10 @@ uint dbBlockSearch::getTracks(bool ignoreLayers)
   int x1, y1, x2, y2;
   _dcr->getBbox(&x1, &y1, &x2, &y2);
 
-  x1 = MAX(x1, die.xMin());
-  y1 = MAX(y1, die.yMin());
-  x2 = MIN(x2, die.xMax());
-  y2 = MIN(y2, die.yMax());
+  x1 = std::max(x1, die.xMin());
+  y1 = std::max(y1, die.yMin());
+  x2 = std::min(x2, die.xMax());
+  y2 = std::min(y2, die.yMax());
 
   int bb_ll[2] = {x1, y1};
   int bb_ur[2] = {x2, y2};
@@ -1543,96 +1482,7 @@ uint dbBlockSearch::getTilePins(Ath__zui *zui)
         return cnt;
 }
 */
-uint dbBlockSearch::addArrow(int x1,
-                             int y1,
-                             int x2,
-                             int y2,
-                             int labelCnt,
-                             char** label,
-                             double* val)
-{
-  return _dcr->addArrow(true,
-                        _inst_bb_id,
-                        _instMenuId,
-                        0,
-                        labelCnt,
-                        label,
-                        val,
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        0);
-}
-uint dbBlockSearch::addArrow(dbInst* inst1,
-                             dbInst* inst2,
-                             int labelCnt,
-                             char** label,
-                             double* val)
-{
-  dbBox* s1 = inst1->getBBox();
-  dbBox* s2 = inst2->getBBox();
 
-  int x1 = (s1->xMin() + s1->xMax()) / 2;
-  int y1 = (s1->yMin() + s1->yMax()) / 2;
-  int x2 = (s2->xMin() + s2->xMax()) / 2;
-  int y2 = (s2->yMin() + s2->yMax()) / 2;
-
-  // 3 inst rarrow 1900000 400000 0 5000 color 0 label {tarrow 1}
-  /*
-  uint Ath__zui::addArrow(bool right, uint boxType, uint hier, int layer,
-                                          int labelCnt, char **label, double
-  *val, int x1, int y1,int x2, int y2, uint boxFilter)
-  */
-
-  return _dcr->addArrow(true,
-                        _inst_bb_id,
-                        _instMenuId,
-                        0,
-                        labelCnt,
-                        label,
-                        val,
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        0);
-}
-uint dbBlockSearch::addFlightLines(dbInst* inst)
-{
-  int labelCnt = 0;
-  char** label = new char*[3];
-  for (uint ii = 0; ii < 3; ii++)
-    label[ii] = new char[16];
-
-  double val[3];
-
-  uint cnt = 0;
-  std::vector<dbInst*> connectivity;
-  inst->getConnectivity(connectivity);
-
-  std::vector<dbInst*>::iterator inst_itr;
-
-  _dcr->setInstMarker();
-  for (inst_itr = connectivity.begin(); inst_itr != connectivity.end();
-       ++inst_itr) {
-    dbInst* inst1 = *inst_itr;
-
-    labelCnt = 0;
-
-    val[labelCnt] = inst->getId();
-    strcpy(label[labelCnt++], "instId1=");
-
-    val[labelCnt] = inst1->getId();
-    strcpy(label[labelCnt++], "instId2=");
-    cnt += addArrow(inst, inst1, labelCnt, label, val);
-  }
-  for (uint jj = 0; jj < 3; jj++)
-    delete[] label[jj];
-  delete[] label;
-
-  return cnt;
-}
 void dbBlockSearch::addInstConnList(dbInst* inst, bool ignoreFlags)
 {
   bool instBoxes
@@ -1689,7 +1539,7 @@ void dbBlockSearch::selectInst()
       inst = dbInst::getInst(_block, instId);
 
     if (inst == NULL) {
-      warning(0, "Cannot find instance in DB with id %d\n", instId);
+      logger_->warn(ODB, 394, "Cannot find instance in DB with id {}", instId);
       return;
     }
     addInstBoxes(inst, true, termShapes, instObs, vias);
@@ -1698,7 +1548,8 @@ void dbBlockSearch::selectInst()
     if (strstr(inspectName, "*") == NULL) {
       inst = _block->findInst(inspectName);
       if (inst == NULL) {
-        warning(0, "Cannot find instance in DB with name %s\n", inspectName);
+        logger_->warn(
+            ODB, 397, "Cannot find instance in DB with name {}", inspectName);
         return;
       }
       addInstBoxes(inst, true, termShapes, instObs, vias);
@@ -1735,7 +1586,8 @@ void dbBlockSearch::selectIterm2Net(uint itermId)
   if (itermId <= iterms.sequential())
     iterm = dbITerm::getITerm(_block, itermId);
   if (iterm == NULL) {
-    warning(0, "Cannot find instance term in DB with id %d\n", itermId);
+    logger_->warn(
+        ODB, 414, "Cannot find instance term in DB with id {}", itermId);
     return;
   }
 
@@ -2230,7 +2082,7 @@ uint dbBlockSearch::selectNet()
     if (netId <= nets.sequential())
       net = dbNet::getNet(_block, netId);
     if (net == NULL) {
-      warning(0, "Cannot find net in DB with id %d\n", netId);
+      logger_->warn(ODB, 415, "Cannot find net in DB with id {}", netId);
       return 0;
     }
     if (isSignalNet(net))
@@ -2246,7 +2098,8 @@ uint dbBlockSearch::selectNet()
     if (strstr(inspectName, "*") == NULL) {
       net = _block->findNet(inspectName);
       if (net == NULL) {
-        warning(0, "Cannot find net in DB with name %s\n", inspectName);
+        logger_->warn(
+            ODB, 418, "Cannot find net in DB with name {}", inspectName);
         return 0;
       }
       if (isSignalNet(net))
@@ -2301,7 +2154,7 @@ void dbBlockSearch::selectBterm2Net(uint btermId)
   if (btermId <= bterms.sequential())
     bterm = dbBTerm::getBTerm(_block, btermId);
   if (bterm == NULL) {
-    warning(0, "Cannot find block term in DB with id %d\n", btermId);
+    logger_->warn(ODB, 416, "Cannot find block term in DB with id {}", btermId);
     return;
   }
   dbNet* net = bterm->getNet();
@@ -2329,7 +2182,8 @@ uint dbBlockSearch::selectBterm()
     if (strstr(inspectName, "*") == NULL) {
       dbBTerm* bterm = _block->findBTerm(inspectName);
       if (bterm == NULL) {
-        warning(0, "Cannot find block term in DB with name %s\n", inspectName);
+        logger_->warn(
+            ODB, 419, "Cannot find block term in DB with name {}", inspectName);
         return 0;
       }
 

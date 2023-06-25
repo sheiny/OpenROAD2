@@ -33,6 +33,7 @@
 
 #include "mpl2/rtl_mp.h"
 
+#include "Mpl2Observer.h"
 #include "hier_rtlmp.h"
 #include "object.h"
 #include "utl/Logger.h"
@@ -50,9 +51,11 @@ MacroPlacer2::~MacroPlacer2() = default;
 void MacroPlacer2::init(sta::dbNetwork* network,
                         odb::dbDatabase* db,
                         sta::dbSta* sta,
-                        utl::Logger* logger)
+                        utl::Logger* logger,
+                        par::PartitionMgr* tritonpart)
 {
-  hier_rtlmp_ = std::make_unique<HierRTLMP>(network, db, sta, logger);
+  hier_rtlmp_
+      = std::make_unique<HierRTLMP>(network, db, sta, logger, tritonpart);
 }
 
 bool MacroPlacer2::place(const int max_num_macro,
@@ -77,14 +80,16 @@ bool MacroPlacer2::place(const int max_num_macro,
                          const float fence_weight,
                          const float boundary_weight,
                          const float notch_weight,
+                         const float macro_blockage_weight,
                          const float pin_access_th,
                          const float target_util,
                          const float target_dead_space,
                          const float min_ar,
                          const int snap_layer,
+                         const bool bus_planning_flag,
                          const char* report_directory)
 {
-  hier_rtlmp_->setTopLevelClusterSize(
+  hier_rtlmp_->setClusterSize(
       max_num_macro, min_num_macro, max_num_inst, min_num_inst);
   hier_rtlmp_->setClusterSizeTolerance(tolerance);
   hier_rtlmp_->setMaxNumLevel(max_num_level);
@@ -101,21 +106,22 @@ bool MacroPlacer2::place(const int max_num_macro,
   hier_rtlmp_->setFenceWeight(fence_weight);
   hier_rtlmp_->setBoundaryWeight(boundary_weight);
   hier_rtlmp_->setNotchWeight(notch_weight);
+  hier_rtlmp_->setMacroBlockageWeight(macro_blockage_weight);
   hier_rtlmp_->setPinAccessThreshold(pin_access_th);
   hier_rtlmp_->setTargetUtil(target_util);
   hier_rtlmp_->setTargetDeadSpace(target_dead_space);
   hier_rtlmp_->setMinAR(min_ar);
   hier_rtlmp_->setSnapLayer(snap_layer);
+  hier_rtlmp_->setBusPlanningFlag(bus_planning_flag);
   hier_rtlmp_->setReportDirectory(report_directory);
-
   hier_rtlmp_->hierRTLMacroPlacer();
 
   return true;
 }
 
-void MacroPlacer2::setDebug()
+void MacroPlacer2::setDebug(std::unique_ptr<Mpl2Observer>& graphics)
 {
-  hier_rtlmp_->setDebug();
+  hier_rtlmp_->setDebug(graphics);
 }
 
 }  // namespace mpl2

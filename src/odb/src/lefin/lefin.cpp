@@ -602,6 +602,14 @@ void lefin::layer(lefiLayer* layer)
     return;
   }
 
+  for (int i = 0; i < layer->numProps(); i++) {
+    if (!strcmp(layer->propName(i), "LEF58_REGION")) {
+      _logger->warn(
+          utl::ODB, 423, "LEF58_REGION layer {} ignored", layer->name());
+      return;
+    }
+  }
+
   dbTechLayerType type(dbTechLayerType::ROUTING);
 
   if (layer->hasType())
@@ -626,6 +634,12 @@ void lefin::layer(lefiLayer* layer)
                   layer->name());
     return;
   }
+
+  if (layer->hasPitch())
+    l->setPitch(dbdist(layer->pitch()));
+  else if (layer->hasXYPitch())
+    l->setPitchXY(dbdist(layer->pitchX()), dbdist(layer->pitchY()));
+
   for (int iii = 0; iii < layer->numProps(); iii++) {
     dbStringProperty::create(l, layer->propName(iii), layer->propValue(iii));
     bool valid = true;
@@ -671,6 +685,9 @@ void lefin::layer(lefiLayer* layer)
       } else if (!strcmp(layer->propName(iii), "LEF58_MINIMUMCUT")) {
         MinCutParser parser(l, this);
         parser.parse(layer->propValue(iii));
+      } else if (!strcmp(layer->propName(iii), "LEF58_PITCH")) {
+        lefTechLayerPitchRuleParser parser(this);
+        parser.parse(layer->propValue(iii), l);
       } else if (!strcmp(layer->propName(iii), "LEF58_AREA")) {
         lefTechLayerAreaRuleParser parser(this);
         parser.parse(layer->propValue(iii), l, _incomplete_props);
@@ -694,9 +711,12 @@ void lefin::layer(lefiLayer* layer)
       } else if (!strcmp(layer->propName(iii), "LEF58_ARRAYSPACING")) {
         ArraySpacingParser parser(l, this);
         valid = parser.parse(layer->propValue(iii));
-      } else if (!strcmp(layer->propName(iii), "LEF58_TYPE"))
+      } else if (!strcmp(layer->propName(iii), "LEF58_TYPE")) {
         valid = lefTechLayerTypeParser::parse(layer->propValue(iii), l, this);
-      else
+      } else if (!strcmp(layer->propName(iii), "LEF58_KEEPOUTZONE")) {
+        KeepOutZoneParser parser(l, this);
+        parser.parse(layer->propValue(iii));
+      } else
         supported = false;
     } else if (type.getValue() == dbTechLayerType::MASTERSLICE) {
       if (!strcmp(layer->propName(iii), "LEF58_TYPE"))
@@ -712,8 +732,22 @@ void lefin::layer(lefiLayer* layer)
                     layer->propName(iii),
                     layer->name(),
                     layer->propValue(iii));
+    if (!supported) {
+      _logger->info(utl::ODB,
+                    388,
+                    "unsupported {} property for layer {} :\"{}\"",
+                    layer->propName(iii),
+                    layer->name(),
+                    layer->propValue(iii));
+    }
   }
-
+  // update wrong way width
+  for (auto rule : l->getTechLayerWidthTableRules()) {
+    if (rule->isWrongDirection()) {
+      l->setWrongWayWidth(*rule->getWidthTable().begin());
+      break;
+    }
+  }
   if (layer->hasWidth())
     l->setWidth(dbdist(layer->width()));
 
@@ -721,11 +755,6 @@ void lefin::layer(lefiLayer* layer)
     l->setMinWidth(dbdist(layer->minwidth()));
   else if (type == dbTechLayerType::ROUTING)
     l->setMinWidth(l->getWidth());
-
-  if (layer->hasPitch())
-    l->setPitch(dbdist(layer->pitch()));
-  else if (layer->hasXYPitch())
-    l->setPitchXY(dbdist(layer->pitchX()), dbdist(layer->pitchY()));
 
   if (layer->hasOffset())
     l->setOffset(dbdist(layer->offset()));
@@ -916,7 +945,7 @@ void lefin::layer(lefiLayer* layer)
   int k;
 
   if (layer->numAntennaModel() > 0) {
-    for (j = 0; j < MIN(layer->numAntennaModel(), 2); j++) {
+    for (j = 0; j < std::min(layer->numAntennaModel(), 2); j++) {
       cur_ant_rule = (j == 1) ? l->createOxide2AntennaRule()
                               : l->createDefaultAntennaRule();
       cur_model = layer->antennaModel(j);
@@ -1911,6 +1940,8 @@ void lefin::via(lefiVia* via, dbTechNonDefaultRule* rule)
       P.setXTopEnclosure(dbdist(via->xTopOffset()));
       P.setYTopEnclosure(dbdist(via->yTopOffset()));
     }
+
+    v->setViaParams(P);
 
     if (via->hasCutPattern())
       v->setPattern(via->cutPattern());

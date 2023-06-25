@@ -352,6 +352,13 @@ void FlexGCWorker::Impl::checkLef58CutSpacingTbl_main(
   }
 }
 
+inline bool isSkipVia(gcRect* rect)
+{
+  return rect->getLayerNum() == GC_IGNORE_PDN_LAYER && rect->isFixed()
+         && rect->hasNet() && rect->getNet()->getFrNet()
+         && rect->getNet()->getFrNet()->getType().isSupply();
+}
+
 void FlexGCWorker::Impl::checkLef58CutSpacingTbl(
     gcRect* viaRect,
     frLef58CutSpacingTableConstraint* con)
@@ -366,12 +373,23 @@ void FlexGCWorker::Impl::checkLef58CutSpacingTbl(
     cutClass = layer1->getCutClass(cutClassIdx)->getName();
 
   auto dbRule = con->getODBRule();
+  if (isSkipVia(viaRect))
+    return;
+
+  bool isUpperVia = true;
   frLayerNum queryLayerNum;
-  if (dbRule->isLayerValid())
-    queryLayerNum = getTech()
-                        ->getLayer(dbRule->getSecondLayer()->getName())
-                        ->getLayerNum();
-  else
+  if (dbRule->isLayerValid()) {
+    if (dbRule->getSecondLayer()->getName() == layer1->getName())
+      isUpperVia = false;
+    if (isUpperVia)
+      queryLayerNum = getTech()
+                          ->getLayer(dbRule->getSecondLayer()->getName())
+                          ->getLayerNum();
+    else
+      queryLayerNum = getTech()
+                          ->getLayer(dbRule->getTechLayer()->getName())
+                          ->getLayerNum();
+  } else
     queryLayerNum = layerNum1;
   frCoord maxSpc;
 
@@ -392,7 +410,98 @@ void FlexGCWorker::Impl::checkLef58CutSpacingTbl(
       continue;
     if (ptr->getPin() == viaRect->getPin())
       continue;
-    checkLef58CutSpacingTbl_main(viaRect, ptr, con);
+    if (isSkipVia(ptr))
+      continue;
+    if (isUpperVia)
+      checkLef58CutSpacingTbl_main(viaRect, ptr, con);
+    else
+      checkLef58CutSpacingTbl_main(ptr, viaRect, con);
+  }
+}
+void FlexGCWorker::Impl::checKeepOutZone_main(gcRect* rect,
+                                              frLef58KeepOutZoneConstraint* con)
+{
+  auto layer = getTech()->getLayer(rect->getLayerNum());
+  if (isSkipVia(rect))
+    return;
+  auto dbRule = con->getODBRule();
+  Rect viaBox(gtl::xl(*rect), gtl::yl(*rect), gtl::xh(*rect), gtl::yh(*rect));
+  Rect sideQueryBox(viaBox), endQueryBox(viaBox);
+  auto viaCutClass = layer->getCutClass(rect->width(), rect->length());
+  if (viaCutClass == nullptr
+      || viaCutClass->getName() != dbRule->getFirstCutClass())
+    return;
+
+  if (viaBox.dx() > viaBox.dy()) {
+    sideQueryBox = sideQueryBox.bloat(dbRule->getSideForwardExtension(),
+                                      odb::Orientation2D::Horizontal);
+    sideQueryBox = sideQueryBox.bloat(dbRule->getSideSideExtension(),
+                                      odb::Orientation2D::Vertical);
+    endQueryBox = endQueryBox.bloat(dbRule->getEndForwardExtension(),
+                                    odb::Orientation2D::Vertical);
+    endQueryBox = endQueryBox.bloat(dbRule->getEndSideExtension(),
+                                    odb::Orientation2D::Horizontal);
+  } else if (viaBox.dx() < viaBox.dy()) {
+    sideQueryBox = sideQueryBox.bloat(dbRule->getSideForwardExtension(),
+                                      odb::Orientation2D::Vertical);
+    sideQueryBox = sideQueryBox.bloat(dbRule->getSideSideExtension(),
+                                      odb::Orientation2D::Horizontal);
+    endQueryBox = endQueryBox.bloat(dbRule->getEndForwardExtension(),
+                                    odb::Orientation2D::Horizontal);
+    endQueryBox = endQueryBox.bloat(dbRule->getEndSideExtension(),
+                                    odb::Orientation2D::Vertical);
+  } else {
+    // skip non-rectangular vias
+    return;
+  }
+  vector<rq_box_value_t<gcRect*>> allResults;
+  auto& workerRegionQuery = getWorkerRegionQuery();
+  {
+    vector<rq_box_value_t<gcRect*>> results;
+    workerRegionQuery.queryMaxRectangle(
+        sideQueryBox, layer->getLayerNum(), results);
+    allResults.insert(allResults.end(), results.begin(), results.end());
+  }
+  {
+    vector<rq_box_value_t<gcRect*>> results;
+    workerRegionQuery.queryMaxRectangle(
+        endQueryBox, layer->getLayerNum(), results);
+    allResults.insert(allResults.end(), results.begin(), results.end());
+  }
+  for (auto& [box, ptr] : allResults) {
+    if (ptr->isFixed() && rect->isFixed())
+      continue;
+    if (ptr->getPin() == rect->getPin())
+      continue;
+    if (isSkipVia(ptr))
+      continue;
+    auto via2CutClass = layer->getCutClass(ptr->width(), ptr->length());
+    if (!dbRule->getSecondCutClass().empty()
+        && (via2CutClass == nullptr
+            || dbRule->getSecondCutClass() != via2CutClass->getName()))
+      continue;
+    odb::Rect ptrBox(
+        gtl::xl(*ptr), gtl::yl(*ptr), gtl::xh(*ptr), gtl::yh(*ptr));
+    if (!sideQueryBox.overlaps(ptrBox) && !endQueryBox.overlaps(ptrBox))
+      continue;
+    gtl::rectangle_data<frCoord> markerRect(*rect);
+    gtl::generalized_intersect(markerRect, *ptr);
+    Rect markerBox(gtl::xl(markerRect),
+                   gtl::yl(markerRect),
+                   gtl::xh(markerRect),
+                   gtl::yh(markerRect));
+    auto marker = make_unique<frMarker>();
+    marker->setBBox(markerBox);
+    marker->setLayerNum(layer->getLayerNum());
+    marker->setConstraint(con);
+    marker->addSrc(ptr->getNet()->getOwner());
+    marker->addAggressor(
+        ptr->getNet()->getOwner(),
+        make_tuple(layer->getLayerNum(), ptrBox, ptr->isFixed()));
+    marker->addSrc(rect->getNet()->getOwner());
+    marker->addVictim(rect->getNet()->getOwner(),
+                      make_tuple(rect->getLayerNum(), viaBox, rect->isFixed()));
+    addMarker(std::move(marker));
   }
 }
 

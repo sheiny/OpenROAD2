@@ -30,11 +30,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include "darr.h"
 #include "db.h"
 #include "rcx/extRCap.h"
 #include "rcx/extSpef.h"
-#include "rcx/exttree.h"
 
 namespace rcx {
 
@@ -45,6 +43,7 @@ void extMain::resetMinMaxRC(uint ii, uint jj)
   _minResTable[ii][jj] = 0;
   _maxResTable[ii][jj] = 0;
 }
+
 void extMain::setMinRC(uint ii, uint jj, extDistRC* rc)
 {
   if (rc) {
@@ -55,6 +54,7 @@ void extMain::setMinRC(uint ii, uint jj, extDistRC* rc)
     _minResTable[ii][jj] = 0;
   }
 }
+
 void extMain::setMaxRC(uint ii, uint jj, extDistRC* rc)
 {
   if (rc) {
@@ -65,12 +65,13 @@ void extMain::setMaxRC(uint ii, uint jj, extDistRC* rc)
     _maxResTable[ii][jj] = 0;
   }
 }
+
 extDistRC* extRCModel::getMinRC(int met, int width)
 {
   if (met >= _layerCnt)
     return NULL;
 
-  extMeasure m;
+  extMeasure m(logger_);
   m._met = met;
   m._underMet = 0;
   m._overMet = 0;
@@ -78,12 +79,13 @@ extDistRC* extRCModel::getMinRC(int met, int width)
 
   return getOverFringeRC(&m);
 }
+
 extDistRC* extRCModel::getMaxRC(int met, int width, int dist)
 {
   if (met >= _layerCnt)
     return NULL;
 
-  extMeasure m;
+  extMeasure m(logger_);
   m._met = met;
   m._width = width;
   m._dist = dist;
@@ -103,22 +105,7 @@ extDistRC* extRCModel::getMaxRC(int met, int width, int dist)
   }
   return rc;
 }
-void extDistRC::debugRC(const char* debugWord,
-                        const char* from,
-                        int width,
-                        int level)
-{
-  // char tmp[32];
-  // sprintf(tmp, " ");
-  // if (level > 0)
-  //   sprintf(tmp, "%d", level);
-  // if (width > 0)
-  //   sprintf(tmp, "%s %d", tmp, width);
 
-  // debug(debugWord, "C", "%s: %s, tC %g  CC %g F %g D %g   R %g  Sep %d\n",
-  //		from, tmp, _coupling+_fringe+_diag, _coupling,  _fringe, _diag,
-  //_res, _sep);
-}
 uint extMain::calcMinMaxRC()
 {
   uint cornerCnt = _modelTable->getCnt();
@@ -152,14 +139,12 @@ uint extMain::calcMinMaxRC()
 
       setMinRC(met, jj, rcMin);
       setMaxRC(met, jj, rcMax);
-
-      rcMin->debugRC("EXT_STATS", "MinRC", width, met);
-      rcMax->debugRC("EXT_STATS", "MaxRC", width, met);
     }
     cnt++;
   }
   return cnt;
 }
+
 uint extMain::getExtStats(odb::dbNet* net,
                           uint corner,
                           int& wlen,
@@ -187,11 +172,7 @@ uint extMain::getExtStats(odb::dbNet* net,
   odb::dbWireShapeItr shapes;
   odb::dbShape s;
   for (shapes.begin(wire); shapes.next(s);) {
-    //		uint level= 0;
-
     if (s.isVia()) {
-      // if (!_skip_via_wires)
-      //    continue;
       via_cnt++;
 
       odb::dbTechVia* tvia = s.getTechVia();

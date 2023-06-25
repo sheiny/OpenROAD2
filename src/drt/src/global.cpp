@@ -102,19 +102,18 @@ float TASHAPEBLOATWIDTH = 1.5;
 frUInt4 VIACOST = 4;
 // new cost used
 frUInt4 GRIDCOST = 2;
-frUInt4 FIXEDSHAPECOST = 30;
 frUInt4 ROUTESHAPECOST = 8;
 frUInt4 MARKERCOST = 32;
 frUInt4 MARKERBLOATWIDTH = 1;
 frUInt4 BLOCKCOST = 32;
 frUInt4 GUIDECOST = 1;  // disabled change getNextPathCost to enable
-float MARKERDECAY = 0.95;
 float SHAPEBLOATWIDTH = 3;
 int MISALIGNMENTCOST = 8;
 
 int CONGCOST = 8;
 int HISTCOST = 32;
-
+std::string REPAIR_PDN_LAYER_NAME;
+frLayerNum GC_IGNORE_PDN_LAYER = -1;
 namespace fr {
 
 ostream& operator<<(ostream& os, const frRect& pinFigIn)
@@ -486,6 +485,8 @@ ostream& operator<<(ostream& os, const frMarker& m)
       return os << "frcSpacingTablePrlConstraint";
     case frConstraintTypeEnum::frcSpacingTableTwConstraint:
       return os << "frcSpacingTableTwConstraint";
+    case frConstraintTypeEnum::frcLef58KeepOutZoneConstraint:
+      return os << "frcLef58KeepOutZoneConstraint";
     default:
       return os << "unknown viol";
   }

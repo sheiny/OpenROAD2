@@ -9,7 +9,8 @@ _installCommonDev() {
     cmakeChecksum="b8d86f8c5ee990ae03c486c3631cee05"
     cmakeVersionBig=3.24
     cmakeVersionSmall=${cmakeVersionBig}.2
-    swigVersionType="tag"
+    pcreVersion=10.42
+    pcreChecksum="37d2f77cfd411a3ddf1c64e1d72e43f7"
     swigVersion=4.1.0
     swigChecksum="794433378154eb61270a3ac127d9c5f3"
     boostVersionBig=1.80
@@ -17,20 +18,22 @@ _installCommonDev() {
     boostChecksum="077f074743ea7b0cb49c6ed43953ae95"
     eigenVersion=3.4
     lemonVersion=1.3.1
-    lemonChecksum="e89f887559113b68657eca67cf3329b5"
     spdlogVersion=1.8.1
 
     # temp dir to download and compile
     baseDir=/tmp/installers
     mkdir -p "${baseDir}"
-    if [[ ! -z $PREFIX ]]; then mkdir -p ${PREFIX}; fi
+    if [[ ! -z "${PREFIX}" ]]; then
+        mkdir -p "${PREFIX}"
+    fi
 
     # CMake
     cmakePrefix=${PREFIX:-"/usr/local"}
-    if [[ -z $(${cmakePrefix}/bin/cmake --version | grep ${cmakeVersionBig}) ]]; then
+    cmakeBin=${cmakePrefix}/bin/cmake
+    if [[ ! -f ${cmakeBin} || -z $(${cmakeBin} --version | grep ${cmakeVersionBig}) ]]; then
         cd "${baseDir}"
         wget https://cmake.org/files/v${cmakeVersionBig}/cmake-${cmakeVersionSmall}-${osName}-x86_64.sh
-        md5sum -c <(echo "${cmakeChecksum}  cmake-${cmakeVersionSmall}-${osName}-x86_64.sh") || exit 1
+        md5sum -c <(echo "${cmakeChecksum} cmake-${cmakeVersionSmall}-${osName}-x86_64.sh") || exit 1
         chmod +x cmake-${cmakeVersionSmall}-${osName}-x86_64.sh
         ./cmake-${cmakeVersionSmall}-${osName}-x86_64.sh --skip-license --prefix=${cmakePrefix}
     else
@@ -38,15 +41,23 @@ _installCommonDev() {
     fi
 
     # SWIG
-    swigPrefix=${PREFIX:-"/usr"}
-    if [[ -z $(${swigPrefix}/bin/swig -version | grep ${swigVersion}) ]]; then
+    swigPrefix=${PREFIX:-"/usr/local"}
+    swigBin=${swigPrefix}/bin/swig
+    if [[ ! -f ${swigBin} || -z $(${swigBin} -version | grep ${swigVersion}) ]]; then
         cd "${baseDir}"
-        tarName="rel-${swigVersion}.tar.gz"
-        [[ ${swigVersionType} == "tag" ]] && tarName="v${swigVersion}.tar.gz"
+        tarName="v${swigVersion}.tar.gz"
         wget https://github.com/swig/swig/archive/${tarName}
-        md5sum -c <(echo "${swigChecksum}  ${tarName}") || exit 1
+        md5sum -c <(echo "${swigChecksum} ${tarName}") || exit 1
         tar xfz ${tarName}
         cd swig-${tarName%%.tar*} || cd swig-${swigVersion}
+
+        # Check if pcre2 is installed
+        if [[ -z $(pcre2-config --version) ]]; then
+          tarName="pcre2-${pcreVersion}.tar.gz"
+          wget https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${pcreVersion}/${tarName}
+          md5sum -c <(echo "${pcreChecksum} ${tarName}") || exit 1
+          ./Tools/pcre-build.sh
+        fi
         ./autogen.sh
         ./configure --prefix=${swigPrefix}
         make -j $(nproc)
@@ -56,27 +67,27 @@ _installCommonDev() {
     fi
 
     # boost
-    boostPrefix=${PREFIX:-"/usr/local/include"}
-    if [[ -z $(grep "BOOST_LIB_VERSION \"${boostVersionBig//./_}\"" ${boostPrefix}/boost/version.hpp) ]]; then
+    boostPrefix=${PREFIX:-"/usr/local"}
+    if [[ -z $(grep "BOOST_LIB_VERSION \"${boostVersionBig//./_}\"" ${boostPrefix}/include/boost/version.hpp) ]]; then
         cd "${baseDir}"
         boostVersionUnderscore=${boostVersionSmall//./_}
         wget https://boostorg.jfrog.io/artifactory/main/release/${boostVersionSmall}/source/boost_${boostVersionUnderscore}.tar.gz
         md5sum -c <(echo "${boostChecksum}  boost_${boostVersionUnderscore}.tar.gz") || exit 1
         tar -xf boost_${boostVersionUnderscore}.tar.gz
         cd boost_${boostVersionUnderscore}
-        ./bootstrap.sh
+        ./bootstrap.sh --prefix="${boostPrefix}"
         ./b2 install --with-iostreams --with-test --with-serialization --with-system --with-thread -j $(nproc)
     else
         echo "Boost already installed."
     fi
 
     # eigen
-    eigenPrefix=${PREFIX:-"/usr/local/include"}
-    if [[ ! -d ${eigenPrefix}/eigen3/ ]]; then
+    eigenPrefix=${PREFIX:-"/usr/local"}
+    if [[ ! -d ${eigenPrefix}/include/eigen3 ]]; then
         cd "${baseDir}"
         git clone -b ${eigenVersion} https://gitlab.com/libeigen/eigen.git
         cd eigen
-        ${cmakePrefix}/bin/cmake -B build .
+        ${cmakePrefix}/bin/cmake -DCMAKE_INSTALL_PREFIX="${eigenPrefix}" -B build .
         ${cmakePrefix}/bin/cmake --build build -j $(nproc) --target install
     else
         echo "Eigen already installed."
@@ -94,44 +105,63 @@ _installCommonDev() {
     fi
 
     # lemon
-    lemonPrefix=${PREFIX:-"/usr/local/include"}
-    if [[ -z $(grep "LEMON_VERSION \"${lemonVersion}\"" ${lemonPrefix}/lemon/config.h) ]]; then
+    lemonPrefix=${PREFIX:-"/usr/local"}
+    if [[ -z $(grep "LEMON_VERSION \"${lemonVersion}\"" ${lemonPrefix}/include/lemon/config.h) ]]; then
         cd "${baseDir}"
-        wget http://lemon.cs.elte.hu/pub/sources/lemon-${lemonVersion}.tar.gz
-        md5sum -c <(echo "${lemonChecksum}  lemon-${lemonVersion}.tar.gz") || exit 1
-        tar -xf lemon-${lemonVersion}.tar.gz
-        cd lemon-${lemonVersion}
-        ${cmakePrefix}/bin/cmake -B build .
+        git clone -b ${lemonVersion} https://github.com/The-OpenROAD-Project/lemon-graph.git
+        cd lemon-graph
+        ${cmakePrefix}/bin/cmake -DCMAKE_INSTALL_PREFIX="${lemonPrefix}" -B build .
         ${cmakePrefix}/bin/cmake --build build -j $(nproc) --target install
     else
         echo "Lemon already installed."
     fi
 
     # spdlog
-    if [[ -z $(grep "PACKAGE_VERSION \"${spdlogVersion}\"" ${spdlogFolder}) ]]; then
+    spdlogPrefix=${PREFIX:-"/usr/local"}
+    if [[ ! -d ${spdlogPrefix}/include/spdlog ]]; then
         cd "${baseDir}"
         git clone -b "v${spdlogVersion}" https://github.com/gabime/spdlog.git
         cd spdlog
-        ${cmakePrefix}/bin/cmake -B build .
+        ${cmakePrefix}/bin/cmake -DCMAKE_INSTALL_PREFIX="${spdlogPrefix}" -DSPDLOG_BUILD_EXAMPLE=OFF -B build .
         ${cmakePrefix}/bin/cmake --build build -j $(nproc) --target install
     else
         echo "spdlog already installed."
     fi
 
-    cd "$lastDir"
+    cd "${lastDir}"
     rm -rf "${baseDir}"
+
+    if [[ ! -z ${PREFIX} ]]; then
+      # Emit an environment setup script
+      cat > ${PREFIX}/env.sh <<EOF
+depRoot="\$(dirname \$(readlink -f "\${BASH_SOURCE[0]}"))"
+PATH=\${depRoot}/bin:\${PATH}
+LD_LIBRARY_PATH=\${depRoot}/lib64:\${depRoot}/lib:\${LD_LIBRARY_PATH}
+EOF
+    fi
 }
 
 _installOrTools() {
     os=$1
     version=$2
     arch=$3
-    orToolsVersionBig=9.4
-    orToolsVersionSmall=${orToolsVersionBig}.1874
+    orToolsVersionBig=9.5
+    orToolsVersionSmall=${orToolsVersionBig}.2237
+
+    baseDir=/tmp/installers
+    mkdir -p "${baseDir}"
+    if [[ ! -z "${PREFIX}" ]]; then mkdir -p "${PREFIX}"; fi
+    cd "${baseDir}"
+
     orToolsFile=or-tools_${arch}_${os}-${version}_cpp_v${orToolsVersionSmall}.tar.gz
     wget https://github.com/google/or-tools/releases/download/v${orToolsVersionBig}/${orToolsFile}
-    mkdir -p /opt/or-tools
-    tar --strip 1 --dir /opt/or-tools -xf ${orToolsFile}
+    orToolsPath=${PREFIX:-"/opt/or-tools"}
+    if command -v brew &> /dev/null; then
+        orToolsPath="$(brew --prefix or-tools)"
+    fi
+    mkdir -p ${orToolsPath}
+    tar --strip 1 --dir ${orToolsPath} -xf ${orToolsFile}
+    rm -rf ${baseDir}
 }
 
 _installUbuntuCleanUp() {
@@ -139,7 +169,7 @@ _installUbuntuCleanUp() {
     apt-get autoremove -y
 }
 
-_installUbuntuDev() {
+_installUbuntuPackages() {
     export DEBIAN_FRONTEND="noninteractive"
     apt-get -y update
     apt-get -y install tzdata
@@ -158,33 +188,40 @@ _installUbuntuDev() {
         libpcre3-dev \
         python3-dev \
         libreadline-dev \
+        libgtest-dev \
         tcl-dev \
         tcllib \
         wget \
         zlib1g-dev \
-        libomp-dev
-}
+        libomp-dev \
+        devscripts \
+        debhelper
 
-_installUbuntuRuntime() {
-    export DEBIAN_FRONTEND="noninteractive"
-    apt-get -y update
-    apt-get -y install tzdata
     apt-get install -y \
         binutils \
         libgomp1 \
-        libpython3.8 \
         libtcl \
         qt5-image-formats-plugins \
-        tcl-tclreadline
+        tcl-tclreadline \
+        wget
 
-    if [[ $1 == 22.04 ]]; then
+    if [[ $1 == 22.10 ]]; then
         apt-get install -y \
             qtbase5-dev \
             qtchooser \
             qt5-qmake \
-            qtbase5-dev-tools
+            qtbase5-dev-tools \
+            libpython3.11
+    elif [[ $1 == 22.04 ]]; then
+        apt-get install -y \
+            qtbase5-dev \
+            qtchooser \
+            qt5-qmake \
+            qtbase5-dev-tools \
+            libpython3.8
     else
-        apt-get install -y qt5-default
+        apt-get install -y qt5-default \
+            libpython3.8
     fi
 
     # need the strip "hack" above to run on docker
@@ -196,7 +233,20 @@ _installRHELCleanUp() {
     rm -rf /var/lib/apt/lists/*
 }
 
-_installRHELDev() {
+_installRHELPackages() {
+    yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+
+    yum -y install \
+        tzdata \
+        binutils \
+        libgomp \
+        python3-libs \
+        tcl \
+        tcl-tclreadline \
+        qt5-srpm-macros.noarch \
+        wget
+
+    yum -y update
     yum -y install \
         autoconf \
         automake \
@@ -232,22 +282,19 @@ _installRHELDev() {
 
     yum install -y \
         http://repo.okay.com.mx/centos/8/x86_64/release/bison-3.0.4-10.el8.x86_64.rpm \
-        https://forensics.cert.org/centos/cert/7/x86_64/flex-2.6.1-9.el7.x86_64.rpm \
-        https://vault.centos.org/centos/8/BaseOS/x86_64/os/Packages/tcl-devel-8.6.8-2.el8.i686.rpm
-}
+        https://forensics.cert.org/centos/cert/7/x86_64/flex-2.6.1-9.el7.x86_64.rpm
 
-_installRHELRuntime() {
-    yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+    if [[ $(yum repolist | egrep -c "rhel-8-for-x86_64-appstream-rpms") -eq 0 ]]; then
+        yum -y install http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-gpg-keys-8-6.el8.noarch.rpm
+        yum -y install http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-stream-repos-8-6.el8.noarch.rpm
+        rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial
+    fi
 
-    yum -y update
     yum -y install \
-        tzdata \
-        binutils \
-        libgomp \
-        python3-libs \
-        tcl \
-        tcl-tclreadline \
-        qt5-srpm-macros.noarch
+        qt5-qtbase-devel \
+        qt5-qtimageformats \
+        tcl-devel
+
 }
 
 _installCentosCleanUp() {
@@ -255,13 +302,14 @@ _installCentosCleanUp() {
     rm -rf /var/lib/apt/lists/*
 }
 
-_installCentosDev() {
-    if [[ -z $(yum list installed lcov) ]]; then
-        yum install -y http://downloads.sourceforge.net/ltp/lcov-1.14-1.noarch.rpm
-    fi
-    if [[ -z $(yum list installed ius-release) ]]; then
-        yum install -y https://repo.ius.io/ius-release-el7.rpm
-    fi
+_installCentosPackages() {
+    yum remove -y lcov ius-release epel-release
+    yum install -y http://downloads.sourceforge.net/ltp/lcov-1.14-1.noarch.rpm
+    yum install -y https://repo.ius.io/ius-release-el7.rpm
+    yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+
+    yum update -y
+
     yum groupinstall -y "Development Tools"
     yum install -y centos-release-scl
     yum install -y \
@@ -279,25 +327,63 @@ _installCentosDev() {
         tcl-tclreadline-devel \
         zlib-devel \
         wget
+
     yum install -y \
         python-devel \
         python36 \
         python36-devel \
         python36-pip
-}
 
-_installCentosRuntime() {
-    if [[ -z $(yum list installed epel-release) ]]; then
-        yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-    fi
-    yum update -y
     yum install -y \
         libgomp \
         python36-libs \
         qt5-qtbase-devel \
         qt5-qtimageformats \
-        tcl-tclreadline
-    yum update -y
+        tcl-tclreadline \
+        wget
+}
+
+_installOpenSuseCleanUp() {
+    zypper -n clean --all
+    zypper -n packages --unneeded | awk -F'|' 'NR==0 || NR==1 || NR==2 || NR==3 || NR==4 {next} {print $3}' | grep -v Name | xargs -r zypper -n remove --clean-deps;
+}
+
+_installOpenSusePackages() {
+    zypper refresh && zypper -n update
+    zypper -n install \
+        binutils \
+        libgomp1 \
+        libpython3_6m1_0 \
+        libqt5-qtbase \
+        libqt5-creator \
+        libqt5-qtstyleplugins \
+        qimgv \
+        tcl \
+        tcllib
+
+    zypper refresh && zypper -n update
+    zypper -n install -t pattern devel_basis
+    zypper -n install \
+        lcov \
+        llvm \
+        clang \
+        gcc \
+        gcc11-c++ \
+        libstdc++6-devel-gcc8 \
+        pcre-devel \
+        pcre2-devel \
+        python3-devel \
+        python3-pip \
+        readline5-devel \
+        tcl-devel \
+        wget \
+        git \
+        gzip \
+        libomp11-devel \
+        zlib-devel
+
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 50
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 50
 }
 
 _installHomebrewPackage() {
@@ -306,12 +392,11 @@ _installHomebrewPackage() {
     url=https://raw.githubusercontent.com/Homebrew/homebrew-core/${commit}/Formula/${package}.rb
     curl -L ${url} > ${package}.rb
 
-    if brew list $package &> /dev/null
-        then
+    if brew list "${package}" &> /dev/null; then
         # Homebrew is awful at letting you use the version you want if a newer
         # version is installed. The package must be completely removed to ensure
         # only the correct version is installed
-        brew remove --force --ignore-dependencies $package
+        brew remove --force --ignore-dependencies "${package}"
     fi
 
     # Must ignore dependencies to avoid automatic upgrade
@@ -324,13 +409,11 @@ _installHomebrewPackage() {
 }
 
 _installDarwin() {
-    if ! command -v brew &> /dev/null
-      then
+    if ! command -v brew &> /dev/null; then
       echo "Homebrew is not found. Please install homebrew before continuing."
       exit 1
       fi
-    if ! xcode-select -p &> /dev/null
-      then
+    if ! xcode-select -p &> /dev/null; then
       # xcode-select does not pause execution, so the user must handle it
       cat <<EOF
 Xcode command line tools not installed.
@@ -341,6 +424,9 @@ EOF
       exit 1
     fi
     brew install bison boost cmake eigen flex libomp pyqt5 python swig tcl-tk zlib
+
+    # Some systems neeed this to correclty find OpenMP package during build
+    brew link --force libomp
 
     # Lemon is not in the homebrew-core repo
     brew install The-OpenROAD-Project/lemon-graph/lemon-graph
@@ -356,7 +442,7 @@ _installDebianCleanUp() {
     apt-get autoremove -y
 }
 
-_installDebianDev() {
+_installDebianPackages() {
     export DEBIAN_FRONTEND="noninteractive"
     apt-get -y update
     apt-get -y install tzdata
@@ -379,20 +465,18 @@ _installDebianDev() {
         tcllib \
         wget \
         zlib1g-dev \
-        libomp-dev
-}
+        libomp-dev \
+        devscripts \
+        debhelper
 
-_installDebianRuntime() {
-    export DEBIAN_FRONTEND="noninteractive"
-    apt-get -y update
-    apt-get -y install tzdata
     apt-get install -y \
         binutils \
         libgomp1 \
         libtcl \
         qt5-image-formats-plugins \
-        tcl-tclreadline
-    
+        tcl-tclreadline \
+        wget
+
     if [[ $1 == 10 ]]; then
         apt-get install -y \
             libpython3.7 \
@@ -407,21 +491,51 @@ _installDebianRuntime() {
     fi
 }
 
+_checkIsLocal() {
+    if [[ "${isLocal}" == "true" ]]; then
+        echo "ERROR: cannot install base packages locally; you need privileged access." >&2
+        echo "Hint: -local is only used with -common to install common packages." >&2
+        exit 1
+    fi
+}
+
 _help() {
     cat <<EOF
 
-Usage: $0 -run[time]
-       $0 -dev[elopment]
+Usage: $0
+                                # Installs all of OpenROAD's dependencies no
+                                #     need to run -base or -common. Requires
+                                #     privileged access.
+                                #
+       $0 -base
+                                # Installs OpenROAD's dependencies using
+                                #     package managers (-common must be
+                                #     executed in another command).
+       $0 -common
+                                # Installs OpenROAD's common dependencies
+                                #     (-base must be executed in another
+                                #     command).
        $0 -prefix=DIR
+                                # Installs common dependencies in an existing
+                                #     user-specified directory. Only used
+                                #     with -common. This flag cannot be used
+                                #     with sudo or with root access.
        $0 -local
+                                # Installs common dependencies in
+                                #    "$HOME/.local". Only used with
+                                #    -common. This flag cannot be used with
+                                #    sudo or with root access.
 
 EOF
     exit "${1:-1}"
 }
 
-# default option
-option="runtime"
+#default prefix
 PREFIX=""
+#default option
+option="all"
+#default isLocal
+isLocal="false"
 
 # default values, can be overwritten by cmdline args
 while [ "$#" -gt 0 ]; do
@@ -430,16 +544,40 @@ while [ "$#" -gt 0 ]; do
             _help 0
             ;;
         -run|-runtime)
-            option="runtime"
+            echo "The use of this flag is deprecated and will be removed soon."
             ;;
         -dev|-development)
-            option="dev"
+            echo "The use of this flag is deprecated and will be removed soon."
+            ;;
+        -base)
+            if [[ "${option}" != "all" ]]; then
+                echo "WARNING: previous argument -${option} will be overwritten with -base." >&2
+            fi
+            option="base"
+            ;;
+        -common)
+            if [[ "${option}" != "all" ]]; then
+                echo "WARNING: previous argument -${option} will be overwritten with -common." >&2
+            fi
+            option="common"
             ;;
         -local)
-            export PREFIX="$HOME/.local"
+            if [[ $(id -u) == 0 ]]; then
+                echo "ERROR: cannot install locally (i.e., use -local) if you are root or using sudo." >&2
+                exit 1
+            fi
+            if [[ ! -z ${PREFIX} ]]; then
+                echo "WARNING: previous argument -prefix will be overwritten with -local"
+            fi
+            export PREFIX="${HOME}/.local"
+            export isLocal="true"
             ;;
         -prefix=*)
-            export PREFIX="$(echo $1 | sed -e 's/^[^=]*=//g')"
+            if [[ ! -z ${PREFIX} ]]; then
+                echo "WARNING: previous argument -local will be overwritten with -prefix"
+                export isLocal="false"
+            fi
+            export PREFIX="$(realpath $(echo $1 | sed -e 's/^[^=]*=//g'))"
             ;;
         *)
             echo "unknown option: ${1}" >&2
@@ -459,6 +597,10 @@ case "${platform}" in
         fi
         ;;
     "Darwin" )
+        if [[ $(id -u) == 0 ]]; then>&2
+            echo "ERROR: cannot install on macOS if you are root or using sudo (not recommended for brew)." >&2
+            exit 1
+        fi
         os="Darwin"
         ;;
     *)
@@ -470,15 +612,15 @@ esac
 
 case "${os}" in
     "CentOS Linux" )
-        spdlogFolder="/usr/local/lib64/cmake/spdlog/spdlogConfigVersion.cmake"
-        export spdlogFolder
-        _installCentosRuntime
-        if [[ "${option}" == "dev" ]]; then
-            _installCentosDev
-            _installCommonDev
+        if [[ "${option}" == "base" || "${option}" == "all" ]]; then
+            _checkIsLocal
+            _installCentosPackages
+            _installCentosCleanUp
         fi
-        _installOrTools "centos" "7" "amd64"
-        _installCentosCleanUp
+        if [[ "${option}" == "common" || "${option}" == "all" ]]; then
+            _installCommonDev
+            _installOrTools "centos" "7" "amd64"
+        fi
         cat <<EOF
 To enable GCC-8 or Clang-7 you need to run:
     source /opt/rh/devtoolset-8/enable
@@ -487,64 +629,67 @@ EOF
         ;;
     "Ubuntu" )
         version=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release | sed 's/"//g')
-        spdlogFolder="/usr/local/lib/cmake/spdlog/spdlogConfigVersion.cmake"
-        export spdlogFolder
-        _installUbuntuRuntime "${version}"
-        if [[ "${option}" == "dev" ]]; then
-            _installUbuntuDev
-            _installCommonDev
+        if [[ "${option}" == "base" || "${option}" == "all" ]]; then
+            _checkIsLocal
+            _installUbuntuPackages "${version}"
+            _installUbuntuCleanUp
         fi
-        _installOrTools "ubuntu" "${version}" "amd64"
-        _installUbuntuCleanUp
+        if [[ "${option}" == "common" || "${option}" == "all" ]]; then
+            _installCommonDev
+            _installOrTools "ubuntu" "${version}" "amd64"
+        fi
         ;;
     "Red Hat Enterprise Linux")
-        spdlogFolder="/usr/local/lib64/cmake/spdlog/spdlogConfigVersion.cmake"
-        export spdlogFolder
-        _installRHELRuntime
-        if [[ "${option}" == "dev" ]]; then
-            _installRHELDev
-            _installCommonDev
+        if [[ "${option}" == "base" || "${option}" == "all" ]]; then
+            _checkIsLocal
+            _installRHELPackages
+            _installRHELCleanUp
         fi
-        _installOrTools "centos" "8" "amd64"
-        _installRHELCleanUp
+        if [[ "${option}" == "common" || "${option}" == "all" ]]; then
+            _installCommonDev
+            _installOrTools "centos" "8" "amd64"
+        fi
         ;;
     "Darwin" )
         _installDarwin
-        _installOrTools "MacOsX" "12.5" $(uname -m)
+        _installOrTools "macOS" "13.0.1" $(uname -m)
         cat <<EOF
 
 To install or run openroad, update your path with:
-    export PATH="\$(brew --prefix bison)/bin:\$(brew --prefix flex)/bin:\$(brew --prefix tcl-tk)/bin:\$PATH"
-
-You may wish to add this line to your .bashrc file
+    export PATH="\$(brew --prefix bison)/bin:\$(brew --prefix flex)/bin:\$(brew --prefix tcl-tk)/bin:\${PATH}"
+    export CMAKE_PREFIX_PATH=\$(brew --prefix or-tools)
+EOF
+        ;;
+    "openSUSE Leap" )
+        if [[ "${option}" == "common" || "${option}" == "all" ]]; then
+            _checkIsLocal
+            _installOpenSusePackages
+            _installOpenSuseCleanUp
+        fi
+        if [[ "${option}" == "common" || "${option}" == "all" ]]; then
+            _installCommonDev
+            _installOrTools "opensuse" "leap" "amd64"
+        fi
+        cat <<EOF
+To enable GCC-11 you need to run:
+        update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 50
+        update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 50
 EOF
         ;;
     "Debian GNU/Linux" )
         version=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release | sed 's/"//g')
-        spdlogFolder="/usr/local/lib/cmake/spdlog/spdlogConfigVersion.cmake"
-        export spdlogFolder
-        _installDebianRuntime "${version}"
-        if [[ "${option}" == "dev" ]]; then
-            _installDebianDev
-            _installCommonDev
+        if [[ "${option}" == "base" || "${option}" == "all" ]]; then
+            _checkIsLocal
+            _installDebianPackages "${version}"
+            _installDebianCleanUp
         fi
-        _installOrTools "debian" "${version}" "amd64"
-        _installDebianCleanUp
+        if [[ "${option}" == "common" || "${option}" == "all" ]]; then
+            _installCommonDev
+            _installOrTools "debian" "${version}" "amd64"
+        fi
         ;;
     *)
         echo "unsupported system: ${os}" >&2
-        echo "supported systems are CentOS 7 and Ubuntu 20.04" >&2
         _help
         ;;
 esac
-
-if [[ ! -z ${PREFIX} ]]; then
-            cat <<EOF
-To use cmake, set cmake as an alias:
-    alias cmake='${PREFIX}/bin/cmake' 
-    or  run
-    echo export PATH=${PREFIX}/bin:'$PATH' >> ~/.bash_profile
-    source ~/.bash_profile
-EOF
-fi
-

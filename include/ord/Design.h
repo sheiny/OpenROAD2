@@ -89,6 +89,38 @@ namespace dpo {
 class Optdp;
 }
 
+namespace fin {
+class Finale;
+}
+
+namespace par {
+class PartitionMgr;
+}
+
+namespace rcx {
+class Ext;
+}
+
+namespace rmp {
+class Restructure;
+}
+
+namespace stt {
+class SteinerTreeBuilder;
+}
+
+namespace psm {
+class PDNSim;
+}
+
+namespace pdn {
+class PdnGen;
+}
+
+namespace pad {
+class ICeWall;
+}
+
 namespace ord {
 
 class Tech;
@@ -96,14 +128,16 @@ class Tech;
 class Design
 {
  public:
-  Design(Tech* tech);
+  explicit Design(Tech* tech);
   void readVerilog(const std::string& file_name);
   void readDef(const std::string& file_name,
                bool continue_on_errors = false,
                bool floorplan_init = false,
-               bool incremental = false);
+               bool incremental = false,
+               bool child = false);
   void link(const std::string& design_name);
 
+  void readDb(const std::string& file_name);
   void writeDb(const std::string& file_name);
   void writeDef(const std::string& file_name);
 
@@ -129,6 +163,14 @@ class Design
   cts::TritonCTS* getTritonCts();
   triton_route::TritonRoute* getTritonRoute();
   dpo::Optdp* getOptdp();
+  fin::Finale* getFinale();
+  par::PartitionMgr* getPartitionMgr();
+  rcx::Ext* getOpenRCX();
+  rmp::Restructure* getRestructure();
+  stt::SteinerTreeBuilder* getSteinerTreeBuilder();
+  psm::PDNSim* getPDNSim();
+  pdn::PdnGen* getPdnGen();
+  pad::ICeWall* getICeWall();
 
  private:
   Tech* tech_;

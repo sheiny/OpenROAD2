@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_FLEXTA_H_
-#define _FR_FLEXTA_H_
+#pragma once
 
 #include <memory>
 #include <set>
@@ -43,7 +42,7 @@ class FlexTA
 {
  public:
   // constructors
-  FlexTA(frDesign* in, Logger* logger);
+  FlexTA(frDesign* in, Logger* logger, bool save_updates_);
   ~FlexTA();
   // getters
   frTechObject* getTech() const { return tech_; }
@@ -56,6 +55,7 @@ class FlexTA
   frTechObject* tech_;
   frDesign* design_;
   Logger* logger_;
+  bool save_updates_;
   std::unique_ptr<FlexTAGraphics> graphics_;
   // others
   void main_helper(frLayerNum lNum, int maxOffsetIter, int panelWidth);
@@ -104,9 +104,10 @@ class FlexTAWorker
 {
  public:
   // constructors
-  FlexTAWorker(frDesign* designIn, Logger* logger)
+  FlexTAWorker(frDesign* designIn, Logger* logger, bool save_updates)
       : design_(designIn),
         logger_(logger),
+        save_updates_(save_updates),
         dir_(dbTechLayerDir::NONE),
         taIter_(0),
         rq_(this),
@@ -182,13 +183,14 @@ class FlexTAWorker
  private:
   frDesign* design_;
   Logger* logger_;
+  bool save_updates_;
   Rect routeBox_;
   Rect extBox_;
   dbTechLayerDir dir_;
   int taIter_;
   FlexTAWorkerRegionQuery rq_;
 
-  std::vector<std::unique_ptr<taPin>> iroutes_;  // unsorterd iroutes
+  std::vector<std::unique_ptr<taPin>> iroutes_;  // unsorted iroutes
   std::vector<std::unique_ptr<taPin>> extIroutes_;
   std::vector<std::vector<frCoord>> trackLocs_;
   std::set<taPin*, taPinComp>
@@ -220,23 +222,23 @@ class FlexTAWorker
                          frCoord& minEnd,
                          std::set<frCoord>& downViaCoordSet,
                          std::set<frCoord>& upViaCoordSet,
-                         int& wlen,
-                         frCoord& wlen2);
+                         int& nextIrouteDir,
+                         frCoord& pinCoord);
   void initIroute_helper_generic(frGuide* guide,
                                  frCoord& maxBegin,
                                  frCoord& minEnd,
                                  std::set<frCoord>& downViaCoordSet,
                                  std::set<frCoord>& upViaCoordSet,
-                                 int& wlen,
-                                 frCoord& wlen2);
-  void initIroute_helper_generic_helper(frGuide* guide, frCoord& wlen2);
+                                 int& nextIrouteDir,
+                                 frCoord& pinCoord);
+  void initIroute_helper_generic_helper(frGuide* guide, frCoord& pinCoord);
   bool initIroute_helper_pin(frGuide* guide,
                              frCoord& maxBegin,
                              frCoord& minEnd,
                              std::set<frCoord>& downViaCoordSet,
                              std::set<frCoord>& upViaCoordSet,
-                             int& wlen,
-                             frCoord& wlen2);
+                             int& nextIrouteDir,
+                             frCoord& pinCoord);
   void initCosts();
   void sortIroutes();
 
@@ -295,7 +297,7 @@ class FlexTAWorker
   frUInt4 assignIroute_getCost(taPin* iroute,
                                frCoord trackLoc,
                                frUInt4& drcCost);
-  frUInt4 assignIroute_getWlenCost(taPin* iroute, frCoord trackLoc);
+  frUInt4 assignIroute_getNextIrouteDirCost(taPin* iroute, frCoord trackLoc);
   frUInt4 assignIroute_getPinCost(taPin* iroute, frCoord trackLoc);
   frUInt4 assignIroute_getAlignCost(taPin* iroute, frCoord trackLoc);
   frUInt4 assignIroute_getDRCCost(taPin* iroute, frCoord trackLoc);
@@ -315,5 +317,3 @@ class FlexTAWorker
 };
 
 }  // namespace fr
-
-#endif

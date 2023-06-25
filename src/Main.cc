@@ -34,14 +34,15 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <libgen.h>
-#include <limits.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <tcl.h>
 
 #include <array>
 #include <boost/stacktrace.hpp>
+#include <climits>
+#include <clocale>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 // We have had too many problems with this std::filesytem on various platforms
@@ -79,6 +80,13 @@ using sta::stringEq;
 using std::string;
 
 #ifdef ENABLE_PYTHON3
+// par causes abseil link error at startup on apple silicon
+#ifdef ENABLE_PAR
+#define TOOL_PAR X(par)
+#else
+#define TOOL_PAR
+#endif
+
 #define FOREACH_TOOL_WITHOUT_OPENROAD(X) \
   X(ifp)                                 \
   X(utl)                                 \
@@ -92,6 +100,13 @@ using std::string;
   X(cts)                                 \
   X(drt)                                 \
   X(dpo)                                 \
+  X(fin)                                 \
+  TOOL_PAR                               \
+  X(rcx)                                 \
+  X(rmp)                                 \
+  X(stt)                                 \
+  X(psm)                                 \
+  X(pdn)                                 \
   X(odb)
 
 #define FOREACH_TOOL(X)            \
@@ -199,8 +214,13 @@ int main(int argc, char* argv[])
 {
   // This avoids problems with locale setting dependent
   // C functions like strtod (e.g. 0.5 vs 0,5).
-  setenv("LC_ALL", "en_US.UTF-8", /* override */ 1);
-  setenv("LANG", "en_US.UTF-8", /* override */ 1);
+  std::array locales = {"en_US.UTF-8", "C.UTF-8", "C"};
+  for (auto locale : locales) {
+    if (std::setlocale(LC_ALL, locale) != nullptr) {
+      setenv("LC_ALL", locale, /* override */ 1);
+      break;
+    }
+  }
 
   // Generate a stacktrace on crash
   signal(SIGABRT, handler);
@@ -311,8 +331,9 @@ static int tclAppInit(int& argc,
   if (findCmdLineFlag(argc, argv, "-gui")) {
     // gobble up remaining -gui flags if present, since this could result in
     // second invocation of the GUI
-    while (findCmdLineFlag(argc, argv, "-gui"))
+    while (findCmdLineFlag(argc, argv, "-gui")) {
       ;
+    }
 
     gui::startGui(argc, argv, interp);
   } else {
@@ -367,7 +388,7 @@ static int tclAppInit(int& argc,
           // need to delay loading of file until after GUI is completed
           // initialized
           gui::Gui::get()->addRestoreStateCommand(
-              fmt::format(restore_state_cmd, init.string()));
+              fmt::format(FMT_RUNTIME(restore_state_cmd), init.string()));
         }
       }
 #else
@@ -381,7 +402,7 @@ static int tclAppInit(int& argc,
           // need to delay loading of file until after GUI is completed
           // initialized
           gui::Gui::get()->addRestoreStateCommand(
-              fmt::format(restore_state_cmd, init_path));
+              fmt::format(FMT_RUNTIME(restore_state_cmd), init_path));
         }
       }
 #endif
@@ -402,9 +423,8 @@ static int tclAppInit(int& argc,
           } else {
             // need to delay loading of file until after GUI is completed
             // initialized
-            const char* restore_state_cmd = "source {{{}}}";
             gui::Gui::get()->addRestoreStateCommand(
-                fmt::format(restore_state_cmd, cmd_file));
+                fmt::format("source {{{}}}", cmd_file));
             if (exit_after_cmd_file) {
               gui::Gui::get()->addRestoreStateCommand("exit");
             }

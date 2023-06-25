@@ -77,41 +77,41 @@ typedef array<Required, RiseFall::index_count> Requireds;
 
 enum class BufferedNetType { load, junction, wire, buffer };
 
-// The routing tree is represented a binary tree with the sinks being the leaves
+// The routing tree is represented as a binary tree with the sinks being the leaves
 // of the tree, the junctions being the Steiner nodes and the root being the
 // source of the net.
 class BufferedNet
 {
 public:
   // load
-  BufferedNet(BufferedNetType type,
-              Point location,
-              Pin *load_pin,
+  BufferedNet(const BufferedNetType type,
+              const Point location,
+              const Pin *load_pin,
               const Corner *corner,
               const Resizer *resizer);
   // wire
-  BufferedNet(BufferedNetType type,
-              Point location,
-              int layer,
-              BufferedNetPtr ref,
+  BufferedNet(const BufferedNetType type,
+              const Point location,
+              const int layer,
+              const BufferedNetPtr ref,
               const Corner *corner,
               const Resizer *resizer);
   // junc
-  BufferedNet(BufferedNetType type,
-              Point location,
-              BufferedNetPtr ref,
-              BufferedNetPtr ref2,
+  BufferedNet(const BufferedNetType type,
+              const Point& location,
+              const BufferedNetPtr ref,
+              const BufferedNetPtr ref2,
               const Resizer *resizer);
   // buffer
-  BufferedNet(BufferedNetType type,
-              Point location,
+  BufferedNet(const BufferedNetType type,
+              const Point& location,
               LibertyCell *buffer_cell,
-              BufferedNetPtr ref,
+              const BufferedNetPtr ref,
               const Corner *corner,
               const Resizer *resizer);
   string to_string(const Resizer *resizer) const;
   void reportTree(const Resizer *resizer) const;
-  void reportTree(int level,
+  void reportTree(const int level,
                   const Resizer *resizer) const;
   BufferedNetType type() const { return type_; }
   // junction steiner point location connecting ref/ref2
@@ -126,7 +126,7 @@ public:
   float maxLoadSlew() const { return max_load_slew_; }
   void setMaxLoadSlew(float max_slew);
   // load
-  Pin *loadPin() const { return load_pin_; }
+  const Pin *loadPin() const { return load_pin_; }
   // wire
   int length() const;
   // routing level
@@ -162,15 +162,15 @@ public:
 private:
   BufferedNetType type_;
   Point location_;
-  // load
-  Pin *load_pin_;
-  // buffer
+  // only used by load type
+  const Pin *load_pin_;
+  // only used by buffer type
   LibertyCell *buffer_cell_;
-  // wire
+  // only used by wire type
   int layer_;
-  // load wire junc
+  // only used by buffer, wire, and junc types
   BufferedNetPtr ref_;
-  // junc
+  // only used by junc type
   BufferedNetPtr ref2_;
 
   // Capacitance looking downstream from here.

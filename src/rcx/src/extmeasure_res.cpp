@@ -29,18 +29,10 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-#include <dbRtTree.h>
 
 #include "dbUtil.h"
 #include "rcx/extRCap.h"
 #include "utl/Logger.h"
-
-#ifdef HI_ACC_1
-#define FRINGE_UP_DOWN
-#endif
-//#define CHECK_SAME_NET
-//#define DEBUG_NET 208091
-//#define MIN_FOR_LOOPS
 
 namespace rcx {
 
@@ -55,7 +47,6 @@ using odb::dbChip;
 using odb::dbDatabase;
 using odb::dbNet;
 using odb::dbRSeg;
-using odb::dbRtTree;
 using odb::dbSet;
 using odb::dbShape;
 using odb::dbSigType;
@@ -97,17 +88,6 @@ int extMeasure::computeResDist(SEQ* s,
   for (int kk = (int) trackMin; kk <= (int) trackMax;
        kk++)  // skip overlapping track
   {
-    /* TEST 0322
-    if (!kk)
-      continue; */
-    /*
-#ifdef HI_ACC_1
-    if (kk <= _dgContextHiTrack[planeIndex])
-#else
-    if (kk < _dgContextHiTrack[planeIndex])
-#endif
-      trackTable[cnt++] = *_dgContextTracks / 2 + kk;
-      */
     if (-kk >= _dgContextLowTrack[planeIndex])
       trackTable[cnt++] = *_dgContextTracks / 2 - kk;
   }
@@ -115,11 +95,9 @@ int extMeasure::computeResDist(SEQ* s,
   for (uint ii = 0; ii < cnt; ii++) {
     int trackn = trackTable[ii];
 
-#ifdef HI_ACC_1
     if (_dgContextArray[planeIndex][trackn]->getCnt() <= 1)
       continue;
-#endif
-    // Check for same track: 032021 DF
+    // Check for same track
     bool same_track = false;
     Ath__array1D<SEQ*>* dTable = _dgContextArray[planeIndex][trackn];
     int cnt = (int) dTable->getCnt();
@@ -150,13 +128,13 @@ int extMeasure::computeResDist(SEQ* s,
     tableCopyP(&residueTable, &tmpTable);
     residueTable.resetCnt();
   }
-  // seq_release(&tmpTable);
   if (diagTable != NULL)
     tableCopyP(&tmpTable, diagTable);
   else
     seq_release(&tmpTable);
   return len;
 }
+
 uint extMeasure::computeRes(SEQ* s,
                             uint targetMet,
                             uint dir,
@@ -184,6 +162,7 @@ uint extMeasure::computeRes(SEQ* s,
   seq_release(&overlapSeq);
   return len;
 }
+
 int extMeasure::getMaxDist(int tgtMet, uint modelIndex)
 {
   uint modelCnt = _metRCTable.getCnt();
@@ -200,10 +179,12 @@ int extMeasure::getMaxDist(int tgtMet, uint modelIndex)
   int maxDist = distTable->getComputeRC_maxDist();
   return maxDist;
 }
+
 int extDistRCTable::getComputeRC_maxDist()
 {
   return _maxDist;
 }
+
 void extMeasure::calcRes(int rsegId1,
                          uint len,
                          int dist1,
@@ -234,6 +215,7 @@ void extMeasure::calcRes(int rsegId1,
     }
   }
 }
+
 void extMeasure::calcRes0(double* deltaRes,
                           uint tgtMet,
                           uint len,
@@ -251,6 +233,7 @@ void extMeasure::calcRes0(double* deltaRes,
     deltaRes[ii] = R;
   }
 }
+
 void extMain::calcRes0(double* deltaRes,
                        uint tgtMet,
                        uint width,
@@ -272,55 +255,7 @@ void extMain::calcRes0(double* deltaRes,
     deltaRes[jj] = R;
   }
 }
-extDistRC* extDistRCTable::findRes(int dist1, int dist2, bool compute)
-{
-  Ath__array1D<extDistRC*>* table = _computeTable;
-  if (!compute)
-    table = _measureTable;
 
-  if (table->getCnt() == 0)
-    return NULL;
-
-  int target_dist_index = -1;
-  extDistRC* rc = NULL;
-  uint ii = 0;
-  for (; ii < table->getCnt(); ii++) {
-    rc = table->get(ii);
-    if (dist1 == rc->_coupling) {
-      target_dist_index = ii;
-      break;
-    }
-    if (dist1 < rc->_coupling) {
-      target_dist_index = ii;
-      break;
-    }
-  }
-  if (target_dist_index < 0) {
-    rc = table->get(0);  // assume first rec is 0,0
-    return rc;
-  }
-  extDistRC* last_rc = NULL;
-  for (uint ii = target_dist_index; ii < table->getCnt(); ii++) {
-    extDistRC* rc1 = table->get(ii);
-    if (rc->_coupling != rc1->_coupling) {
-      return last_rc;
-    }
-    if (dist2 == rc1->_sep) {
-      return rc1;
-    }
-    if (dist2 < rc1->_sep) {
-      if (last_rc != NULL)
-        return last_rc;
-      return rc1;
-    }
-    last_rc = rc1;
-  }
-  if (table->getCnt() > 0) {
-    rc = table->get(0);  // assume first rec is 0,0
-    return rc;
-  }
-  return NULL;
-}
 extDistRC* extDistRCTable::getComputeRC_res(uint dist1, uint dist2)
 {
   int min_dist = 0;
@@ -355,7 +290,7 @@ extDistRC* extDistRCTable::getComputeRC_res(uint dist1, uint dist2)
   bool found = false;
   extDistRC* rc2 = _measureTableR[1]->geti(0);
   if (rc2 == NULL)
-    return rc1;  // TO TEST
+    return rc1;
 
   if (dist1 <= rc1->_sep) {
     index_dist = 0;
@@ -409,6 +344,7 @@ extDistRC* extDistRCTable::getComputeRC_res(uint dist1, uint dist2)
   }
   return NULL;
 }
+
 extDistRC* extDistRCTable::findIndexed_res(uint dist1, uint dist2)
 {
   extDistRC* firstRC = _measureTable->get(0);
@@ -434,11 +370,11 @@ extDistRC* extDistWidthRCTable::getRes(uint mou, uint w, int dist1, int dist2)
   if (wIndex < 0)
     return NULL;
 
-  // extDistRC *rc= _rcDistTable[mou][wIndex]->findRes(dist1, dist2, false);
   extDistRC* rc = _rcDistTable[mou][wIndex]->getComputeRC_res(dist1, dist2);
 
   return rc;
 }
+
 extDistRCTable* extDistWidthRCTable::getRuleTable(uint mou, uint w)
 {
   int wIndex = getWidthIndex(w);
@@ -455,14 +391,13 @@ void extMeasure::getDgOverlap_res(SEQ* sseq,
                                   Ath__array1D<SEQ*>* residueSeq)
 {
   int idx = 1;
-  uint lp = dir ? 0 : 1;  // x : y
-  uint wp = dir ? 1 : 0;  // y : x
+  uint lp = dir ? 0 : 1;
+  uint wp = dir ? 1 : 0;
   SEQ* rseq;
   SEQ* tseq;
   SEQ* wseq;
   int covered = sseq->_ll[lp];
 
-#ifdef HI_ACC_1
   if (idx == dgContext->getCnt()) {
     rseq = _seqPool->alloc();
     rseq->_ll[wp] = sseq->_ll[wp];
@@ -472,11 +407,7 @@ void extMeasure::getDgOverlap_res(SEQ* sseq,
     residueSeq->add(rseq);
     return;
   }
-#endif
 
-  dbRSeg* srseg = NULL;
-  if (_rsegSrcId > 0)
-    srseg = dbRSeg::getRSeg(_block, _rsegSrcId);
   for (; idx < (int) dgContext->getCnt(); idx++) {
     tseq = dgContext->get(idx);
     if (tseq->_ur[lp] <= covered)
@@ -492,28 +423,6 @@ void extMeasure::getDgOverlap_res(SEQ* sseq,
       residueSeq->add(rseq);
       break;
     }
-#ifdef CHECK_SAME_NET
-    dbRSeg* trseg = NULL;
-    if (tseq->type > 0)
-      trseg = dbRSeg::getRSeg(_block, tseq->type);
-    if ((trseg != NULL) && (srseg != NULL)
-        && (trseg->getNet() == srseg->getNet())) {
-      if ((tseq->_ur[lp] >= sseq->_ur[lp])
-          || (idx == (int) dgContext->getCnt() - 1)) {
-        rseq = _seqPool->alloc();
-        rseq->_ll[wp] = sseq->_ll[wp];
-        rseq->_ur[wp] = sseq->_ur[wp];
-        rseq->_ll[lp] = covered;
-        rseq->_ur[lp] = sseq->_ur[lp];
-        assert(rseq->_ur[lp] >= rseq->_ll[lp]);
-        residueSeq->add(rseq);
-        break;
-      } else
-        continue;
-    }
-#else
-    (void) srseg;  // silence unused warning
-#endif
     wseq = _seqPool->alloc();
     wseq->type = tseq->type;
     wseq->_ll[wp] = tseq->_ll[wp];

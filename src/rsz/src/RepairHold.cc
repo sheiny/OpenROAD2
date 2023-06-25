@@ -92,6 +92,7 @@ RepairHold::RepairHold(Resizer *resizer) :
   resizer_(resizer),
   resize_count_(0),
   inserted_buffer_count_(0),
+  cloned_gate_count_(0),
   min_(MinMax::min()),
   max_(MinMax::max()),
   min_index_(MinMax::minIndex()),
@@ -143,7 +144,7 @@ RepairHold::repairHold(double setup_margin,
 
 // For testing/debug.
 void
-RepairHold::repairHold(Pin *end_pin,
+RepairHold::repairHold(const Pin *end_pin,
                        double setup_margin,
                        double hold_margin,
                        bool allow_setup_violations,
@@ -169,21 +170,53 @@ RepairHold::repairHold(Pin *end_pin,
   resizer_->incrementalParasiticsEnd();
 }
 
-// Find the buffer with the most delay in the fastest corner.
+// Find a good hold buffer using delay/area as the metric.
 LibertyCell *
 RepairHold::findHoldBuffer()
 {
-  LibertyCell *max_buffer = nullptr;
-  float max_delay = 0.0;
+  // Build a vector of buffers sorted by the metric
+  struct MetricBuffer {
+    float metric;
+    LibertyCell* cell;
+  };
+  std::vector<MetricBuffer> buffers;
   for (LibertyCell *buffer : resizer_->buffer_cells_) {
-    float buffer_min_delay = bufferHoldDelay(buffer);
-    if (max_buffer == nullptr
-        || buffer_min_delay > max_delay) {
-      max_buffer = buffer;
-      max_delay = buffer_min_delay;
+    const float buffer_area = buffer->area();
+    if (buffer_area != 0.0) {
+      float buffer_cost = bufferHoldDelay(buffer) / buffer_area;
+      buffers.push_back({buffer_cost, buffer});
     }
   }
-  return max_buffer;
+
+  std::sort(buffers.begin(),
+            buffers.end(),
+            [](const MetricBuffer& lhs, const MetricBuffer& rhs) {
+              return lhs.metric < rhs.metric;
+            });
+
+  if (buffers.empty()) {
+    return nullptr;
+  }
+
+  // Select the highest metric
+  MetricBuffer& best_buffer = *buffers.rbegin();
+  const MetricBuffer& highest_metric = best_buffer;
+
+  // See if there is a smaller choice with nearly as good a metric.
+  const float margin = 0.95;
+  for (auto itr = buffers.rbegin() + 1; itr != buffers.rend(); itr++) {
+    if (itr->metric >= margin * highest_metric.metric) {
+      // buffer within margin, so check if area is smaller
+      const float best_buffer_area = best_buffer.cell->area();
+      const float buffer_area = itr->cell->area();
+
+      if (buffer_area < best_buffer_area) {
+        best_buffer = *itr;
+      }
+    }
+  }
+
+  return best_buffer.cell;
 }
 
 float
@@ -267,7 +300,6 @@ RepairHold::repairHold(VertexSeq &ends,
       logger_->info(RSZ, 32, "Inserted {} hold buffers.", inserted_buffer_count_);
       resizer_->level_drvr_vertices_valid_ = false;
     }
-    logger_->metric("design__instance__count__hold_buffer", inserted_buffer_count_);
     if (inserted_buffer_count_ > max_buffer_count)
       logger_->error(RSZ, 60, "Max buffer count reached.");
     if (resizer_->overMaxArea())
@@ -275,6 +307,7 @@ RepairHold::repairHold(VertexSeq &ends,
   }
   else
     logger_->info(RSZ, 33, "No hold violations found.");
+  logger_->metric("design__instance__count__hold_buffer", inserted_buffer_count_);
 }
 
 void
@@ -424,7 +457,8 @@ RepairHold::repairEndHold(Vertex *end_vertex,
               if (!allow_setup_violations
                   && fuzzyLess(setup_slack_after, setup_slack_before)
                   && setup_slack_after < setup_margin)
-                resizer_->journalRestore(resize_count_, inserted_buffer_count_);
+                resizer_->journalRestore(resize_count_, inserted_buffer_count_,
+                                         cloned_gate_count_);
               resizer_->journalEnd();
             }
           }
@@ -503,14 +537,14 @@ RepairHold::makeHoldDelay(Vertex *drvr,
   sta_->connectPin(buffer, output, out_net);
   resizer_->parasiticsInvalid(out_net);
 
-  for (Pin *load_pin : load_pins) {
+  for (const Pin *load_pin : load_pins) {
     Net *load_net = network_->isTopLevelPort(load_pin)
       ? network_->net(network_->term(load_pin))
       : network_->net(load_pin);
     if (load_net != out_net) {
       Instance *load = db_network_->instance(load_pin);
       Port *load_port = db_network_->port(load_pin);
-      sta_->disconnectPin(load_pin);
+      sta_->disconnectPin(const_cast<Pin*>(load_pin));
       sta_->connectPin(load, load_port, out_net);
     }
   }

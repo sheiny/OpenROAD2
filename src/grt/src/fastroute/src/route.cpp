@@ -253,7 +253,7 @@ void FastRouteCore::newrouteL(int netID, RouteType ripuptype, bool viaGuided)
   const auto& treeedges = sttrees_[netID].edges;
   const auto& treenodes = sttrees_[netID].nodes;
 
-  // loop for all the tree edges (2*d-3)
+  // loop for all the tree edges
   for (int i = 0; i < num_edges; i++) {
     // only route the non-degraded edges (len>0)
     if (sttrees_[netID].edges[i].len > 0) {
@@ -534,8 +534,7 @@ void FastRouteCore::newrouteZ(int netID, int threshold)
   const auto& treeedges = sttrees_[netID].edges;
   const auto& treenodes = sttrees_[netID].nodes;
 
-  // loop for all the tree edges (2*d-3)
-
+  // loop for all the tree edges
   for (int ind = 0; ind < num_edges; ind++) {
     TreeEdge* treeedge = &(treeedges[ind]);
 
@@ -1439,14 +1438,16 @@ void FastRouteCore::routeLVEnew(int netID,
 
   for (int j = ymin; j <= ymax; j++) {
     for (int i = xmin; i <= xmax; i++) {
-      const float tmp1 = abs(d2[j][x1] - d2[y1][x1])
-                         + abs(d1[j][i] - d1[j][x1]);  // yfirst for point 1
+      const float tmp1
+          = std::abs(d2[j][x1] - d2[y1][x1])
+            + std::abs(d1[j][i] - d1[j][x1]);  // yfirst for point 1
       const float tmp2
-          = abs(d2[j][i] - d2[y1][i]) + abs(d1[y1][i] - d1[y1][x1]);
+          = std::abs(d2[j][i] - d2[y1][i]) + std::abs(d1[y1][i] - d1[y1][x1]);
       const float tmp3
-          = abs(d2[y2][i] - d2[j][i]) + abs(d1[y2][i] - d1[y2][x2]);
-      const float tmp4 = abs(d2[y2][x2] - d2[j][x2])
-                         + abs(d1[j][x2] - d1[j][i]);  // xifrst for mid point
+          = std::abs(d2[y2][i] - d2[j][i]) + std::abs(d1[y2][i] - d1[y2][x2]);
+      const float tmp4
+          = std::abs(d2[y2][x2] - d2[j][x2])
+            + std::abs(d1[j][x2] - d1[j][i]);  // xifrst for mid point
 
       float tmp = tmp1 + tmp4;
       bool LH1 = false;
@@ -1676,7 +1677,7 @@ void FastRouteCore::newrouteLInMaze(int netID)
 
   const int edgeCost = nets_[netID]->getEdgeCost();
 
-  // loop for all the tree edges (2*d-3)
+  // loop for all the tree edges
   for (int i = 0; i < num_edges; i++) {
     if (sttrees_[netID].edges[i].len <= 0) {
       // only route the non-degraded edges (len>0)

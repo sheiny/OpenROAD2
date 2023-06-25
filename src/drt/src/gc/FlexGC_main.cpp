@@ -638,11 +638,11 @@ void FlexGCWorker::Impl::checkMetalSpacing_short_obs(
     std::list<gtl::rectangle_data<frCoord>> res;
     gtl::get_max_rectangles(res, bg2gtl(poly));
     for (const auto& rect : res) {
-      gcRect* rect3 = new gcRect(*rect2);
-      rect3->setRect(rect);
+      gcRect rect3 = *rect2;
+      rect3.setRect(rect);
       gtl::rectangle_data<frCoord> newMarkerRect(markerRect);
-      gtl::intersect(newMarkerRect, *rect3);
-      checkMetalSpacing_short(rect1, rect3, newMarkerRect);
+      gtl::intersect(newMarkerRect, rect3);
+      checkMetalSpacing_short(rect1, &rect3, newMarkerRect);
     }
   }
 }
@@ -797,7 +797,7 @@ void FlexGCWorker::Impl::checkMetalSpacing_main(gcRect* ptr1,
                                                 bool isSpcRect)
 {
   // NSMetal does not need self-intersection
-  // Minimum width rule handles outsite this function
+  // Minimum width rule handled outside this function
   if (ptr1 == ptr2) {
     return;
   }
@@ -940,7 +940,7 @@ void FlexGCWorker::Impl::checkMetalCornerSpacing_main(
   }
   frCoord cornerX = gtl::x(cornerPt);
   frCoord cornerY = gtl::y(cornerPt);
-  frCoord candX, candY;
+  frCoord candX = -1, candY = -1;
   // ensure this is a real corner to corner case
   if (con->getCornerType() == frCornerTypeEnum::CONVEX) {
     if (cornerX >= (candX = gtl::xh(*rect))) {
@@ -980,6 +980,21 @@ void FlexGCWorker::Impl::checkMetalCornerSpacing_main(
           && gtl::length(*(corner->getPrevEdge())) < con->getEolWidth()) {
         return;
       }
+      // check for the rect corners
+      if (rect->getNet()) {
+        auto corner2 = rect->getNet()->getPolyCornerAt(
+            candX, candY, rect->getLayerNum());
+        if (corner2->getType() == frCornerTypeEnum::CONVEX) {
+          if (corner2->getNextCorner()->getType() == frCornerTypeEnum::CONVEX
+              && gtl::length(*(corner2->getNextEdge())) < con->getEolWidth()) {
+            return;
+          }
+          if (corner2->getPrevCorner()->getType() == frCornerTypeEnum::CONVEX
+              && gtl::length(*(corner2->getPrevEdge())) < con->getEolWidth()) {
+            return;
+          }
+        }
+      }
     }
   }
 
@@ -1017,7 +1032,7 @@ void FlexGCWorker::Impl::checkMetalCornerSpacing_main(
       } else if (maxXY >= reqSpcVal) {
         continue;
       }
-      // no vaiolation if fixed
+      // no violation if fixed
       // if (corner->isFixed() && rect->isFixed() && objPtr->isFixed()) {
       if (rect->isFixed() && objPtr->isFixed()) {
         // if (corner->isFixed() && rect->isFixed()) {
@@ -1825,11 +1840,11 @@ void FlexGCWorker::Impl::checkMetalShape_addPatch(gcPin* pin, int min_area)
     patchBx.set_xlo(-chosenEdg->length() / 2);
     patchBx.set_xhi(chosenEdg->length() / 2);
     patchBx.set_yhi(length);
-    offset.x() = (chosenEdg->low().x() + chosenEdg->high().x()) / 2;
+    offset.setX((chosenEdg->low().x() + chosenEdg->high().x()) / 2);
     if (chosenEdg->getOuterDir() == frDirEnum::N) {
-      offset.y() = chosenEdg->low().y();
+      offset.setY(chosenEdg->low().y());
     } else if (chosenEdg->getOuterDir() == frDirEnum::S) {
-      offset.y() = chosenEdg->low().y() - length;
+      offset.setY(chosenEdg->low().y() - length);
     } else
       logger_->error(
           DRT, 4500, "Edge outer dir should be either North or South");
@@ -1837,11 +1852,11 @@ void FlexGCWorker::Impl::checkMetalShape_addPatch(gcPin* pin, int min_area)
     patchBx.set_xhi(length);
     patchBx.set_ylo(-chosenEdg->length() / 2);
     patchBx.set_yhi(chosenEdg->length() / 2);
-    offset.y() = (chosenEdg->low().y() + chosenEdg->high().y()) / 2;
+    offset.setY((chosenEdg->low().y() + chosenEdg->high().y()) / 2);
     if (chosenEdg->getOuterDir() == frDirEnum::E) {
-      offset.x() = chosenEdg->low().x();
+      offset.setX(chosenEdg->low().x());
     } else if (chosenEdg->getOuterDir() == frDirEnum::W) {
-      offset.x() = chosenEdg->low().x() - length;
+      offset.setX(chosenEdg->low().x() - length);
     } else
       logger_->error(DRT, 4501, "Edge outer dir should be either East or West");
   }
@@ -1849,9 +1864,57 @@ void FlexGCWorker::Impl::checkMetalShape_addPatch(gcPin* pin, int min_area)
   patch->setLayerNum(layer_idx);
   patch->setOrigin(offset);
   patch->setOffsetBox(patchBx);
+
+  // get drNet for patch
+  gcNet* gc_net = pin->getNet();
+  frNet* fr_net = gc_net->getFrNet();
+  if (fr_net == nullptr) {
+    logger_->error(DRT, 410, "frNet not found.");
+  }
+
+  const std::vector<drNet*>* dr_nets = drWorker_->getDRNets(fr_net);
+  if (dr_nets == nullptr) {
+    logger_->error(
+        DRT, 411, "frNet {} does not have drNets.", fr_net->getName());
+  }
+  if (dr_nets->size() == 1) {
+    patch->addToNet((*dr_nets)[0]);
+  } else {
+    // detect what drNet has objects overlapping with the patch
+    checkMetalShape_patchOwner_helper(patch.get(), dr_nets);
+  }
+
   Rect shiftedPatch = patchBx;
   shiftedPatch.moveTo(offset.x(), offset.y());
   pwires_.push_back(std::move(patch));
+}
+
+void FlexGCWorker::Impl::checkMetalShape_patchOwner_helper(
+    drPatchWire* patch,
+    const std::vector<drNet*>* dr_nets)
+{
+  Rect patch_box = patch->getOffsetBox();
+  for (drNet* dr_net : *dr_nets) {
+    // check if patch overlaps with some rect of dr_net
+    if (patch_box.overlaps(dr_net->getPinBox())) {
+      patch->addToNet(dr_net);
+      return;
+    }
+
+    for (auto&& conn_fig : dr_net->getExtConnFigs()) {
+      if (patch_box.overlaps(conn_fig->getBBox())) {
+        patch->addToNet(dr_net);
+        return;
+      }
+    }
+
+    for (auto&& conn_fig : dr_net->getRouteConnFigs()) {
+      if (patch_box.overlaps(conn_fig->getBBox())) {
+        patch->addToNet(dr_net);
+        return;
+      }
+    }
+  }
 }
 
 void FlexGCWorker::Impl::checkMetalShape_main(gcPin* pin)
@@ -2081,7 +2144,7 @@ void FlexGCWorker::Impl::checkCutSpacing_spc(
     // skip if no parallel overlap
     if (prl <= 0) {
       return;
-      // skip if paralell overlap but shares the same above/below metal
+      // skip if parallel overlap but shares the same above/below metal
     } else {
       box_t queryBox;
       myBloat(markerRect, 0, queryBox);
@@ -2755,7 +2818,7 @@ void FlexGCWorker::Impl::checkLef58CutSpacing_spc_layer(
         // check curr and next form an EOL edge
         if (corner->getNextCorner()->getType() == frCornerTypeEnum::CONVEX) {
           if (con->hasMinLength()) {
-            // not EOL if minLength is not satsified
+            // not EOL if minLength is not satisfied
             if (gtl::length(*(corner->getPrevEdge())) < con->getMinLength()
                 || gtl::length(*(corner->getNextCorner()->getNextEdge()))
                        < con->getMinLength()) {
@@ -3052,6 +3115,10 @@ void FlexGCWorker::Impl::checkCutSpacing_main(gcRect* rect)
     checkLef58CutSpacing_main(rect, con, skipDiffNet);
   }
 
+  for (auto con : layer->getKeepOutZoneConstraints()) {
+    checKeepOutZone_main(rect, con);
+  }
+
   // LEF58_SPACINGTABLE
   if (layer->hasLef58SameMetalCutSpcTblConstraint())
     checkLef58CutSpacingTbl(rect,
@@ -3069,6 +3136,19 @@ void FlexGCWorker::Impl::checkCutSpacing_main(gcRect* rect)
   if (layer->hasLef58DefaultInterCutSpcTblConstraint())
     checkLef58CutSpacingTbl(rect,
                             layer->getLef58DefaultInterCutSpcTblConstraint());
+  if (layer->getLayerNum() + 2 < TOP_ROUTING_LAYER
+      && layer->getLayerNum() + 2 < getTech()->getLayers().size()) {
+    auto aboveLayer = getTech()->getLayer(layer->getLayerNum() + 2);
+    if (aboveLayer->hasLef58SameNetInterCutSpcTblConstraint())
+      checkLef58CutSpacingTbl(
+          rect, aboveLayer->getLef58SameNetInterCutSpcTblConstraint());
+    if (aboveLayer->hasLef58SameMetalInterCutSpcTblConstraint())
+      checkLef58CutSpacingTbl(
+          rect, aboveLayer->getLef58SameMetalInterCutSpcTblConstraint());
+    if (aboveLayer->hasLef58DefaultInterCutSpcTblConstraint())
+      checkLef58CutSpacingTbl(
+          rect, aboveLayer->getLef58DefaultInterCutSpcTblConstraint());
+  }
 }
 
 void FlexGCWorker::Impl::checkCutSpacing()
@@ -3401,7 +3481,7 @@ void FlexGCWorker::Impl::checkMinimumCut()
         continue;
       for (auto& pin : targetNet_->getPins(i)) {
         for (auto& maxrect : pin->getMaxRectangles()) {
-          checkCutSpacing_main(maxrect.get());
+          checkMinimumCut_main(maxrect.get());
         }
       }
     }

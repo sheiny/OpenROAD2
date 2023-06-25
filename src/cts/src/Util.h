@@ -48,6 +48,9 @@ class Point
   T getX() const { return x_; }
   T getY() const { return y_; }
 
+  void setX(T x) { x_ = x; }
+  void setY(T y) { y_ = y; }
+
   T computeDist(const Point<T>& other) const
   {
     T dx = (getX() > other.getX()) ? (getX() - other.getX())
@@ -76,9 +79,9 @@ class Point
   {
     if (getX() != other.getX()) {
       return getX() < other.getX();
-    } else {
-      return getY() < other.getY();
     }
+
+    return getY() < other.getY();
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Point<T>& point)
@@ -129,7 +132,7 @@ class Box
     return out;
   }
 
- protected:
+ private:
   T xMin_;
   T yMin_;
   T width_;

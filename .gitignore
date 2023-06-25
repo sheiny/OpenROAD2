@@ -10,6 +10,7 @@
 *.rej
 *.orig
 *.vscode
+*.sw[opqr]
 tags
 TAGS
 *~
@@ -30,9 +31,7 @@ docs/main
 
 .idea/
 cmake-build-debug/
+debug/
 
 coverage-output
 messages.txt
-
-Session.vim
-TODO

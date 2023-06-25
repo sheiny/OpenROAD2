@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_FLEXDR_H_
-#define _FR_FLEXDR_H_
+#pragma once
 
 #include <triton_route/TritonRoute.h>
 
@@ -66,22 +65,6 @@ struct FlexDRViaData
   // std::pair<layer1area, layer2area>
   std::vector<std::pair<frCoord, frCoord>> halfViaEncArea;
 
-  // via2viaMinLen[z][0], last via=down, curr via=down
-  // via2viaMinLen[z][1], last via=down, curr via=up
-  // via2viaMinLen[z][2], last via=up,   curr via=down
-  // via2viaMinLen[z][3], last via=up,   curr via=up
-  std::vector<std::pair<std::vector<frCoord>, std::vector<bool>>> via2viaMinLen;
-
-  // via2viaMinLen[z][0], prev via=down, curr via=down, min required x dist
-  // via2viaMinLen[z][1], prev via=down, curr via=down, min required y dist
-  // via2viaMinLen[z][2], prev via=down, curr via=up,   min required x dist
-  // via2viaMinLen[z][3], prev via=down, curr via=up,   min required y dist
-  // via2viaMinLen[z][4], prev via=up,   curr via=down, min required x dist
-  // via2viaMinLen[z][5], prev via=up,   curr via=down, min required y dist
-  // via2viaMinLen[z][6], prev via=up,   curr via=up,   min required x dist
-  // via2viaMinLen[z][7], prev via=up,   curr via=up,   min required y dist
-  std::vector<std::vector<frCoord>> via2viaMinLenNew;
-
   // via2turnMinLen[z][0], last via=down, min required x dist
   // via2turnMinLen[z][1], last via=down, min required y dist
   // via2turnMinLen[z][2], last via=up,   min required x dist
@@ -93,8 +76,6 @@ struct FlexDRViaData
   void serialize(Archive& ar, const unsigned int version)
   {
     (ar) & halfViaEncArea;
-    (ar) & via2viaMinLen;
-    (ar) & via2viaMinLenNew;
     (ar) & via2turnMinLen;
   }
   friend class boost::serialization::access;
@@ -110,6 +91,8 @@ class FlexDR
     int mazeEndIter;
     frUInt4 workerDRCCost;
     frUInt4 workerMarkerCost;
+    frUInt4 workerFixedShapeCost;
+    float workerMarkerDecay;
     int ripupMode;
     bool followGuide;
   };
@@ -188,38 +171,6 @@ class FlexDR
   void getBatchInfo(int& batchStepX, int& batchStepY);
 
   void init_halfViaEncArea();
-  void init_via2viaMinLen();
-  frCoord init_via2viaMinLen_minSpc(frLayerNum lNum,
-                                    frViaDef* viaDef1,
-                                    frViaDef* viaDef2);
-  frCoord init_via2viaMinLen_minimumcut1(frLayerNum lNum,
-                                         frViaDef* viaDef1,
-                                         frViaDef* viaDef2);
-  bool init_via2viaMinLen_minimumcut2(frLayerNum lNum,
-                                      frViaDef* viaDef1,
-                                      frViaDef* viaDef2);
-
-  void init_via2viaMinLenNew();
-  frCoord init_via2viaMinLenNew_minSpc(frLayerNum lNum,
-                                       frViaDef* viaDef1,
-                                       frViaDef* viaDef2,
-                                       bool isCurrDirY);
-  frCoord init_via2viaMinLenNew_minimumcut1(frLayerNum lNum,
-                                            frViaDef* viaDef1,
-                                            frViaDef* viaDef2,
-                                            bool isCurrDirY);
-  frCoord init_via2viaMinLenNew_cutSpc(frLayerNum lNum,
-                                       frViaDef* viaDef1,
-                                       frViaDef* viaDef2,
-                                       bool isCurrDirY);
-
-  frCoord init_via2turnMinLen_minSpc(frLayerNum lNum,
-                                     frViaDef* viaDef,
-                                     bool isCurrDirY);
-  frCoord init_via2turnMinLen_minStp(frLayerNum lNum,
-                                     frViaDef* viaDef,
-                                     bool isCurrDirY);
-  void init_via2turnMinLen();
 
   void removeGCell2BoundaryPin();
   std::map<frNet*, std::set<std::pair<Point, frLayerNum>>, frBlockObjectComp>
@@ -307,6 +258,8 @@ class FlexDRWorker
         ripupMode_(1),
         workerDRCCost_(ROUTESHAPECOST),
         workerMarkerCost_(MARKERCOST),
+        workerFixedShapeCost_(0),
+        workerMarkerDecay_(0),
         boundaryPin_(),
         pinCnt_(0),
         initNumMarkers_(0),
@@ -316,7 +269,7 @@ class FlexDRWorker
         historyMarkers_(std::vector<std::set<FlexMazeIdx>>(3)),
         nets_(),
         owner2nets_(),
-        gridGraph_(design->getTech(), this),
+        gridGraph_(design->getTech(), logger, this),
         markers_(),
         rq_(this),
         gcWorker_(nullptr),
@@ -342,6 +295,8 @@ class FlexDRWorker
         ripupMode_(0),
         workerDRCCost_(0),
         workerMarkerCost_(0),
+        workerFixedShapeCost_(0),
+        workerMarkerDecay_(0),
         boundaryPin_(),
         pinCnt_(0),
         initNumMarkers_(0),
@@ -382,13 +337,26 @@ class FlexDRWorker
   void setMazeEndIter(int in) { mazeEndIter_ = in; }
   void setRipupMode(int in) { ripupMode_ = in; }
   void setFollowGuide(bool in) { followGuide_ = in; }
-  void setCost(frUInt4 drcCostIn, frUInt4 markerCostIn)
+  void setCost(frUInt4 drcCostIn,
+               frUInt4 markerCostIn,
+               frUInt4 workerFixedShapeCostIn,
+               float workerMarkerDecayIn)
   {
     workerDRCCost_ = drcCostIn;
     workerMarkerCost_ = markerCostIn;
+    workerFixedShapeCost_ = workerFixedShapeCostIn;
+    workerMarkerDecay_ = workerMarkerDecayIn;
   }
   void setMarkerCost(frUInt4 markerCostIn) { workerMarkerCost_ = markerCostIn; }
   void setDrcCost(frUInt4 drcCostIn) { workerDRCCost_ = drcCostIn; }
+  void setFixedShapeCost(frUInt4 fixedShapeCostIn)
+  {
+    workerFixedShapeCost_ = fixedShapeCostIn;
+  }
+  void setMarkerDecay(float markerDecayIn)
+  {
+    workerMarkerDecay_ = markerDecayIn;
+  }
   void setMarkers(std::vector<frMarker>& in)
   {
     markers_.clear();
@@ -538,7 +506,8 @@ class FlexDRWorker
   bool skipRouting_;
   int ripupMode_;
   // drNetOrderingEnum netOrderingMode;
-  frUInt4 workerDRCCost_, workerMarkerCost_;
+  frUInt4 workerDRCCost_, workerMarkerCost_, workerFixedShapeCost_;
+  float workerMarkerDecay_;
   // used in init route as gr boundary pin
   std::map<frNet*, std::set<std::pair<Point, frLayerNum>>, frBlockObjectComp>
       boundaryPin_;
@@ -557,7 +526,7 @@ class FlexDRWorker
   std::vector<frMarker> bestMarkers_;
   FlexDRWorkerRegionQuery rq_;
 
-  // persistant gc worker
+  // persistent gc worker
   unique_ptr<FlexGCWorker> gcWorker_;
 
   // on-the-fly access points that require adding access edges in the grid graph
@@ -941,6 +910,12 @@ class FlexDRWorker
                    frMIdx z,
                    FlexMazeIdx* prev,
                    FlexMazeIdx* next);
+  void editStyleExt(frSegStyle& currStyle,
+                    frMIdx startX,
+                    frMIdx endX,
+                    frMIdx z,
+                    FlexMazeIdx* prev,
+                    FlexMazeIdx* next);
   bool isInsideTaperBox(frMIdx x,
                         frMIdx y,
                         frMIdx startZ,
@@ -1043,5 +1018,3 @@ class FlexDRWorker
   friend class boost::serialization::access;
 };
 }  // namespace fr
-
-#endif

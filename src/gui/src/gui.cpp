@@ -68,15 +68,21 @@ static void message_handler(QtMsgType type,
 {
   auto* logger = ord::OpenRoad::openRoad()->getLogger();
 
-  bool suppress_warning = false;
+  bool suppress = false;
 #if NDEBUG
+  // suppress messages when built as a release, but preserve them in debug
+  // builds
   if (application != nullptr) {
-    if (application->platformName() == "offscreen"
+    if (QApplication::platformName() == "offscreen"
         && msg.contains("This plugin does not support")) {
-      suppress_warning = true;
+      suppress = true;
     }
   }
 #endif
+
+  if (suppress) {
+    return;
+  }
 
   std::string print_msg;
   if (context.file != nullptr && context.function != nullptr) {
@@ -90,15 +96,13 @@ static void message_handler(QtMsgType type,
   }
   switch (type) {
     case QtDebugMsg:
-      logger->debug(utl::GUI, 1, print_msg);
+      logger->debug(utl::GUI, "qt", print_msg);
       break;
     case QtInfoMsg:
       logger->info(utl::GUI, 75, print_msg);
       break;
     case QtWarningMsg:
-      if (!suppress_warning) {
-        logger->warn(utl::GUI, 76, print_msg);
-      }
+      logger->warn(utl::GUI, 76, print_msg);
       break;
     case QtCriticalMsg:
     case QtFatalMsg:
@@ -273,7 +277,7 @@ void Gui::pause(int timeout)
   main_window->pause(timeout);
 }
 
-Selected Gui::makeSelected(std::any object)
+Selected Gui::makeSelected(const std::any& object)
 {
   if (!object.has_value()) {
     return Selected();
@@ -282,16 +286,15 @@ Selected Gui::makeSelected(std::any object)
   auto it = descriptors_.find(object.type());
   if (it != descriptors_.end()) {
     return it->second->makeSelected(object);
-  } else {
-    logger_->warn(utl::GUI,
-                  33,
-                  "No descriptor is registered for {}.",
-                  object.type().name());
-    return Selected();  // FIXME: null descriptor
   }
+  logger_->warn(utl::GUI,
+                33,
+                "No descriptor is registered for {}.",
+                object.type().name());
+  return Selected();  // FIXME: null descriptor
 }
 
-void Gui::setSelected(Selected selection)
+void Gui::setSelected(const Selected& selection)
 {
   main_window->setSelected(selection);
 }
@@ -348,6 +351,13 @@ void Gui::selectHighlightConnectedNets(bool select_flag,
 {
   return main_window->selectHighlightConnectedNets(
       select_flag, output, input, highlight_group);
+}
+
+void Gui::selectHighlightConnectedBufferTrees(bool select_flag,
+                                              int highlight_group)
+{
+  return main_window->selectHighlightConnectedBufferTrees(select_flag,
+                                                          highlight_group);
 }
 
 void Gui::addInstToHighlightSet(const char* name, int highlight_group)
@@ -481,10 +491,10 @@ void Gui::clearRulers()
   main_window->clearRulers();
 }
 
-const std::string Gui::addToolbarButton(const std::string& name,
-                                        const std::string& text,
-                                        const std::string& script,
-                                        bool echo)
+std::string Gui::addToolbarButton(const std::string& name,
+                                  const std::string& text,
+                                  const std::string& script,
+                                  bool echo)
 {
   return main_window->addToolbarButton(
       name, QString::fromStdString(text), QString::fromStdString(script), echo);
@@ -495,12 +505,12 @@ void Gui::removeToolbarButton(const std::string& name)
   main_window->removeToolbarButton(name);
 }
 
-const std::string Gui::addMenuItem(const std::string& name,
-                                   const std::string& path,
-                                   const std::string& text,
-                                   const std::string& script,
-                                   const std::string& shortcut,
-                                   bool echo)
+std::string Gui::addMenuItem(const std::string& name,
+                             const std::string& path,
+                             const std::string& text,
+                             const std::string& script,
+                             const std::string& shortcut,
+                             bool echo)
 {
   return main_window->addMenuItem(name,
                                   QString::fromStdString(path),
@@ -515,8 +525,8 @@ void Gui::removeMenuItem(const std::string& name)
   main_window->removeMenuItem(name);
 }
 
-const std::string Gui::requestUserInput(const std::string& title,
-                                        const std::string& question)
+std::string Gui::requestUserInput(const std::string& title,
+                                  const std::string& question)
 {
   return main_window->requestUserInput(QString::fromStdString(title),
                                        QString::fromStdString(question));
@@ -607,9 +617,9 @@ void Gui::saveImage(const std::string& filename,
   odb::Rect save_region = region;
   const bool use_die_area = region.dx() == 0 || region.dy() == 0;
   const bool is_offscreen
-      = main_window->testAttribute(
-            Qt::WA_DontShowOnScreen) /* if not interactive this will be set */
-        || !enabled();
+      = main_window == nullptr
+        || main_window->testAttribute(
+            Qt::WA_DontShowOnScreen); /* if not interactive this will be set */
   if (is_offscreen
       && use_die_area) {  // if gui is active and interactive the visible are of
                           // the layout viewer will be used.
@@ -843,9 +853,8 @@ bool Renderer::checkDisplayControl(const std::string& name)
 
   if (group_name.empty()) {
     return Gui::get()->checkDisplayControlsVisible(name);
-  } else {
-    return Gui::get()->checkDisplayControlsVisible(group_name + "/" + name);
   }
+  return Gui::get()->checkDisplayControlsVisible(group_name + "/" + name);
 }
 
 void Renderer::setDisplayControl(const std::string& name, bool value)
@@ -854,10 +863,8 @@ void Renderer::setDisplayControl(const std::string& name, bool value)
 
   if (group_name.empty()) {
     return Gui::get()->setDisplayControlsVisible(name, value);
-  } else {
-    return Gui::get()->setDisplayControlsVisible(group_name + "/" + name,
-                                                 value);
   }
+  return Gui::get()->setDisplayControlsVisible(group_name + "/" + name, value);
 }
 
 void Renderer::addDisplayControl(
@@ -874,7 +881,7 @@ void Renderer::addDisplayControl(
                                     mutual_exclusivity.end());
 }
 
-const Renderer::Settings Renderer::getSettings()
+Renderer::Settings Renderer::getSettings()
 {
   Settings settings;
   for (const auto& [key, init_value] : controls_) {
@@ -1030,6 +1037,16 @@ void Gui::removeRouteGuides(odb::dbNet* net)
   main_window->getLayoutViewer()->removeRouteGuides(net);
 }
 
+void Gui::addNetTracks(odb::dbNet* net)
+{
+  main_window->getLayoutViewer()->addNetTracks(net);
+}
+
+void Gui::removeNetTracks(odb::dbNet* net)
+{
+  main_window->getLayoutViewer()->removeNetTracks(net);
+}
+
 void Gui::removeFocusNet(odb::dbNet* net)
 {
   main_window->getLayoutViewer()->removeFocusNet(net);
@@ -1043,6 +1060,11 @@ void Gui::clearFocusNets()
 void Gui::clearRouteGuides()
 {
   main_window->getLayoutViewer()->clearRouteGuides();
+}
+
+void Gui::clearNetTracks()
+{
+  main_window->getLayoutViewer()->clearNetTracks();
 }
 
 void Gui::setLogger(utl::Logger* logger)
@@ -1167,11 +1189,11 @@ int startGui(int& argc,
   }
   if (!restore_commands.empty()) {
     // Temporarily connect to script widget to get ending tcl state
-    int tcl_return_code = TCL_OK;
-    auto tcl_return_code_connect = QObject::connect(
-        main_window->getScriptWidget(),
-        &ScriptWidget::commandExecuted,
-        [&tcl_return_code](int code) { tcl_return_code = code; });
+    bool tcl_ok = true;
+    auto tcl_return_code_connect
+        = QObject::connect(main_window->getScriptWidget(),
+                           &ScriptWidget::commandExecuted,
+                           [&tcl_ok](bool is_ok) { tcl_ok = is_ok; });
 
     main_window->getScriptWidget()->executeSilentCommand(
         QString::fromStdString(restore_commands));
@@ -1179,7 +1201,7 @@ int startGui(int& argc,
     // disconnect tcl return lister
     QObject::disconnect(tcl_return_code_connect);
 
-    if (tcl_return_code != TCL_OK) {
+    if (!tcl_ok) {
       auto& cmds = gui->getRestoreStateCommands();
       if (cmds[cmds.size() - 1]
           == "exit") {  // exit, will be the last command if it is present
@@ -1211,7 +1233,7 @@ int startGui(int& argc,
   }
 
   if (do_exec) {
-    exit_code = app.exec();
+    exit_code = QApplication::exec();
   }
 
   // cleanup
@@ -1226,6 +1248,8 @@ int startGui(int& argc,
     }
   }
 
+  main_window->exit();
+
   // delete main window and set to nullptr
   delete main_window;
   main_window = nullptr;
@@ -1236,7 +1260,7 @@ int startGui(int& argc,
   // rethow exception, if one happened after cleanup of main_window
   exception.rethrow();
 
-  if (!gui->isContinueAfterClose() || exit_requested) {
+  if (interactive && (!gui->isContinueAfterClose() || exit_requested)) {
     // if exiting, go ahead and exit with gui return code.
     exit(exit_code);
   }

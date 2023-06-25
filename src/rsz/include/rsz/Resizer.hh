@@ -36,12 +36,14 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <string>
 
 #include "utl/Logger.h"
 #include "db_sta/dbSta.hh"
 #include "sta/UnorderedSet.hh"
 #include "sta/Path.hh"
+#include "dpl/Opendp.h"
 
 namespace grt {
 class GlobalRouter;
@@ -58,9 +60,7 @@ using std::array;
 using std::string;
 using std::vector;
 
-using ord::OpenRoad;
 using utl::Logger;
-using gui::Gui;
 
 using odb::Rect;
 using odb::Point;
@@ -118,7 +118,7 @@ using sta::ParasiticNode;
 using sta::PinSeq;
 using sta::Slack;
 
-class SteinerRenderer;
+class AbstractSteinerRenderer;
 class SteinerTree;
 typedef int SteinerPt;
 
@@ -144,15 +144,14 @@ class Resizer : public StaState
 {
 public:
   Resizer();
-  ~Resizer();
-  void init(OpenRoad *openroad,
-            Tcl_Interp *interp,
-            Logger *logger,
-            Gui *gui,
-            dbDatabase *db,
-            dbSta *sta,
-            SteinerTreeBuilder *stt_builder,
-            GlobalRouter *global_router);
+  ~Resizer() override;
+  void init(Logger* logger,
+            dbDatabase* db,
+            dbSta* sta,
+            SteinerTreeBuilder* stt_builder,
+            GlobalRouter* global_router,
+            dpl::Opendp* opendp,
+            std::unique_ptr<AbstractSteinerRenderer> steiner_renderer);
   void setLayerRC(dbTechLayer *layer,
                   const Corner *corner,
                   double res,
@@ -193,6 +192,7 @@ public:
   bool haveEstimatedParasitics() const;
   void parasiticsInvalid(const Net *net);
   void parasiticsInvalid(const dbNet *net);
+  bool parasiticsValid() const;
 
   // Core area (meters).
   double coreArea() const;
@@ -225,11 +225,13 @@ public:
   float targetLoadCap(LibertyCell *cell);
 
   ////////////////////////////////////////////////////////////////
-
   void repairSetup(double setup_margin,
-                   int max_passes);
+                   double repair_tns_end_percent,
+                   int max_passes,
+                   bool skip_pin_swap,
+                   bool skip_gate_cloning);
   // For testing.
-  void repairSetup(Pin *drvr_pin);
+  void repairSetup(const Pin *end_pin);
   // Rebuffer one net (for testing).
   // resizerPreamble() required.
   void rebufferNet(const Pin *drvr_pin);
@@ -242,7 +244,7 @@ public:
                   // Max buffer count as percent of design instance count.
                   float max_buffer_percent,
                   int max_passes);
-  void repairHold(Pin *end_pin,
+  void repairHold(const Pin *end_pin,
                   double setup_margin,
                   double hold_margin,
                   bool allow_setup_violations,
@@ -317,16 +319,16 @@ public:
   void findResizeSlacks();
   // Return nets with worst slack.
   NetSeq &resizeWorstSlackNets();
-  // Return net slack.
-  Slack resizeNetSlack(const Net *net);
+  // Return net slack, if any (indicated by the bool).
+  std::optional<Slack> resizeNetSlack(const Net *net);
   // db flavor
   vector<dbNet*> resizeWorstSlackDbNets();
-  Slack resizeNetSlack(const dbNet *db_net);
+  std::optional<Slack> resizeNetSlack(const dbNet *db_net);
 
   ////////////////////////////////////////////////////////////////
   // API for logic resynthesis
-  PinSet findFaninFanouts(PinSet *end_pins);
-  PinSet findFanins(PinSet *end_pins);
+  PinSet findFaninFanouts(PinSet& end_pins);
+  PinSet findFanins(PinSet& end_pins);
 
   ////////////////////////////////////////////////////////////////
   void highlightSteiner(const Pin *drvr);
@@ -342,9 +344,9 @@ protected:
   void ensureLevelDrvrVertices();
   Instance *bufferInput(const Pin *top_pin,
                         LibertyCell *buffer_cell);
-  void bufferOutput(Pin *top_pin,
+  void bufferOutput(const Pin *top_pin,
                     LibertyCell *buffer_cell);
-  bool hasTristateDriver(const Net *net);
+  bool hasTristateOrDontTouchDriver(const Net *net);
   bool isTristateDriver(const Pin *pin);
   void makeEquivCells();
   void findBuffers();
@@ -388,6 +390,13 @@ protected:
   float portFanoutLoad(LibertyPort *port) const;
   float portCapacitance(LibertyPort *input,
                         const Corner *corner) const;
+  float pinCapacitance(const Pin *pin, const DcalcAnalysisPt *dcalc_ap) const;
+  void swapPins(Instance *inst, LibertyPort *port1,
+                LibertyPort *port2, bool journal);
+  void findSwapPinCandidate(LibertyPort *input_port, LibertyPort *drvr_port,
+                            float load_cap, const DcalcAnalysisPt *dcalc_ap,
+                            // Return value
+                            LibertyPort **swap_port);
   void gateDelays(LibertyPort *drvr_port,
                   float load_cap,
                   const DcalcAnalysisPt *dcalc_ap,
@@ -450,7 +459,9 @@ protected:
                  PinSeq &loads);
   bool isFuncOneZero(const Pin *drvr_pin);
   bool hasPins(Net *net);
-  Point tieLocation(Pin *load,
+  std::vector<const Pin*> getPins(Net* net) const;
+  std::vector<const Pin*> getPins(Instance* inst) const;
+  Point tieLocation(const Pin *load,
                     int separation);
   bool hasFanout(Vertex *drvr);
   InstanceSeq findClkInverters();
@@ -465,6 +476,9 @@ protected:
                            const Net *net);
   void estimateWireParasiticSteiner(const Pin *drvr_pin,
                                     const Net *net);
+  float totalLoad(SteinerTree *tree) const;
+  float subtreeLoad(SteinerTree *tree, float cap_per_micron,
+                    SteinerPt pt) const;
   void makePadParasitic(const Net *net);
   bool isPadNet(const Net *net) const;
   bool isPadPin(const Pin *pin) const;
@@ -516,14 +530,16 @@ protected:
                       const Corner *&corner);
   void warnBufferMovedIntoCore();
   bool isLogicStdCell(const Instance *inst);
-
+  void invalidateParasitics(const Pin *pin, const Net *net);
   ////////////////////////////////////////////////////////////////
   // Jounalling support for checkpointing and backing out changes
   // during repair timing.
   void journalBegin();
   void journalEnd();
   void journalRestore(int &resize_count,
-                      int &inserted_buffer_count);
+                      int &inserted_buffer_count,
+                      int &cloned_gate_count);
+  void journalSwapPins(Instance *inst, LibertyPort *port1, LibertyPort *port2);
   void journalInstReplaceCellBefore(Instance *inst);
   void journalMakeBuffer(Instance *buffer);
 
@@ -542,7 +558,7 @@ protected:
   RepairDesign *repair_design_;
   RepairSetup *repair_setup_;
   RepairHold *repair_hold_;
-  SteinerRenderer *steiner_renderer_;
+  std::unique_ptr<AbstractSteinerRenderer> steiner_renderer_;
 
   // Layer RC per wire length indexed by layer->getNumber(), corner->index
   vector<vector<double>> layer_res_; // ohms/meter
@@ -556,12 +572,10 @@ protected:
   LibertyCellSet dont_use_;
   double max_area_;
 
-  OpenRoad *openroad_;
   Logger *logger_;
   SteinerTreeBuilder *stt_builder_;
   GlobalRouter *global_router_;
-  IncrementalGRoute *incr_groute_;
-  Gui *gui_;
+  IncrementalGRoute* incr_groute_;
   dbSta *sta_;
   dbNetwork *db_network_;
   dbDatabase *db_;
@@ -593,8 +607,12 @@ protected:
   int unique_inst_index_;
   int resize_count_;
   int inserted_buffer_count_;
+  int cloned_gate_count_;
   bool buffer_moved_into_core_;
   // Slack map variables.
+  // This is the minimum length of wire that is worth while to split and
+  // insert a buffer in the middle of. Theoretically computed using the smallest
+  // drive cell (because larger ones would give us a longer length).
   float max_wire_length_;
   float worst_slack_nets_percent_;
   Map<const Net*, Slack> net_slack_map_;
@@ -604,6 +622,10 @@ protected:
   Map<Instance*, LibertyCell*> resized_inst_map_;
   InstanceSeq inserted_buffers_;
   InstanceSet inserted_buffer_set_;
+  Map<Instance *, std::tuple<LibertyPort *, LibertyPort *>> swapped_pins_;
+  Map<Instance *, Instance *> cloned_gates_;
+
+  dpl::Opendp* opendp_;
 
   // "factor debatable"
   static constexpr float tgt_slew_load_cap_factor = 10.0;
@@ -611,9 +633,11 @@ protected:
   static constexpr int max_steiner_pin_count_ = 100000;
 
   friend class BufferedNet;
+  friend class GateCloner;
   friend class RepairDesign;
   friend class RepairSetup;
   friend class RepairHold;
+  friend class SteinerTree;
 };
 
 } // namespace

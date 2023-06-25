@@ -41,7 +41,6 @@
 #include <vector>
 
 #include "CtsOptions.h"
-#include "Graphics.h"
 #include "TechChar.h"
 #include "Util.h"
 
@@ -50,8 +49,6 @@ class Logger;
 }  // namespace utl
 
 namespace cts {
-
-class Graphics;
 
 using utl::Logger;
 
@@ -64,14 +61,14 @@ class Matching
   unsigned getP1() const { return p_1; }
 
  private:
-  unsigned p_0;
-  unsigned p_1;
+  const unsigned p_0;
+  const unsigned p_1;
 };
 
 class SinkClustering
 {
  public:
-  SinkClustering(CtsOptions* options, TechChar* techChar);
+  SinkClustering(const CtsOptions* options, TechChar* techChar);
 
   void addPoint(double x, double y) { points_.emplace_back(x, y); }
   void addCap(float cap) { pointsCap_.emplace_back(cap); }
@@ -80,12 +77,12 @@ class SinkClustering
 
   const std::vector<Matching>& allMatchings() const { return matchings_; }
 
-  std::vector<std::vector<unsigned>> sinkClusteringSolution()
+  const std::vector<std::vector<unsigned>>& sinkClusteringSolution() const
   {
     return bestSolution_;
   }
 
-  double getWireLength(std::vector<Point<double>> points);
+  double getWireLength(const std::vector<Point<double>>& points) const;
   int getScaleFactor() const { return scaleFactor_; }
 
  private:
@@ -95,7 +92,6 @@ class SinkClustering
   void writePlotFile();
   void findBestMatching(unsigned groupSize);
   void writePlotFile(unsigned groupSize);
-  void clusteringVisualizer(const std::vector<Point<double>>& points);
 
   double computeTheta(double x, double y) const;
   unsigned numVertex(unsigned x, unsigned y) const;
@@ -107,9 +103,9 @@ class SinkClustering
   static bool isOne(double pos);
   static bool isZero(double pos);
 
-  CtsOptions* options_;
+  const CtsOptions* options_;
   Logger* logger_;
-  TechChar* techChar_;
+  const TechChar* techChar_;
   std::vector<Point<double>> points_;
   std::vector<float> pointsCap_;
   std::vector<std::pair<double, unsigned>> thetaIndexVector_;
@@ -121,7 +117,6 @@ class SinkClustering
   bool useMaxCapLimit_;
   int scaleFactor_;
   static constexpr double max_cap__factor_ = 10;
-  std::unique_ptr<Graphics> graphics_;
 };
 
 }  // namespace cts

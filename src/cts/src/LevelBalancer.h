@@ -80,11 +80,10 @@ using utl::Logger;
 //
 //
 
-typedef std::map<odb::dbInst*, std::pair<unsigned, TreeBuilder*>> CellLevelMap;
 class LevelBalancer
 {
  public:
-  LevelBalancer(TreeBuilder* root, CtsOptions* options, Logger* logger)
+  LevelBalancer(TreeBuilder* root, const CtsOptions* options, Logger* logger)
       : root_(root), options_(options), logger_(logger), levelBufCount_(0)
   {
   }
@@ -94,15 +93,18 @@ class LevelBalancer
                        std::vector<ClockInst*> cluster,
                        Clock::SubNet* driverNet,
                        unsigned bufLevels,
-                       const std::string nameSuffix);
+                       const std::string& nameSuffix);
   void fixTreeLevels(TreeBuilder* builder,
                      unsigned parentDepth,
                      unsigned maxTreeDepth);
   unsigned computeMaxTreeDepth(TreeBuilder* parent);
 
  private:
+  using CellLevelMap
+      = std::map<odb::dbInst*, std::pair<unsigned, TreeBuilder*>>;
+
   TreeBuilder* root_;
-  CtsOptions* options_;
+  const CtsOptions* options_;
   Logger* logger_;
   CellLevelMap cgcLevelMap_;
   unsigned levelBufCount_;

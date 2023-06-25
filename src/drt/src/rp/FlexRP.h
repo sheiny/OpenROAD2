@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_FLEXRP_H_
-#define _FR_FLEXRP_H_
+#pragma once
 
 #include <boost/icl/interval_set.hpp>
 
@@ -58,15 +57,9 @@ class FlexRP
   // prep
   void prep();
 
-  // end
-  void end();
-
   // functions
   void prep_viaForbiddenThrough();
   void prep_minStepViasCheck();
-  bool hasMinStepViolation(frMinStepConstraint* minStepCons,
-                           int edge1,
-                           int edge2);
   bool hasMinStepViol(Rect& r1, Rect& r2, frLayerNum lNum);
   void prep_viaForbiddenThrough_helper(const frLayerNum& lNum,
                                        const int& tableLayerIdx,
@@ -122,11 +115,6 @@ class FlexRP
                                        frViaDef* viaDef2,
                                        bool isCurrDirX,
                                        frNonDefaultRule* ndr = nullptr);
-  void prep_via2viaForbiddenLen_minStepGF12(const frLayerNum& lNum,
-                                            frViaDef* viaDef1,
-                                            frViaDef* viaDef2,
-                                            bool isCurrDirX,
-                                            ForbiddenRanges& forbiddenRanges);
   void prep_via2viaForbiddenLen_minStep(const frLayerNum& lNum,
                                         frViaDef* viaDef1,
                                         frViaDef* viaDef2,
@@ -174,5 +162,3 @@ class FlexRP
       std::pair<frCoord, frCoord>& range);
 };
 }  // namespace fr
-
-#endif

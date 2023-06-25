@@ -58,8 +58,6 @@ void io::Parser::initDefaultVias()
     auto viaDef = tech_->getVia(userDefinedVia);
     tech_->getLayer(viaDef->getCutLayerNum())->setDefaultViaDef(viaDef);
   }
-  std::map<frLayerNum, std::map<int, std::map<viaRawPriorityTuple, frViaDef*>>>
-      layerNum2ViaDefs;
   for (auto layerNum = design_->getTech()->getBottomLayerNum();
        layerNum <= design_->getTech()->getTopLayerNum();
        ++layerNum) {
@@ -70,40 +68,42 @@ void io::Parser::initDefaultVias()
     if (layer->getDefaultViaDef() != nullptr) {
       continue;
     }
+    std::map<int, std::map<viaRawPriorityTuple, frViaDef*>> cuts2ViaDefs;
     for (auto& viaDef : layer->getViaDefs()) {
       int cutNum = int(viaDef->getCutFigs().size());
       viaRawPriorityTuple priority;
       getViaRawPriority(viaDef, priority);
-      layerNum2ViaDefs[layerNum][cutNum][priority] = viaDef;
+      cuts2ViaDefs[cutNum][priority] = viaDef;
     }
-    if (!layerNum2ViaDefs[layerNum][1].empty()) {
-      auto defaultSingleCutVia
-          = (layerNum2ViaDefs[layerNum][1].begin())->second;
+    auto iter_1cut = cuts2ViaDefs.find(1);
+    if (iter_1cut != cuts2ViaDefs.end() && !iter_1cut->second.empty()) {
+      auto defaultSingleCutVia = iter_1cut->second.begin()->second;
       tech_->getLayer(layerNum)->setDefaultViaDef(defaultSingleCutVia);
-    } else {
-      if (layerNum >= BOTTOM_ROUTING_LAYER) {
-        logger_->error(DRT,
-                       234,
-                       "{} does not have single-cut via.",
-                       tech_->getLayer(layerNum)->getName());
-      }
+    } else if (layerNum > TOP_ROUTING_LAYER) {
+      // We may need vias here to stack up to bumps.  However there
+      // may not be a single cut via.  Since we aren't routing, but
+      // just stacking, we'll use the best via we can find.
+      auto via_map = cuts2ViaDefs.begin()->second;
+      tech_->getLayer(layerNum)->setDefaultViaDef(via_map.begin()->second);
+    } else if (layerNum >= BOTTOM_ROUTING_LAYER) {
+      logger_->error(DRT,
+                     234,
+                     "{} does not have single-cut via.",
+                     tech_->getLayer(layerNum)->getName());
     }
     // generate via if default via enclosure is not along pref dir
-    if (ENABLE_VIA_GEN && layerNum >= BOTTOM_ROUTING_LAYER) {
+    if (ENABLE_VIA_GEN && layerNum >= BOTTOM_ROUTING_LAYER
+        && layerNum <= TOP_ROUTING_LAYER) {
       auto techDefautlViaDef = tech_->getLayer(layerNum)->getDefaultViaDef();
       frVia via(techDefautlViaDef);
       Rect layer1Box = via.getLayer1BBox();
       Rect layer2Box = via.getLayer2BBox();
       frLayerNum layer1Num = techDefautlViaDef->getLayer1Num();
       frLayerNum layer2Num = techDefautlViaDef->getLayer2Num();
-      bool isLayer1Square = (layer1Box.xMax() - layer1Box.xMin())
-                            == (layer1Box.yMax() - layer1Box.yMin());
-      bool isLayer2Square = (layer2Box.xMax() - layer2Box.xMin())
-                            == (layer2Box.yMax() - layer2Box.yMin());
-      bool isLayer1EncHorz = (layer1Box.xMax() - layer1Box.xMin())
-                             > (layer1Box.yMax() - layer1Box.yMin());
-      bool isLayer2EncHorz = (layer2Box.xMax() - layer2Box.xMin())
-                             > (layer2Box.yMax() - layer2Box.yMin());
+      bool isLayer1Square = layer1Box.dx() == layer1Box.dy();
+      bool isLayer2Square = layer2Box.dx() == layer2Box.dy();
+      bool isLayer1EncHorz = layer1Box.dx() > layer1Box.dy();
+      bool isLayer2EncHorz = layer2Box.dx() > layer2Box.dy();
       bool isLayer1Horz = (tech_->getLayer(layer1Num)->getDir()
                            == dbTechLayerDir::HORIZONTAL);
       bool isLayer2Horz = (tech_->getLayer(layer2Num)->getDir()
@@ -272,7 +272,7 @@ void io::Parser::initCutLayerWidth()
       continue;
     }
     auto layer = design_->getTech()->getLayer(layerNum);
-    // update cut layer width is not specifed in LEF
+    // update cut layer width is not specified in LEF
     if (layer->getWidth() == 0) {
       // first check default via size, if it is square, use that size
       auto viaDef = layer->getDefaultViaDef();
@@ -379,14 +379,35 @@ void io::Parser::getViaRawPriority(frViaDef* viaDef,
   frCoord layer1Area = area(viaLayerPS1);
   frCoord layer2Area = area(viaLayerPS2);
 
+  frCoord cutArea = 0;
+  for (auto& fig : viaDef->getCutFigs()) {
+    cutArea += fig->getBBox().area();
+  }
+
   priority = std::make_tuple(isNotDefaultVia,
                              layer1Width,
                              layer2Width,
                              isNotUpperAlign,
+                             cutArea,
                              layer2Area,
                              layer1Area,
                              isNotLowerAlign,
                              viaDef->getName());
+
+  debugPrint(logger_,
+             DRT,
+             "via_selection",
+             1,
+             "via {} !default={} w1={} w2={} !align2={} area2={} area1={} "
+             "!align1={}",
+             viaDef->getName(),
+             isNotDefaultVia,
+             layer1Width,
+             layer2Width,
+             isNotUpperAlign,
+             layer2Area,
+             layer1Area,
+             isNotLowerAlign);
 }
 
 // 13M_3Mx_2Cx_4Kx_2Hx_2Gx_LB
@@ -661,7 +682,6 @@ void io::Parser::initRPin_rpin()
     }
     // term
     for (auto& term : net->getBTerms()) {
-      int pinIdx = 0;
       auto trueTerm = term;
       for (auto& pin : trueTerm->getPins()) {
         auto rpin = make_unique<frRPin>();
@@ -672,8 +692,6 @@ void io::Parser::initRPin_rpin()
         rpin->setAccessPoint(prefAp);
 
         net->addRPin(rpin);
-
-        pinIdx++;
       }
     }
   }
@@ -705,8 +723,8 @@ void io::Parser::buildGCellPatterns_getWidth(frCoord& GCELLGRIDX,
       Rect guideBBox = rect.getBBox();
       frCoord guideWidth
           = (tech_->getLayer(layerNum)->getDir() == dbTechLayerDir::HORIZONTAL)
-                ? (guideBBox.yMax() - guideBBox.yMin())
-                : (guideBBox.xMax() - guideBBox.xMin());
+                ? guideBBox.dy()
+                : guideBBox.dx();
       if (tech_->getLayer(layerNum)->getDir() == dbTechLayerDir::HORIZONTAL) {
         if (guideGridYMap.find(guideWidth) == guideGridYMap.end()) {
           guideGridYMap[guideWidth] = 0;
@@ -893,7 +911,6 @@ void io::Parser::buildGCellPatterns(odb::dbDatabase* db)
                     == dbTechLayerDir::HORIZONTAL);
         frCoord gcLow = isH ? gcellBox.yMin() : gcellBox.xMax();
         frCoord gcHigh = isH ? gcellBox.yMax() : gcellBox.xMin();
-        int trackCnt = 0;
         for (auto& tp : design_->getTopBlock()->getTrackPatterns(layerNum)) {
           if ((tech_->getLayer(layerNum)->getDir() == dbTechLayerDir::HORIZONTAL
                && tp->isHorizontal() == false)
@@ -914,7 +931,6 @@ void io::Parser::buildGCellPatterns(odb::dbDatabase* db)
                  && trackNum * (int) tp->getTrackSpacing() + tp->getStartCoord()
                         < gcHigh;
                  trackNum++) {
-              trackCnt++;
             }
           }
         }

@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_LAYER_H_
-#define _FR_LAYER_H_
+#pragma once
 
 #include <set>
 
@@ -54,6 +53,7 @@ class frLayer
         fakeMasterslice(false),
         layerNum(0),
         width(0),
+        wrongDirWidth(0),
         minWidth(0),
         defaultViaDef(nullptr),
         hasMinStepViol(false),
@@ -98,6 +98,7 @@ class frLayer
         fakeMasterslice(false),
         layerNum(layerNumIn),
         width(0),
+        wrongDirWidth(0),
         minWidth(-1),
         defaultViaDef(nullptr),
         minSpc(nullptr),
@@ -167,6 +168,7 @@ class frLayer
     return (fakeCut || fakeMasterslice) ? 0 : db_layer_->getPitch();
   }
   frUInt4 getWidth() const { return width; }
+  frUInt4 getWrongDirWidth() const { return db_layer_->getWrongWayWidth(); }
   frUInt4 getMinWidth() const { return minWidth; }
   dbTechLayerDir getDir() const
   {
@@ -188,7 +190,7 @@ class frLayer
   }
   bool isUnidirectional() const
   {
-    // We don't handle coloring so any double/triple patterned
+    // We don't handle coloring so any multiple patterned
     // layer is treated as unidirectional.
     // RectOnly could allow for a purely wrong-way rect but
     // we ignore that rare case and treat it as unidirectional.
@@ -687,6 +689,22 @@ class frLayer
     return (!lef58AreaConstraints.empty());
   }
 
+  void addKeepOutZoneConstraint(frLef58KeepOutZoneConstraint* in)
+  {
+    keepOutZoneConstraints.push_back(in);
+  }
+
+  const std::vector<frLef58KeepOutZoneConstraint*>& getKeepOutZoneConstraints()
+      const
+  {
+    return keepOutZoneConstraints;
+  }
+
+  bool hasKeepOutZoneConstraints() const
+  {
+    return (!keepOutZoneConstraints.empty());
+  }
+
   void setLef58SameNetInterCutSpcTblConstraint(
       frLef58CutSpacingTableConstraint* con)
   {
@@ -758,6 +776,7 @@ class frLayer
   bool fakeMasterslice;
   frLayerNum layerNum;
   frUInt4 width;
+  frUInt4 wrongDirWidth;
   frUInt4 minWidth;
   frViaDef* defaultViaDef;
   bool hasMinStepViol;
@@ -816,8 +835,7 @@ class frLayer
   std::vector<frLef58EolKeepOutConstraint*> lef58EolKeepOutConstraints;
   std::vector<frMetalWidthViaConstraint*> metalWidthViaConstraints;
   std::vector<frLef58AreaConstraint*> lef58AreaConstraints;
+  std::vector<frLef58KeepOutZoneConstraint*> keepOutZoneConstraints;
   drEolSpacingConstraint drEolCon;
 };
 }  // namespace fr
-
-#endif

@@ -52,11 +52,6 @@ class dbBlock;
 class dbBox;
 using uint = unsigned int;
 
-unsigned int AthHashFunction(char* key, unsigned int len, unsigned int prime);
-int Ath__double2int(double v);
-
-int AthResourceLog(const char* title, int smallScale = 0);
-
 // Simple list
 template <class T>
 class AthList
@@ -229,6 +224,9 @@ class AthArray
 };
 
 // A simple pool allocation function
+//
+// Note: T must be default-constructible, as `new` is used to construct T when
+// memory debugging is enabled.
 template <class T>
 class AthPool
 {

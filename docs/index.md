@@ -39,7 +39,7 @@ linked [here](https://theopenroadproject.org/publications/).
 
 ## Code of conduct
 
-Please read our code of conduct [here](../CODE_OF_CONDUCT.md).
+Please read our code of conduct [here](main/CODE_OF_CONDUCT.md).
 
 ## Documentation
 
@@ -51,14 +51,14 @@ The application is a standalone binary capable of performing RTL-to-GDSII SoC de
 from logic synthesis and floorplanning through detailed routing with metal fill insertion,
 signoff parasitic extraction and timing analysis.
 
-See documentation for the application [here](../README.md).
+See documentation for the application [here](main/README.md).
 
 ### [Flow](https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts)
 
 The flow is a set of integrated scripts that allow for RTL-to-GDSII flow
 using open-source tools.
 
-See documentation for the flow [here](user/GettingStarted.md).
+See documentation for the flow [here](https://openroad-flow-scripts.readthedocs.io/en/latest/).
 
 ## How to contribute
 
@@ -77,10 +77,8 @@ We maintain the following channels for communication:
 -   Twitter: <https://twitter.com/OpenROAD_EDA>
 -   Issues and bugs:
     -   OpenROAD: <https://github.com/The-OpenROAD-Project/OpenROAD/issues>
-    -   OpenROAD Flow: <https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts/issues>
 -   Discussions:
     -   OpenROAD: <https://github.com/The-OpenROAD-Project/OpenROAD/discussions>
-    -   OpenROAD Flow: <https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts/discussions>
 -   Inquiries: openroad@eng.ucsd.edu
 
 See also our [FAQs](user/FAQS.md).

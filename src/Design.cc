@@ -35,6 +35,8 @@
 
 #include "ord/Design.h"
 
+#include <tcl.h>
+
 #include "ant/AntennaChecker.hh"
 #include "grt/GlobalRouter.h"
 #include "ifp/InitFloorplan.hh"
@@ -69,7 +71,8 @@ void Design::readVerilog(const std::string& file_name)
 void Design::readDef(const std::string& file_name,
                      bool continue_on_errors,  // = false
                      bool floorplan_init,      // = false
-                     bool incremental          // = false
+                     bool incremental,         // = false
+                     bool child                // = false
 )
 {
   auto app = OpenRoad::openRoad();
@@ -82,14 +85,23 @@ void Design::readDef(const std::string& file_name,
   if (tech_->getDB()->getTech() == nullptr) {
     getLogger()->error(utl::ORD, 102, "No technology has been read.");
   }
-  app->readDef(
-      file_name.c_str(), continue_on_errors, floorplan_init, incremental);
+  app->readDef(file_name.c_str(),
+               continue_on_errors,
+               floorplan_init,
+               incremental,
+               child);
 }
 
 void Design::link(const std::string& design_name)
 {
   auto app = OpenRoad::openRoad();
   app->linkDesign(design_name.c_str());
+}
+
+void Design::readDb(const std::string& file_name)
+{
+  auto app = OpenRoad::openRoad();
+  app->readDb(file_name.c_str());
 }
 
 void Design::writeDb(const std::string& file_name)
@@ -196,6 +208,54 @@ dpo::Optdp* Design::getOptdp()
 {
   auto app = OpenRoad::openRoad();
   return app->getOptdp();
+}
+
+fin::Finale* Design::getFinale()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getFinale();
+}
+
+par::PartitionMgr* Design::getPartitionMgr()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getPartitionMgr();
+}
+
+rcx::Ext* Design::getOpenRCX()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getOpenRCX();
+}
+
+rmp::Restructure* Design::getRestructure()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getRestructure();
+}
+
+stt::SteinerTreeBuilder* Design::getSteinerTreeBuilder()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getSteinerTreeBuilder();
+}
+
+psm::PDNSim* Design::getPDNSim()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getPDNSim();
+}
+
+pdn::PdnGen* Design::getPdnGen()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getPdnGen();
+}
+
+pad::ICeWall* Design::getICeWall()
+{
+  auto app = OpenRoad::openRoad();
+  return app->getICeWall();
 }
 
 }  // namespace ord

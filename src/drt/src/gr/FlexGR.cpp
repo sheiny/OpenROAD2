@@ -199,10 +199,10 @@ void FlexGR::searchRepairMacro(int iter,
     Point gcellIdxLL = getDesign()->getTopBlock()->getGCellIdx(macroLL);
     Point gcellIdxUR = getDesign()->getTopBlock()->getGCellIdx(macroUR);
 
-    gcellIdxLL.set(max((int) gcellIdxLL.x() - size, 0),
-                   max((int) gcellIdxLL.y() - size, 0));
-    gcellIdxUR.set(min((int) gcellIdxUR.x() + size, (int) xgp.getCount()),
-                   min((int) gcellIdxUR.y() + size, (int) ygp.getCount()));
+    gcellIdxLL = {max((int) gcellIdxLL.x() - size, 0),
+                  max((int) gcellIdxLL.y() - size, 0)};
+    gcellIdxUR = {min((int) gcellIdxUR.x() + size, (int) xgp.getCount()),
+                  min((int) gcellIdxUR.y() + size, (int) ygp.getCount())};
 
     Rect routeBox1 = getDesign()->getTopBlock()->getGCellBox(gcellIdxLL);
     Rect routeBox2 = getDesign()->getTopBlock()->getGCellBox(gcellIdxUR);
@@ -1648,7 +1648,7 @@ void FlexGR::initGR_genTopology_net(frNet* net)
       rootIdx = rootIdxCnt;
     }
     gcellNode2RPinNodes[gcellNode.get()] = localNodes;
-    tmpGCellNodes.push_back(move(gcellNode));
+    tmpGCellNodes.push_back(std::move(gcellNode));
     rootIdxCnt++;
   }
   net->setFirstNonRPinNode(gcellNodes[0]);

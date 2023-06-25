@@ -115,80 +115,134 @@ proc define_pin_shape_pattern { args } {
 
 sta::define_cmd_args "set_io_pin_constraint" {[-direction direction] \
                                               [-pin_names names] \
-                                              [-region region]}
+                                              [-region region] \
+                                              [-mirrored_pins pins] \
+                                              [-group]
+                                              [-order]}
 
 proc set_io_pin_constraint { args } {
   sta::parse_key_args "set_io_pin_constraint" args \
-  keys {-direction -pin_names -region}
+  keys {-direction -pin_names -region -mirrored_pins} \
+  flags {-group -order}
 
   sta::check_argc_eq0 "set_io_pin_constraint" $args
-
-  if [info exists keys(-region)] {
-    set region $keys(-region)
-  }
 
   set dbTech [ord::get_db_tech]
   set dbBlock [ord::get_db_block]
   set lef_units [$dbTech getLefUnits]
 
-  if [regexp -all {(top|bottom|left|right):(.+)} $region - edge interval] {
-    set edge_ [ppl::parse_edge "-region" $edge]
-
-    if [regexp -all {([0-9]+[.]*[0-9]*|[*]+)-([0-9]+[.]*[0-9]*|[*]+)} $interval - begin end] {
-      if {$begin == {*}} {
-        set begin [ppl::get_edge_extreme "-region" 1 $edge]
-      } else {
-        set begin [ord::microns_to_dbu $begin]
-      }
-
-      if {$end == {*}} {
-        set end [ppl::get_edge_extreme "-region" 0 $edge]
-      } else {
-        set end [ord::microns_to_dbu $end]
-      }
-    } elseif {$interval == {*}} {
-      set begin [ppl::get_edge_extreme "-region" 1 $edge]
-      set end [ppl::get_edge_extreme "-region" 0 $edge]
-    }
-
-    if {[info exists keys(-direction)] && [info exists keys(-pin_names)]} {
-      utl::error PPL 16 "Both -direction and -pin_names constraints not allowed."
-    }
-
-    if [info exists keys(-direction)] {
-      set direction $keys(-direction)
-      set dir [ppl::parse_direction "set_io_pin_constraint" $direction]
-      utl::info PPL 49 "Restrict $direction pins to region [ord::dbu_to_microns $begin]u-[ord::dbu_to_microns $end]u, in the $edge edge."
-      ppl::add_direction_constraint $dir $edge_ $begin $end
-    }
-
-    if [info exists keys(-pin_names)] {
-      set names $keys(-pin_names)
-      ppl::add_pins_to_constraint "set_io_pin_constraint" $names $edge_ $begin $end $edge
-    }
-  } elseif [regexp -all {(up):(.*)} $region - edge box] {
-    if {$box == "*"} {
-      set die_area [$dbBlock getDieArea]
-      set llx [$die_area xMin]
-      set lly [$die_area yMin]
-      set urx [$die_area xMax]
-      set ury [$die_area yMax]
-    } elseif [regexp -all {([0-9]+[.]*[0-9]*) ([0-9]+[.]*[0-9]*) ([0-9]+[.]*[0-9]*) ([0-9]+[.]*[0-9]*)} $box - llx lly urx ury] {
-      set llx [ord::microns_to_dbu $llx]
-      set lly [ord::microns_to_dbu $lly]
-      set urx [ord::microns_to_dbu $urx]
-      set ury [ord::microns_to_dbu $ury]
-    } else {
-      utl::error PPL 59 "Box at top layer must have 4 values (llx lly urx ury)."
-    }
-
-    if [info exists keys(-pin_names)] {
-      set names $keys(-pin_names)
-      ppl::add_pins_to_top_layer "set_io_pin_constraint" $names $llx $lly $urx $ury
-    }
-  } else {
-    utl::warn PPL 73 "Constraint with region $region has an invalid edge."
+  if {[info exists keys(-region)] && [info exists keys(-mirrored_pins)]} {
+    utl::error PPL 83 "Both -region and -mirrored_pins constraints not allowed."
   }
+
+  if {[info exists keys(-mirrored_pins)] && [info exists flags(-group)]} {
+    utl::error PPL 87 "Both -mirrored_pins and -group constraints not allowed."
+  }
+
+  if [info exists keys(-region)] {
+    set region $keys(-region)
+    if [regexp -all {(top|bottom|left|right):(.+)} $region - edge interval] {
+      set edge_ [ppl::parse_edge "-region" $edge]
+
+      if [regexp -all {([0-9]+[.]*[0-9]*|[*]+)-([0-9]+[.]*[0-9]*|[*]+)} $interval - begin end] {
+        if {$begin == {*}} {
+          set begin [ppl::get_edge_extreme "-region" 1 $edge]
+        } else {
+          set begin [ord::microns_to_dbu $begin]
+        }
+
+        if {$end == {*}} {
+          set end [ppl::get_edge_extreme "-region" 0 $edge]
+        } else {
+          set end [ord::microns_to_dbu $end]
+        }
+      } elseif {$interval == {*}} {
+        set begin [ppl::get_edge_extreme "-region" 1 $edge]
+        set end [ppl::get_edge_extreme "-region" 0 $edge]
+      }
+
+      if {[info exists keys(-direction)] && [info exists keys(-pin_names)]} {
+        utl::error PPL 16 "Both -direction and -pin_names constraints not allowed."
+      }
+
+      if [info exists keys(-direction)] {
+        set direction $keys(-direction)
+        set dir [ppl::parse_direction "set_io_pin_constraint" $direction]
+        utl::info PPL 49 "Restrict $direction pins to region [ord::dbu_to_microns $begin]u-[ord::dbu_to_microns $end]u, in the $edge edge."
+        ppl::add_direction_constraint $dir $edge_ $begin $end
+      }
+
+      if [info exists keys(-pin_names)] {
+        set names $keys(-pin_names)
+        ppl::add_pins_to_constraint "set_io_pin_constraint" $names $edge_ $begin $end $edge
+      }
+    } elseif [regexp -all {(up):(.*)} $region - edge box] {
+      if {$box == "*"} {
+        set die_area [$dbBlock getDieArea]
+        set llx [$die_area xMin]
+        set lly [$die_area yMin]
+        set urx [$die_area xMax]
+        set ury [$die_area yMax]
+      } elseif [regexp -all {([0-9]+[.]*[0-9]*) ([0-9]+[.]*[0-9]*) ([0-9]+[.]*[0-9]*) ([0-9]+[.]*[0-9]*)} $box - llx lly urx ury] {
+        set llx [ord::microns_to_dbu $llx]
+        set lly [ord::microns_to_dbu $lly]
+        set urx [ord::microns_to_dbu $urx]
+        set ury [ord::microns_to_dbu $ury]
+      } else {
+        utl::error PPL 59 "Box at top layer must have 4 values (llx lly urx ury)."
+      }
+
+      if [info exists keys(-pin_names)] {
+        set names $keys(-pin_names)
+        ppl::add_pins_to_top_layer "set_io_pin_constraint" $names $llx $lly $urx $ury
+      }
+    } else {
+      utl::warn PPL 73 "Constraint with region $region has an invalid edge."
+    }
+  }
+
+  if [info exists flags(-group)] {
+    if [info exists keys(-pin_names)] {
+        set group $keys(-pin_names)
+    } else {
+      utl::error PPL 58 "The -pin_names argument is required when using -group flag."
+    }
+
+    set pin_list {}
+    set final_group ""
+    foreach pin_name $group {
+      set db_bterm [$dbBlock findBTerm $pin_name]
+      if { $db_bterm != "NULL" } {
+        lappend pin_list $db_bterm
+        set final_group "$final_group $pin_name"
+      } else {
+        utl::warn PPL 47 "Group pin $pin_name not found in the design."
+      }
+    }
+
+    if { [llength $pin_list] != 0} {
+      utl::info PPL 44 "Pin group: \[$final_group \]"
+      ppl::add_pin_group $pin_list [info exists flags(-order)]
+      incr group_idx
+    }
+  } elseif [info exists flags(-order)] {
+    utl::error PPL 95 "-order cannot be used without -group."
+  }
+
+  if [info exists keys(-mirrored_pins)] {
+    set mirrored_pins $keys(-mirrored_pins)
+    if { [expr [llength $mirrored_pins] % 2] != 0 } {
+      utl::error PPL 81 "List of pins must have an even number of pins."
+    }
+
+    foreach {pin1 pin2} $mirrored_pins {
+      utl::info PPL 80 "Mirroring pins $pin1 and $pin2."
+      set bterm1 [ppl::parse_pin_names "set_io_pin_constraint -mirrored_pins" $pin1]
+      set bterm2 [ppl::parse_pin_names "set_io_pin_constraint -mirrored_pins" $pin2]
+      ppl::add_mirrored_pins $bterm1 $bterm2
+    }
+  }
+
 }
 
 proc clear_io_pin_constraints {} {
@@ -450,10 +504,6 @@ proc place_pins { args } {
 
   set num_slots [expr (2*$num_tracks_x + 2*$num_tracks_y)/$min_dist]
 
-  if { ($bterms_cnt > $num_slots) } {
-    utl::error PPL 24 "Number of pins $bterms_cnt exceeds max possible $num_slots."
-  }
-
   if { $regions != {} } {
     set lef_units [$dbTech getLefUnits]
 
@@ -499,7 +549,7 @@ proc place_pins { args } {
           utl::warn PPL 43 "Pin $pin_name not found in group $group_idx."
         }
       }
-      ppl::add_pin_group $pin_list
+      ppl::add_pin_group $pin_list 0
       incr group_idx
     }
   }
@@ -612,6 +662,11 @@ proc add_pins_to_constraint {cmd names edge begin end edge_name} {
 proc add_pins_to_top_layer {cmd names llx lly urx ury} {
   set tech [ord::get_db_tech]
   set top_layer [ppl::get_top_layer]
+  
+  if {$top_layer == "NULL"} {
+    utl::error PPL 99 "Constraint up:{$llx $lly $urx $ury} cannot be created. Pin placement grid on top layer not created."
+  }
+
   set top_layer_name [$top_layer getConstName]
   utl::info PPL 60 "Restrict pins \[$names\] to region ([ord::dbu_to_microns $llx]u, [ord::dbu_to_microns $lly]u)-([ord::dbu_to_microns $urx]u, [ord::dbu_to_microns $urx]u) at routing layer $top_layer_name."
   set pin_list [ppl::parse_pin_names $cmd $names]

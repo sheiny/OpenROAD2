@@ -211,6 +211,13 @@ getPdnGen()
   return openroad->getPdnGen();
 }
 
+pad::ICeWall*
+getICeWall()
+{
+  OpenRoad *openroad = getOpenRoad();
+  return openroad->getICeWall();
+}
+
 stt::SteinerTreeBuilder*
 getSteinerTreeBuilder()
 {
@@ -318,10 +325,11 @@ void
 read_def_cmd(const char *filename,
              bool continue_on_errors,
              bool floorplan_init,
-             bool incremental)
+             bool incremental,
+             bool child)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->readDef(filename, continue_on_errors, floorplan_init, incremental);
+  ord->readDef(filename, continue_on_errors, floorplan_init, incremental, child);
 }
 
 void
@@ -388,16 +396,6 @@ void
 ensure_linked()
 {
   return ensureLinked();
-}
-
-void
-write_verilog_cmd(const char *filename,
-		  bool sort,
-		  bool include_pwr_gnd,
-		  vector<LibertyCell*> *remove_cells)
-{
-  OpenRoad *ord = getOpenRoad();
-  ord->writeVerilog(filename, sort, include_pwr_gnd, remove_cells);
 }
 
 void
@@ -471,9 +469,17 @@ bool
 db_has_rows()
 {
   dbDatabase *db = OpenRoad::openRoad()->getDb();
-  return db->getChip()
-    && db->getChip()->getBlock()
-    && db->getChip()->getBlock()->getRows().size() > 0;
+  if (!db->getChip() || !db->getChip()->getBlock()) {
+    return false;
+  }
+
+  for (odb::dbRow* row : db->getChip()->getBlock()->getRows()) {
+    if (row->getSite()->getClass() != odb::dbSiteClass::PAD) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool

@@ -1,5 +1,7 @@
 record_tests {
+  bus_route
   clock_route
+  clock_route_alpha
   clock_route_error1
   clock_route_error2
   congestion1
@@ -8,10 +10,12 @@ record_tests {
   congestion4
   congestion5
   congestion6
+  congestion7
   critical_nets_percentage
   est_rc1
   est_rc2
   est_rc3
+  est_rc4
   gcd
   gcd_flute
   inst_pin_out_of_die
@@ -23,12 +27,15 @@ record_tests {
   ndr_2w_3s
   no_tracks
   obs_out_of_die
+  overlapping_edges
   pd1
   pd2
   pd3
   pd4
   pin_access1
   pin_access2
+  pin_edge
+  pin_track_not_aligned
   pre_routed1
   region_adjustment
   repair_antennas1
@@ -44,7 +51,10 @@ record_tests {
   report_wire_length5
   report_wire_length6
   silence
+  top_level_term1
+  top_level_term2
   tracks1
   tracks2
   tracks3
+  upper_layer_net
 }

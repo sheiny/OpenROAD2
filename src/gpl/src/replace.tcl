@@ -32,8 +32,8 @@
 ###############################################################################
 
 sta::define_cmd_args "global_placement" {\
-  [-skip_initial_place]\
-  [-skip_nesterov_place]\
+    [-skip_initial_place]\
+    [-skip_nesterov_place]\
     [-timing_driven]\
     [-routability_driven]\
     [-disable_timing_driven]\
@@ -228,8 +228,7 @@ proc global_placement { args } {
   if { [info exists keys(-bin_grid_count)] } {
     set bin_grid_count  $keys(-bin_grid_count)
     sta::check_positive_integer "-bin_grid_count" $bin_grid_count
-    gpl::set_bin_grid_cnt_x_cmd $bin_grid_count
-    gpl::set_bin_grid_cnt_y_cmd $bin_grid_count    
+    gpl::set_bin_grid_cnt_cmd $bin_grid_count $bin_grid_count
   }
  
   # overflow 

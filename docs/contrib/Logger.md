@@ -33,6 +33,27 @@ critical, error, warning, information and debug. These are supported by
 automatic calls to the logger which will then prefix the appropriate
 severity type to the message.
 
+## C++20 Requirements
+
+In C++20 the logger messages are checked during compile time which introduces
+restrictions around rutime format strings. See [docs](https://fmt.dev/latest/api.html#compile-time-format-string-checks)
+
+OpenROAD uses `spdlog` which uses `fmt_lib` under the hood. Below is an example of
+what is no longer allowed.
+
+In order to make use of runtime format strings, we have introduced a 
+`FMT_RUNTIME` macro in Logger.h. You should use this macro any time you
+pass a dynamic string as the format string 
+
+```c++
+logger_->info("{} {}", a, b); // OK
+
+void blah(std::string template& a) {
+  logger_->info(a, c); // Illegal
+  logger_->info(FMT_RUNTIME(a), c); // Ok
+}
+```
+
 ## Messaging Guidelines
 
 In addition to the proper use of message types, follow the guidelines
@@ -418,31 +439,37 @@ target_link_libraries(<library_target>
 )
 ```
 
-| Tool             | message/namespace |
-|------------------|-------------------|
-| antenna_checker  | ant               |
-| dbSta            | sta               |
-| FastRoute        | grt               |
-| finale           | fin               |
-| flute3           | stt               |
-| gui              | gui               |
-| ICeWall          | pad               |
-| init_fp          | ifp               |
-| ioPlacer         | ppl               |
-| OpenDB           | odb               |
-| opendp           | dpl               |
-| detailedPlacer   | dpo               |
-| OpenRCX          | rcx               |
-| *OpenROAD*       | ord               |
-| OpenSTA          | sta               |
-| PartMgr          | par               |
-| pdngen           | pdn               |
-| PDNSim           | psm               |
-| replace          | gpl               |
-| resizer          | rsz               |
-| tapcell          | tap               |
-| TritonCTS        | cts               |
-| TritonMacroPlace | mpl               |
-| TritonRoute      | drt               |
-| Distributed      | dst               |
-| utility          | utl               |
+### OpenROAD Tool List
+
+| Tool                 | message/namespace | Description                               |
+| -------------------- | ----------------- | ----------------------------------------- |
+| antenna_checker      | ant               | Diode Insertion                           |
+| dbSta                | sta               | Interface between odb & sta               |
+| Design For Test      | dft               | Design For Test                           |
+| FastRoute            | grt               | Gloabl Routing                            |
+| finale               | fin               | Metal Fill                                |
+| flute3               | stt               | Steiner tree generation                   |
+| gui                  | gui               | Graphical User Interface                  |
+| ICeWall              | pad               | Chip-Level Connections                    |
+| init_fp              | ifp               | Initialize Floorplan                      |
+| ioPlacer             | ppl               | Pin Placement                             |
+| OpenDB               | odb               | Open Data Base                            |
+| opendp               | dpl               | Detail Placement                          |
+| detailedPlacer       | dpo               | Detailed Placer                           |
+| OpenRCX              | rcx               | Parasitic Extraction                      |
+| *OpenROAD*           | ord               | OpenROAD(Global commands)                 |
+| OpenSTA              | sta               | Timing Analysis                           |
+| PartMgr              | par               | Timing-aware Advanced Partitioner         |
+| pdngen               | pdn               | PDN Analysis                              |
+| PDNSim               | psm               | IR Drop Analysis                          |
+| remapper             | rmp               | Synthesis Restructure                     |
+| replace              | gpl               | Global Placement                          |
+| resizer              | rsz               | Gate ReSizer                              |
+| tapcell              | tap               | Tapcell Insertion                         |
+| TritonCTS            | cts               | Clock Tree Synthesis                      |
+| TritonMacroPlace     | mpl               | Macro Placement                           |
+| Hier RTL-MP          | mpl2              | Hierarchy Macro Placement                 |
+| TritonRoute          | drt               | Detail Routing                            |
+| Distributed          | dst               | Infrastructure for distributed processing | 
+| Unified Power Format | upf               | Unified Power Format                      |
+| utility              | utl               | Utility                                   |

@@ -122,7 +122,8 @@ class dbGroupType
   enum Value
   {
     PHYSICAL_CLUSTER,
-    VOLTAGE_DOMAIN
+    VOLTAGE_DOMAIN,
+    POWER_DOMAIN
   };
 
   ///
@@ -222,9 +223,12 @@ class dbSigType
   bool isSupply() const;
 
   ///
-  /// Cast operator
+  /// Comparison operators for type safe dbSigType
   ///
-  operator Value() const { return _value; }
+  bool operator==(const dbSigType& v) const { return _value == v._value; };
+  bool operator!=(const dbSigType& v) const { return _value != v._value; };
+  bool operator==(const Value v) const { return _value == v; };
+  bool operator!=(const Value v) const { return _value != v; };
 
  private:
   Value _value;
@@ -277,9 +281,12 @@ class dbIoType
   const char* getString() const;
 
   ///
-  /// Cast operator
+  /// Comparison operators for type safe dbIoType
   ///
-  operator Value() const { return _value; }
+  bool operator==(const dbIoType& v) const { return _value == v._value; };
+  bool operator!=(const dbIoType& v) const { return _value != v._value; };
+  bool operator==(const Value v) const { return _value == v; };
+  bool operator!=(const Value v) const { return _value != v; };
 
  private:
   Value _value;

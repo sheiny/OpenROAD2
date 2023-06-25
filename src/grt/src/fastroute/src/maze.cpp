@@ -171,9 +171,40 @@ void FastRouteCore::fixOverlappingEdge(
     std::vector<short> new_route_x, new_route_y;
     const TreeNode& startpoint = treenodes[treeedge->n1];
     const TreeNode& endpoint = treenodes[treeedge->n2];
+    if (startpoint.x == endpoint.x || startpoint.y == endpoint.y) {
+      return;
+    }
     routeLShape(
         startpoint, endpoint, blocked_positions, new_route_x, new_route_y);
 
+    // Updates the usage of the altered edge
+    const int edgeCost = nets_[net_id]->getEdgeCost();
+    for (int k = 0; k < treeedge->route.routelen;
+         k++) {  // remove the usages of the old edges
+      if (treeedge->route.gridsX[k] == treeedge->route.gridsX[k + 1]) {
+        if (treeedge->route.gridsY[k] != treeedge->route.gridsY[k + 1]) {
+          const int min_y = std::min(treeedge->route.gridsY[k],
+                                     treeedge->route.gridsY[k + 1]);
+          v_edges_[min_y][treeedge->route.gridsX[k]].usage -= edgeCost;
+        }
+      } else {
+        const int min_x = std::min(treeedge->route.gridsX[k],
+                                   treeedge->route.gridsX[k + 1]);
+        h_edges_[treeedge->route.gridsY[k]][min_x].usage -= edgeCost;
+      }
+    }
+    for (int k = 0; k < new_route_x.size() - 1;
+         k++) {  // update the usage for the new edges
+      if (new_route_x[k] == new_route_x[k + 1]) {
+        if (new_route_y[k] != new_route_y[k + 1]) {
+          const int min_y = std::min(new_route_y[k], new_route_y[k + 1]);
+          v_edges_[min_y][new_route_x[k]].usage += edgeCost;
+        }
+      } else {
+        const int min_x = std::min(new_route_x[k], new_route_x[k + 1]);
+        h_edges_[new_route_y[k]][min_x].usage += edgeCost;
+      }
+    }
     treeedge->route.gridsX = new_route_x;
     treeedge->route.gridsY = new_route_y;
     treeedge->route.routelen = new_route_x.size() - 1;
@@ -268,6 +299,9 @@ void FastRouteCore::routeLShape(
       // point (startpoint.x, endpoint.y) not added yet, so it
       // need to be included in the for below
       first_x = startpoint.x;
+      if (startpoint.y == endpoint.y) {
+        first_x++;
+      }
     }
     for (short x = first_x; x <= endpoint.x; x++) {
       new_route_x.push_back(x);
@@ -293,12 +327,17 @@ void FastRouteCore::routeLShape(
       x = startpoint.x;
       // point (startpoint.x, startpoint.y) already
       // added, so can be skiped in the for below
-      first_y = startpoint.y + 1;
+      first_y
+          = (startpoint.y < endpoint.y) ? startpoint.y + 1 : startpoint.y - 1;
     } else {
       x = endpoint.x;
       // point (endpoint.x, startpoint.y) not added yet, so it
       // need to be included in the for below
       first_y = startpoint.y;
+      if (startpoint.x == endpoint.x) {
+        first_y
+            = (startpoint.y < endpoint.y) ? startpoint.y + 1 : startpoint.y - 1;
+      }
     }
     if (startpoint.y < endpoint.y) {
       for (short y = first_y; y <= endpoint.y; y++) {
@@ -1276,16 +1315,15 @@ float getCost(const int i,
   float cost;
   if (cost_type == 2) {
     if (i < capacity - 1)
-      cost
-          = cost_height / (exp((float) (capacity - i - 1) * logis_cof) + 1) + 1;
+      cost = cost_height / (std::exp((capacity - i - 1) * logis_cof) + 1) + 1;
     else
-      cost = cost_height / (exp((float) (capacity - i - 1) * logis_cof) + 1) + 1
+      cost = cost_height / (std::exp((capacity - i - 1) * logis_cof) + 1) + 1
              + cost_height / slope * (i - capacity);
   } else {
     if (i < capacity)
-      cost = cost_height / (exp((float) (capacity - i) * logis_cof) + 1) + 1;
+      cost = cost_height / (std::exp((capacity - i) * logis_cof) + 1) + 1;
     else
-      cost = cost_height / (exp((float) (capacity - i) * logis_cof) + 1) + 1
+      cost = cost_height / (std::exp((capacity - i) * logis_cof) + 1) + 1
              + cost_height / slope * (i - capacity);
   }
   return cost;
@@ -2092,23 +2130,82 @@ void FastRouteCore::mazeRouteMSMD(const int iter,
   v_cost_table_.clear();
 }
 
-void FastRouteCore::getCongestionGrid(
-    std::vector<std::pair<GSegment, TileCongestion>>& congestionGridV,
-    std::vector<std::pair<GSegment, TileCongestion>>& congestionGridH)
+void FastRouteCore::findCongestedEdgesNets(
+    NetsPerCongestedArea& nets_in_congested_edges,
+    bool vertical)
 {
+  for (int netID = 0; netID < netCount(); netID++) {
+    if (!nets_[netID]->isRouted()) {
+      continue;
+    }
+
+    const auto& treeedges = sttrees_[netID].edges;
+    const int num_edges = sttrees_[netID].num_edges();
+
+    for (int edgeID = 0; edgeID < num_edges; edgeID++) {
+      const TreeEdge* treeedge = &(treeedges[edgeID]);
+      if (treeedge->len > 0) {
+        int routeLen = treeedge->route.routelen;
+        const std::vector<int16_t>& gridsX = treeedge->route.gridsX;
+        const std::vector<int16_t>& gridsY = treeedge->route.gridsY;
+        int lastX = tile_size_ * (gridsX[0] + 0.5) + x_corner_;
+        int lastY = tile_size_ * (gridsY[0] + 0.5) + y_corner_;
+
+        for (int i = 1; i <= routeLen; i++) {
+          const int xreal = tile_size_ * (gridsX[i] + 0.5) + x_corner_;
+          const int yreal = tile_size_ * (gridsY[i] + 0.5) + y_corner_;
+
+          bool vertical_edge = xreal == lastX;
+
+          if (vertical_edge == vertical) {
+            NetsPerCongestedArea::iterator it
+                = nets_in_congested_edges.find({lastX, lastY});
+            if (it != nets_in_congested_edges.end()) {
+              it->second.nets.insert(nets_[netID]->getDbNet());
+            }
+
+            it = nets_in_congested_edges.find({xreal, yreal});
+            if (it != nets_in_congested_edges.end()) {
+              it->second.nets.insert(nets_[netID]->getDbNet());
+            }
+          }
+
+          lastX = xreal;
+          lastY = yreal;
+        }
+      }
+    }
+  }
+}
+
+void FastRouteCore::getCongestionGrid(
+    std::vector<CongestionInformation>& congestionGridV,
+    std::vector<CongestionInformation>& congestionGridH)
+{
+  NetsPerCongestedArea nets_in_congested_edges;
+
   for (int i = 0; i < y_grid_; i++) {
     for (int j = 0; j < x_grid_ - 1; j++) {
       const int overflow = h_edges_[i][j].usage - h_edges_[i][j].cap;
       if (overflow > 0) {
         const int xreal = tile_size_ * (j + 0.5) + x_corner_;
         const int yreal = tile_size_ * (i + 0.5) + y_corner_;
-        const GSegment segment = GSegment(xreal, yreal, 1, xreal, yreal, 1);
         const int usage = h_edges_[i][j].usage;
         const int capacity = h_edges_[i][j].cap;
-        congestionGridH.push_back({segment, {capacity, usage}});
+        nets_in_congested_edges[{xreal, yreal}].congestion = {capacity, usage};
       }
     }
   }
+  findCongestedEdgesNets(nets_in_congested_edges, false);
+  for (const auto& [edge, tile_info] : nets_in_congested_edges) {
+    TileCongestion congestion = tile_info.congestion;
+    const auto& segment
+        = GSegment(edge.first, edge.second, 1, edge.first, edge.second, 1);
+    const auto& horizontal_srcs
+        = nets_in_congested_edges[{segment.init_x, segment.init_y}].nets;
+    congestionGridH.push_back({segment, congestion, horizontal_srcs});
+  }
+  nets_in_congested_edges.clear();
 
   for (int i = 0; i < y_grid_ - 1; i++) {
     for (int j = 0; j < x_grid_; j++) {
@@ -2116,11 +2213,107 @@ void FastRouteCore::getCongestionGrid(
       if (overflow > 0) {
         const int xreal = tile_size_ * (j + 0.5) + x_corner_;
         const int yreal = tile_size_ * (i + 0.5) + y_corner_;
-        GSegment segment = GSegment(xreal, yreal, 1, xreal, yreal, 1);
         const int usage = v_edges_[i][j].usage;
         const int capacity = v_edges_[i][j].cap;
-        congestionGridV.push_back({segment, {capacity, usage}});
+        nets_in_congested_edges[{xreal, yreal}].congestion = {capacity, usage};
       }
+    }
+  }
+  findCongestedEdgesNets(nets_in_congested_edges, true);
+  for (const auto& [edge, tile_info] : nets_in_congested_edges) {
+    TileCongestion congestion = tile_info.congestion;
+    const auto& segment
+        = GSegment(edge.first, edge.second, 1, edge.first, edge.second, 1);
+    const auto& vertical_srcs
+        = nets_in_congested_edges[{segment.init_x, segment.init_y}].nets;
+    congestionGridV.push_back({segment, congestion, vertical_srcs});
+  }
+}
+
+void FastRouteCore::setCongestionNets(std::set<odb::dbNet*>& congestion_nets,
+                                      int& posX,
+                                      int& posY,
+                                      int dir,
+                                      int& radius)
+{
+  // get Nets with overflow
+  for (int netID = 0; netID < netCount(); netID++) {
+    if (congestion_nets.find(nets_[netID]->getDbNet())
+        != congestion_nets.end()) {
+      continue;
+    }
+
+    const auto& treeedges = sttrees_[netID].edges;
+    const int num_edges = sttrees_[netID].num_edges();
+
+    for (int edgeID = 0; edgeID < num_edges; edgeID++) {
+      const TreeEdge* treeedge = &(treeedges[edgeID]);
+      const std::vector<short>& gridsX = treeedge->route.gridsX;
+      const std::vector<short>& gridsY = treeedge->route.gridsY;
+      const std::vector<short>& gridsL = treeedge->route.gridsL;
+      const int routeLen = treeedge->route.routelen;
+
+      for (int i = 0; i < routeLen; i++) {
+        if (gridsL[i] != gridsL[i + 1]) {
+          continue;
+        }
+        if (gridsX[i] == gridsX[i + 1]) {  // a vertical edge
+          const int ymin = std::min(gridsY[i], gridsY[i + 1]);
+          if (abs(ymin - posY) <= radius && abs(gridsX[i] - posX) <= radius
+              && dir == 0) {
+            congestion_nets.insert(nets_[netID]->getDbNet());
+          }
+        } else if (gridsY[i] == gridsY[i + 1]) {  // a horizontal edge
+          const int xmin = std::min(gridsX[i], gridsX[i + 1]);
+          if (abs(gridsY[i] - posY) <= radius && abs(xmin - posX) <= radius
+              && dir == 1) {
+            congestion_nets.insert(nets_[netID]->getDbNet());
+          }
+        }
+      }
+    }
+  }
+}
+
+// The function will add the new nets to the congestion_nets set
+void FastRouteCore::getCongestionNets(std::set<odb::dbNet*>& congestion_nets)
+{
+  std::vector<int> xs, ys, dirs;
+  int n = 0;
+  // Find horizontal ggrids with congestion
+  for (int i = 0; i < y_grid_; i++) {
+    for (int j = 0; j < x_grid_ - 1; j++) {
+      const int overflow = h_edges_[i][j].usage - h_edges_[i][j].cap;
+      if (overflow > 0) {
+        xs.push_back(j);
+        ys.push_back(i);
+        dirs.push_back(1);
+        n++;
+      }
+    }
+  }
+  // Find vertical ggrids with congestion
+  for (int i = 0; i < y_grid_ - 1; i++) {
+    for (int j = 0; j < x_grid_; j++) {
+      const int overflow = v_edges_[i][j].usage - v_edges_[i][j].cap;
+      if (overflow > 0) {
+        xs.push_back(j);
+        ys.push_back(i);
+        dirs.push_back(0);
+        n++;
+      }
+    }
+  }
+
+  int old_size = congestion_nets.size();
+
+  // The radius around the congested zone is increased when no new nets are
+  // obtained
+  for (int radius = 0; radius < 5 && old_size == congestion_nets.size();
+       radius++) {
+    // Find nets for each congestion ggrid
+    for (int i = 0; i < n; i++) {
+      setCongestionNets(congestion_nets, xs[i], ys[i], dirs[i], radius);
     }
   }
 }
@@ -2137,7 +2330,6 @@ int FastRouteCore::getOverflow2Dmaze(int* maxOverflow, int* tUsage)
   check2DEdgesUsage();
 
   int total_usage = 0;
-
   for (int i = 0; i < y_grid_; i++) {
     for (int j = 0; j < x_grid_ - 1; j++) {
       total_usage += h_edges_[i][j].usage;

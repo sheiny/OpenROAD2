@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_CONSTRAINT_H_
-#define _FR_CONSTRAINT_H_
+#pragma once
 
 #include <algorithm>
 #include <iterator>
@@ -224,6 +223,8 @@ class frConstraint
 
       case frConstraintTypeEnum::frcLef58AreaConstraint:
         return "Lef58Area";
+      case frConstraintTypeEnum::frcLef58KeepOutZoneConstraint:
+        return "KeepOutZone";
     }
     return "";
   }
@@ -2417,6 +2418,29 @@ class frLef58AreaConstraint : public frConstraint
   odb::dbTechLayerAreaRule* db_rule_;
 };
 
+// LEF58_KEEPOUTZONE rule
+class frLef58KeepOutZoneConstraint : public frConstraint
+{
+ public:
+  frLef58KeepOutZoneConstraint(odb::dbTechLayerKeepOutZoneRule* rule)
+      : db_rule_(rule)
+  {
+  }
+  // getter
+  odb::dbTechLayerKeepOutZoneRule* getODBRule() const { return db_rule_; }
+  // others
+  frConstraintTypeEnum typeId() const override
+  {
+    return frConstraintTypeEnum::frcLef58KeepOutZoneConstraint;
+  }
+  void report(utl::Logger* logger) const override
+  {
+    logger->report("LEF58_KEEPOUTZONE");
+  }
+
+ private:
+  odb::dbTechLayerKeepOutZoneRule* db_rule_;
+};
 using namespace std;
 class frNonDefaultRule
 {
@@ -2563,5 +2587,3 @@ class frNonDefaultRule
   bool isHardSpacing() const { return hardSpacing_; }
 };
 }  // namespace fr
-
-#endif

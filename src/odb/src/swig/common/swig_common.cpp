@@ -128,21 +128,33 @@ int write_def(odb::dbBlock* block,
 int write_lef(odb::dbLib* lib, const char* path)
 {
   utl::Logger* logger = new utl::Logger(NULL);
-  odb::lefout writer(logger);
-  return writer.writeTechAndLib(lib, path);
+  std::ofstream os;
+  os.exceptions(std::ofstream::badbit | std::ofstream::failbit);
+  os.open(path);
+  odb::lefout writer(logger, os);
+  writer.writeTechAndLib(lib);
+  return true;
 }
 
 int write_tech_lef(odb::dbTech* tech, const char* path)
 {
   utl::Logger* logger = new utl::Logger(NULL);
-  odb::lefout writer(logger);
-  return writer.writeTech(tech, path);
+  std::ofstream os;
+  os.exceptions(std::ofstream::badbit | std::ofstream::failbit);
+  os.open(path);
+  odb::lefout writer(logger, os);
+  writer.writeTech(tech);
+  return true;
 }
 int write_macro_lef(odb::dbLib* lib, const char* path)
 {
   utl::Logger* logger = new utl::Logger(NULL);
-  odb::lefout writer(logger);
-  return writer.writeLib(lib, path);
+  std::ofstream os;
+  os.exceptions(std::ofstream::badbit | std::ofstream::failbit);
+  os.open(path);
+  odb::lefout writer(logger, os);
+  writer.writeLib(lib);
+  return true;
 }
 
 odb::dbDatabase* read_db(odb::dbDatabase* db, const char* db_path)
@@ -150,15 +162,14 @@ odb::dbDatabase* read_db(odb::dbDatabase* db, const char* db_path)
   if (db == NULL) {
     db = odb::dbDatabase::create();
   }
-  FILE* fp = fopen(db_path, "rb");
-  if (!fp) {
-    int errnum = errno;
-    fprintf(stderr, "Error opening file: %s\n", strerror(errnum));
-    fprintf(stderr, "Errno: %d\n", errno);
-    return NULL;
-  }
-  db->read(fp);
-  fclose(fp);
+
+  std::ifstream file;
+  file.exceptions(std::ifstream::failbit | std::ifstream::badbit
+                  | std::ios::eofbit);
+  file.open(db_path, std::ios::binary);
+
+  db->read(file);
+
   return db;
 }
 

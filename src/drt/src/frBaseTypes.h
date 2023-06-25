@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_BASE_TYPES_H_
-#define _FR_BASE_TYPES_H_
+#pragma once
 
 #include <boost/geometry/geometries/box.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
@@ -205,7 +204,8 @@ enum class frConstraintTypeEnum
   frcLef58EolKeepOutConstraint,
   frcLef58MinimumCutConstraint,
   frcMetalWidthViaConstraint,
-  frcLef58AreaConstraint
+  frcLef58AreaConstraint,
+  frcLef58KeepOutZoneConstraint
 };
 
 std::ostream& operator<<(std::ostream& os, frConstraintTypeEnum type);
@@ -259,6 +259,16 @@ enum class frDirEnum
   U = 6
 };
 
+static constexpr frDirEnum frDirEnumAll[] = {frDirEnum::D,
+                                             frDirEnum::S,
+                                             frDirEnum::W,
+                                             frDirEnum::E,
+                                             frDirEnum::N,
+                                             frDirEnum::U};
+
+static constexpr frDirEnum frDirEnumPlanar[]
+    = {frDirEnum::S, frDirEnum::W, frDirEnum::E, frDirEnum::N};
+
 enum class AccessPointTypeEnum
 {
   Ideal,
@@ -305,8 +315,11 @@ struct frDebugSettings
         mazeEndIter(-1),
         drcCost(-1),
         markerCost(-1),
+        fixedShapeCost(-1),
+        markerDecay(-1),
         ripupMode(-1),
-        followGuide(-1)
+        followGuide(-1),
+        writeNetTracks(false)
 
   {
   }
@@ -333,8 +346,11 @@ struct frDebugSettings
   int mazeEndIter;
   int drcCost;
   int markerCost;
+  int fixedShapeCost;
+  float markerDecay;
   int ripupMode;
   int followGuide;
+  bool writeNetTracks;
 };
 
 // Avoids the need to split the whole serializer like
@@ -347,5 +363,3 @@ inline bool is_loading(const Archive& ar)
 }
 
 }  // namespace fr
-
-#endif

@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _GC_NET_H_
-#define _GC_NET_H_
+#pragma once
 
 #include <memory>
 
@@ -215,6 +214,19 @@ class gcNet : public gcBlockObject
     }
     return false;
   }
+  gcCorner* getPolyCornerAt(frCoord x, frCoord y, frLayerNum ln) const
+  {
+    for (auto& pin : pins_[ln]) {
+      for (auto& corners : pin->getPolygonCorners()) {
+        for (auto& corner : corners) {
+          if (corner->x() == x && corner->y() == y) {
+            return corner.get();
+          }
+        }
+      }
+    }
+    return nullptr;
+  }
 
  private:
   std::vector<gtl::polygon_90_set_data<frCoord>>
@@ -236,5 +248,3 @@ class gcNet : public gcBlockObject
   void init();
 };
 }  // namespace fr
-
-#endif

@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -39,6 +40,8 @@
 namespace odb {
 class dbNet;
 }
+
+using int64 = std::int64_t;
 
 namespace grt {
 
@@ -146,7 +149,6 @@ struct Edge3D
 {
   unsigned short cap;    // the capacity of the edge
   unsigned short usage;  // the usage of the edge
-  unsigned short red;
 };
 
 struct TreeNode

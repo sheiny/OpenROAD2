@@ -131,7 +131,6 @@ void FlexPA::initUniqueInstance_main(
 {
   vector<frInst*> ndrInsts;
   vector<frCoord> offset;
-  int cnt = 0;
   std::set<frInst*> target_frinsts;
   for (auto inst : target_insts_)
     target_frinsts.insert(design_->getTopBlock()->findInst(inst->getName()));
@@ -167,14 +166,11 @@ void FlexPA::initUniqueInstance_main(
       }
     }
     masterOT2Insts[inst->getMaster()][orient][offset].insert(inst.get());
-    cnt++;
   }
 
-  cnt = 0;
   frString orientName;
   for (auto& [master, orientMap] : masterOT2Insts) {
     for (auto& [orient, offsetMap] : orientMap) {
-      cnt += offsetMap.size();
       for (auto& [vec, insts] : offsetMap) {
         auto uniqueInst = *(insts.begin());
         uniqueInstances_.push_back(uniqueInst);
@@ -195,10 +191,6 @@ void FlexPA::initUniqueInstance_main(
   for (int i = 0; i < (int) uniqueInstances_.size(); i++) {
     unique2Idx_[uniqueInstances_[i]] = i;
   }
-
-  // if (VERBOSE > 0) {
-  //   cout <<"#unique instances = " <<cnt <<endl;
-  // }
 }
 
 bool FlexPA::isNDRInst(frInst& inst)
@@ -225,6 +217,38 @@ void FlexPA::initUniqueInstance()
   initUniqueInstance_main(master2PinLayerRange, prefTrackPatterns);
 }
 
+void FlexPA::checkFigsOnGrid(const frMPin* pin)
+{
+  const frMTerm* term = pin->getTerm();
+  const int grid = getTech()->getManufacturingGrid();
+  for (auto& fig : pin->getFigs()) {
+    if (fig->typeId() == frcRect) {
+      auto box = static_cast<frRect*>(fig.get())->getBBox();
+      if (box.xMin() % grid || box.yMin() % grid || box.xMax() % grid
+          || box.yMax() % grid) {
+        logger_->error(DRT,
+                       320,
+                       "Term {} of {} contains offgrid pin shape",
+                       term->getName(),
+                       term->getMaster()->getName());
+      }
+    } else if (fig->typeId() == frcPolygon) {
+      auto polygon = static_cast<frPolygon*>(fig.get());
+      for (Point pt : polygon->getPoints()) {
+        if (pt.getX() % grid || pt.getY() % grid) {
+          logger_->error(DRT,
+                         321,
+                         "Term {} of {} contains offgrid pin shape",
+                         term->getName(),
+                         term->getMaster()->getName());
+        }
+      }
+    } else {
+      logger_->error(DRT, 322, "checkFigsOnGrid unsupported pinFig.");
+    }
+  }
+}
+
 void FlexPA::initPinAccess()
 {
   for (auto& inst : uniqueInstances_) {
@@ -238,6 +262,7 @@ void FlexPA::initPinAccess()
             exit(1);
           }
         }
+        checkFigsOnGrid(pin.get());
         auto pa = make_unique<frPinAccess>();
         pin->addPinAccess(std::move(pa));
       }

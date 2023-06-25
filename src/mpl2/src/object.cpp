@@ -97,11 +97,11 @@ static bool comparePairFirst(const std::pair<float, float>& p1,
 }
 
 ///////////////////////////////////////////////////////////////////////
-// Metric Class
-Metric::Metric(unsigned int num_std_cell,
-               unsigned int num_macro,
-               float std_cell_area,
-               float macro_area)
+// Metrics Class
+Metrics::Metrics(unsigned int num_std_cell,
+                 unsigned int num_macro,
+                 float std_cell_area,
+                 float macro_area)
 {
   num_std_cell_ = num_std_cell;
   num_macro_ = num_macro;
@@ -109,76 +109,76 @@ Metric::Metric(unsigned int num_std_cell,
   macro_area_ = macro_area;
 }
 
-void Metric::addMetric(const Metric& metric)
+void Metrics::addMetrics(const Metrics& metrics)
 {
-  num_std_cell_ += metric.num_std_cell_;
-  num_macro_ += metric.num_macro_;
-  std_cell_area_ += metric.std_cell_area_;
-  macro_area_ += metric.macro_area_;
-  inflat_std_cell_area_ += metric.inflat_std_cell_area_;
-  inflat_macro_area_ += metric.inflat_macro_area_;
+  num_std_cell_ += metrics.num_std_cell_;
+  num_macro_ += metrics.num_macro_;
+  std_cell_area_ += metrics.std_cell_area_;
+  macro_area_ += metrics.macro_area_;
+  inflate_std_cell_area_ += metrics.inflate_std_cell_area_;
+  inflate_macro_area_ += metrics.inflate_macro_area_;
 }
 
-void Metric::inflatStdCellArea(float std_cell_util)
+void Metrics::inflateStdCellArea(float std_cell_util)
 {
   if ((std_cell_util > 0.0) && (std_cell_util < 1.0)) {
-    inflat_std_cell_area_ /= std_cell_util;
+    inflate_std_cell_area_ /= std_cell_util;
   }
 }
 
-const std::pair<unsigned int, unsigned int> Metric::getCountStats() const
+const std::pair<unsigned int, unsigned int> Metrics::getCountStats() const
 {
   return std::pair<unsigned int, unsigned int>(num_std_cell_, num_macro_);
 }
 
-const std::pair<float, float> Metric::getAreaStats() const
+const std::pair<float, float> Metrics::getAreaStats() const
 {
   return std::pair<float, float>(std_cell_area_, macro_area_);
 }
 
-const std::pair<float, float> Metric::getInflatAreaStats() const
+const std::pair<float, float> Metrics::getInflateAreaStats() const
 {
-  return std::pair<float, float>(inflat_std_cell_area_, inflat_macro_area_);
+  return std::pair<float, float>(inflate_std_cell_area_, inflate_macro_area_);
 }
 
-unsigned int Metric::getNumMacro() const
+unsigned int Metrics::getNumMacro() const
 {
   return num_macro_;
 }
 
-unsigned int Metric::getNumStdCell() const
+unsigned int Metrics::getNumStdCell() const
 {
   return num_std_cell_;
 }
 
-float Metric::getStdCellArea() const
+float Metrics::getStdCellArea() const
 {
   return std_cell_area_;
 }
 
-float Metric::getMacroArea() const
+float Metrics::getMacroArea() const
 {
   return macro_area_;
 }
 
-float Metric::getArea() const
+float Metrics::getArea() const
 {
   return std_cell_area_ + macro_area_;
 }
 
-float Metric::getInflatStdCellArea() const
+float Metrics::getInflateStdCellArea() const
 {
-  return inflat_std_cell_area_;
+  return inflate_std_cell_area_;
 }
 
-float Metric::getInflatMacroArea() const
+float Metrics::getInflateMacroArea() const
 {
-  return inflat_macro_area_;
+  return inflate_macro_area_;
 }
 
-float Metric::getInflatArea() const
+float Metrics::getInflateArea() const
 {
-  return inflat_std_cell_area_ + inflat_macro_area_;
+  return inflate_std_cell_area_ + inflate_macro_area_;
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -262,7 +262,7 @@ const std::vector<odb::dbInst*> Cluster::getLeafMacros() const
   return leaf_macros_;
 }
 
-const std::vector<HardMacro*> Cluster::getHardMacros() const
+std::vector<HardMacro*> Cluster::getHardMacros() const
 {
   return hard_macros_;
 }
@@ -336,15 +336,15 @@ bool Cluster::getIOClusterFlag() const
   return io_cluster_flag_;
 }
 
-// Metric Support and Statistics
-void Cluster::setMetric(const Metric& metric)
+// Metrics Support and Statistics
+void Cluster::setMetrics(const Metrics& metrics)
 {
-  metric_ = metric;
+  metrics_ = metrics;
 }
 
-const Metric Cluster::getMetric() const
+const Metrics Cluster::getMetrics() const
 {
-  return metric_;
+  return metrics_;
 }
 
 int Cluster::getNumStdCell() const
@@ -352,7 +352,7 @@ int Cluster::getNumStdCell() const
   if (type_ == HardMacroCluster) {
     return 0;
   }
-  return metric_.getNumStdCell();
+  return metrics_.getNumStdCell();
 }
 
 int Cluster::getNumMacro() const
@@ -360,7 +360,7 @@ int Cluster::getNumMacro() const
   if (type_ == StdCellCluster) {
     return 0;
   }
-  return metric_.getNumMacro();
+  return metrics_.getNumMacro();
 }
 
 float Cluster::getArea() const
@@ -374,7 +374,7 @@ float Cluster::getStdCellArea() const
     return 0.0;
   }
 
-  return metric_.getStdCellArea();
+  return metrics_.getStdCellArea();
 }
 
 float Cluster::getMacroArea() const
@@ -383,7 +383,7 @@ float Cluster::getMacroArea() const
     return 0.0;
   }
 
-  return metric_.getMacroArea();
+  return metrics_.getMacroArea();
 }
 
 // Physical location support
@@ -454,7 +454,7 @@ void Cluster::setParent(Cluster* parent)
 
 void Cluster::addChild(Cluster* child)
 {
-  children_.insert(child);
+  children_.push_back(child);
 }
 
 void Cluster::removeChild(const Cluster* child)
@@ -464,7 +464,7 @@ void Cluster::removeChild(const Cluster* child)
 
 void Cluster::addChildren(const std::vector<Cluster*>& children)
 {
-  children_.insert(children.begin(), children.end());
+  std::copy(children.begin(), children.end(), std::back_inserter(children_));
 }
 
 void Cluster::removeChildren()
@@ -477,7 +477,7 @@ Cluster* Cluster::getParent() const
   return parent_;
 }
 
-std::set<Cluster*> Cluster::getChildren() const
+std::vector<Cluster*> Cluster::getChildren() const
 {
   return children_;
 }
@@ -496,7 +496,7 @@ bool Cluster::mergeCluster(Cluster& cluster, bool& delete_flag)
   }
 
   parent_->removeChild(&cluster);
-  metric_.addMetric(cluster.metric_);
+  metrics_.addMetrics(cluster.metrics_);
   // modify name
   name_ += "||" + cluster.name_;
   // if current cluster is a leaf cluster
@@ -512,7 +512,7 @@ bool Cluster::mergeCluster(Cluster& cluster, bool& delete_flag)
   delete_flag = true;
   // if current cluster is not a leaf cluster
   if (children_.size() > 0) {
-    children_.insert(&cluster);
+    children_.push_back(&cluster);
     cluster.setParent(this);
     delete_flag = false;
   }
@@ -581,7 +581,8 @@ bool Cluster::isSameConnSignature(const Cluster& cluster, float net_threshold)
 // For example, if a small cluster A is closely connected to a
 // well-formed cluster B, (there are also other well-formed clusters
 // C, D), A is only connected to B and A has no connection with C, D
-// candidate_clusters are small clusters,
+//
+// candidate_clusters are small clusters that need to be merged,
 // any cluster not in candidate_clusters is a well-formed cluster
 //
 int Cluster::getCloseCluster(const std::vector<int>& candidate_clusters,
@@ -590,7 +591,13 @@ int Cluster::getCloseCluster(const std::vector<int>& candidate_clusters,
   int closely_cluster = -1;
   int num_closely_clusters = 0;
   for (auto& [cluster_id, num_nets] : connection_map_) {
-    logger_->report("cluster_id : {}  nets: {}", cluster_id, num_nets);
+    debugPrint(logger_,
+               MPL,
+               "clustering",
+               2,
+               "cluster_id: {}, nets: {}",
+               cluster_id,
+               num_nets);
     if (num_nets > net_threshold
         && std::find(
                candidate_clusters.begin(), candidate_clusters.end(), cluster_id)
@@ -677,7 +684,7 @@ void Cluster::printBasicInformation(utl::Logger* logger) const
     line += "\n";
   }
 
-  logger->info(MPL, 2022, line);
+  logger->report(line);
 }
 
 // Macro Placement Support
@@ -714,7 +721,7 @@ void Cluster::addVirtualConnection(int src, int target)
 }
 
 ///////////////////////////////////////////////////////////////////////
-// Metric HardMacro
+// HardMacro
 HardMacro::HardMacro(std::pair<float, float> loc, const std::string& name)
 {
   width_ = 0.0;
@@ -735,11 +742,15 @@ HardMacro::HardMacro(float width, float height, const std::string& name)
   pin_y_ = height / 2.0;
 }
 
-HardMacro::HardMacro(odb::dbInst* inst, float dbu, float halo_width)
+HardMacro::HardMacro(odb::dbInst* inst,
+                     float dbu,
+                     int manufacturing_grid,
+                     float halo_width)
 {
   inst_ = inst;
   dbu_ = dbu;
   halo_width_ = halo_width;
+  manufacturing_grid_ = manufacturing_grid;
 
   // set name
   name_ = inst->getName();
@@ -781,11 +792,6 @@ bool HardMacro::operator<(const HardMacro& macro) const
 
 bool HardMacro::operator==(const HardMacro& macro) const
 {
-  std::cout << "width_ :  " << width_ << "  macro.width_ : " << macro.width_
-            << "  "
-            << "height_ :  " << height_ << "  macro.height_ : " << macro.height_
-            << "   " << ((width_ == macro.width_) && (height_ == macro.height_))
-            << std::endl;
   return (width_ == macro.width_) && (height_ == macro.height_);
 }
 
@@ -919,9 +925,9 @@ float HardMacro::getRealHeight() const
 }
 
 // Orientation support
-std::string HardMacro::getOrientation() const
+odb::dbOrientType HardMacro::getOrientation() const
 {
-  return orientation_.getString();
+  return orientation_;
 }
 
 // We do not allow rotation of macros
@@ -971,20 +977,22 @@ void HardMacro::updateDb(float pitch_x, float pitch_y)
   ux = std::round(ux / pitch_x) * pitch_x;
   ly = std::round(ly / pitch_y) * pitch_y;
   uy = std::round(uy / pitch_y) * pitch_y;
-  std::cout << "Update macro " << getName() << std::endl;
-  std::cout << "lx :  " << lx << "  "
-            << "ly :  " << ly << "  "
-            << "ux :  " << ux << "  "
-            << "uy :  " << uy << "  "
-            << "orientation : " << orientation_.getString() << std::endl;
+  int round_lx = std::round(float(micronToDbu(lx, dbu_)) / manufacturing_grid_)
+                 * manufacturing_grid_;
+  int round_ly = std::round(float(micronToDbu(ly, dbu_)) / manufacturing_grid_)
+                 * manufacturing_grid_;
+  int round_ux = std::round(float(micronToDbu(ux, dbu_)) / manufacturing_grid_)
+                 * manufacturing_grid_;
+  int round_uy = std::round(float(micronToDbu(uy, dbu_)) / manufacturing_grid_)
+                 * manufacturing_grid_;
   if (orientation_.getString() == std::string("MX")) {
-    inst_->setLocation(micronToDbu(lx, dbu_), micronToDbu(uy, dbu_));
+    inst_->setLocation(round_lx, round_uy);
   } else if (orientation_.getString() == std::string("MY")) {
-    inst_->setLocation(micronToDbu(ux, dbu_), micronToDbu(ly, dbu_));
+    inst_->setLocation(round_ux, round_ly);
   } else if (orientation_.getString() == std::string("R180")) {
-    inst_->setLocation(micronToDbu(ux, dbu_), micronToDbu(uy, dbu_));
+    inst_->setLocation(round_ux, round_uy);
   } else {
-    inst_->setLocation(micronToDbu(lx, dbu_), micronToDbu(ly, dbu_));
+    inst_->setLocation(round_lx, round_ly);
   }
   inst_->setOrient(orientation_);
   inst_->setPlacementStatus(odb::dbPlacementStatus::LOCKED);
@@ -1259,17 +1267,17 @@ void SoftMacro::setShapes(
     return;
   }
   area_ = area;
+  width_list_.clear();
+  height_list_.clear();
   // sort width list based
   height_list_ = width_list;
   std::sort(height_list_.begin(), height_list_.end(), comparePairFirst);
   for (auto& shape : height_list_) {
-    const float min_width = shape.first;
-    const float max_width = shape.second;
     if (width_list_.size() == 0
-        || min_width > width_list_[width_list_.size() - 1].second) {
-      width_list_.push_back(std::pair<float, float>(min_width, max_width));
-    } else {
-      width_list_[width_list_.size() - 1].second = max_width;
+        || shape.first > width_list_[width_list_.size() - 1].second) {
+      width_list_.push_back(shape);
+    } else if (shape.second > width_list_[width_list_.size() - 1].second) {
+      width_list_[width_list_.size() - 1].second = shape.second;
     }
   }
   height_list_.clear();
@@ -1279,17 +1287,6 @@ void SoftMacro::setShapes(
   }
   width_ = width_list_[0].first;
   height_ = height_list_[0].first;
-  std::cout << getName() << std::endl;
-  std::cout << "width_list : ";
-  for (auto& width : width_list_) {
-    std::cout << width.first << "  -  " << width.second << "   ";
-  }
-  std::cout << std::endl;
-  std::cout << "height_list : ";
-  for (auto& height : height_list_) {
-    std::cout << height.first << " -  " << height.second << "   ";
-  }
-  std::cout << std::endl;
 }
 
 float SoftMacro::getX() const
@@ -1329,7 +1326,7 @@ float SoftMacro::getHeight() const
 
 float SoftMacro::getArea() const
 {
-  return area_;
+  return area_ > 0.01 ? area_ : 0.0;
 }
 
 // Num Macros
@@ -1430,20 +1427,6 @@ void SoftMacro::setShapeF(float width, float height)
   width_ = width;
   height_ = height;
   area_ = width * height;
-}
-
-void SoftMacro::printShape()
-{
-  std::cout << "width_list : ";
-  for (auto& width : width_list_) {
-    std::cout << " <" << width.first << " , " << width.second << " >  ";
-  }
-  std::cout << std::endl;
-  std::cout << "width_list : ";
-  for (auto& width : height_list_) {
-    std::cout << " <" << width.first << " , " << width.second << " >  ";
-  }
-  std::cout << std::endl;
 }
 
 }  // namespace mpl2

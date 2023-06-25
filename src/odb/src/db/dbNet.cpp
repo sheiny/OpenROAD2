@@ -55,6 +55,8 @@
 #include "dbInst.h"
 #include "dbJournal.h"
 #include "dbMTerm.h"
+#include "dbNetTrack.h"
+#include "dbNetTrackItr.h"
 #include "dbRSeg.h"
 #include "dbRSegItr.h"
 #include "dbSWire.h"
@@ -91,6 +93,7 @@ _dbNet::_dbNet(_dbDatabase* db, const _dbNet& n)
       _r_segs(n._r_segs),
       _non_default_rule(n._non_default_rule),
       guides_(n.guides_),
+      tracks_(n.tracks_),
       _groups(n._groups),
       _weight(n._weight),
       _xtalk(n._xtalk),
@@ -167,6 +170,7 @@ dbOStream& operator<<(dbOStream& stream, const _dbNet& net)
   stream << net._ccAdjustOrder;
   stream << net._groups;
   stream << net.guides_;
+  stream << net.tracks_;
   return stream;
 }
 
@@ -192,6 +196,10 @@ dbIStream& operator>>(dbIStream& stream, _dbNet& net)
   stream >> net._ccAdjustOrder;
   stream >> net._groups;
   stream >> net.guides_;
+  _dbDatabase* db = net.getImpl()->getDatabase();
+  if (db->isSchema(db_schema_net_tracks)) {
+    stream >> net.tracks_;
+  }
 
   return stream;
 }
@@ -325,6 +333,9 @@ bool _dbNet::operator==(const _dbNet& rhs) const
   if (guides_ != rhs.guides_)
     return false;
 
+  if (tracks_ != rhs.tracks_)
+    return false;
+
   return true;
 }
 
@@ -415,6 +426,7 @@ void _dbNet::differences(dbDiff& diff,
   DIFF_FIELD(_ccAdjustOrder);
   DIFF_VECTOR(_groups);
   DIFF_FIELD(guides_);
+  DIFF_FIELD(tracks_);
   DIFF_END
 }
 
@@ -492,6 +504,7 @@ void _dbNet::out(dbDiff& diff, char side, const char* field) const
   DIFF_OUT_FIELD(_ccAdjustOrder);
   DIFF_OUT_VECTOR(_groups);
   DIFF_OUT_FIELD(guides_);
+  DIFF_OUT_FIELD(tracks_);
   DIFF_END
 }
 
@@ -2782,8 +2795,8 @@ void dbNet::getNetStats(uint& wireCnt,
       uint level = pshape.shape.getTechLayer()->getRoutingLevel();
       if (levelTable)
         levelTable[level]++;
-      len += MAX(pshape.shape.xMax() - pshape.shape.xMin(),
-                 pshape.shape.yMax() - pshape.shape.yMin());
+      len += std::max(pshape.shape.xMax() - pshape.shape.xMin(),
+                      pshape.shape.yMax() - pshape.shape.yMin());
     }
   }
 }
@@ -3045,9 +3058,6 @@ uint dbNet::setLevelAtFanout(uint level,
       continue;
 
     dbInst* inst = iterm->getInst();
-    // if (strcmp("INV_26", inst->getConstName())==0)
-    //	notice(0, "inst %d %s\n", inst->getId(), inst->getConstName());
-
     if (inst->getMaster()->isSequential())
       continue;
     if (inst->getLevel() != 0)
@@ -3078,6 +3088,23 @@ void dbNet::clearGuides()
   }
 }
 
+dbSet<dbNetTrack> dbNet::getTracks() const
+{
+  _dbNet* net = (_dbNet*) this;
+  _dbBlock* block = (_dbBlock*) net->getOwner();
+  return dbSet<dbNetTrack>(net, block->_net_track_itr);
+}
+
+void dbNet::clearTracks()
+{
+  auto tracks = getTracks();
+  dbSet<dbNetTrack>::iterator itr = tracks.begin();
+  while (itr != tracks.end()) {
+    auto curTrack = *itr++;
+    dbNetTrack::destroy(curTrack);
+  }
+}
+
 #if 0
 //
 // Helper fn: given a net create two terms at endpoints (x1,y1) and (x2,y2)
@@ -3086,7 +3113,7 @@ void dbNet::clearGuides()
 std::pair<dbBTerm *,dbBTerm *>
 dbNet::createTerms4SingleNet(int x1, int y1, int x2, int y2, dbTechLayer *inly)
 {
-  int fwidth = MIN(x2 - x1, y2 - y1);
+  int fwidth = std::min(x2 - x1, y2 - y1);
   uint hwidth = fwidth/2;
 
   std::pair<dbBTerm *,dbBTerm *> retpr;

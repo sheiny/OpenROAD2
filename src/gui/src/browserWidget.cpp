@@ -44,6 +44,7 @@
 
 #include "dbDescriptors.h"
 #include "db_sta/dbSta.hh"
+#include "displayControls.h"
 #include "utl/Logger.h"
 
 Q_DECLARE_METATYPE(odb::dbInst*);
@@ -57,11 +58,15 @@ namespace gui {
 BrowserWidget::BrowserWidget(
     const std::map<odb::dbModule*, LayoutViewer::ModuleSettings>&
         modulesettings,
+    DisplayControls* controls,
     QWidget* parent)
     : QDockWidget("Hierarchy Browser", parent),
       block_(nullptr),
       sta_(nullptr),
       inst_descriptor_(nullptr),
+      display_controls_(controls),
+      display_controls_warning_(
+          new QPushButton("Module view is not enabled", this)),
       modulesettings_(modulesettings),
       view_(new QTreeView(this)),
       model_(new QStandardItemModel(this)),
@@ -70,6 +75,14 @@ BrowserWidget::BrowserWidget(
       menu_(new QMenu(this))
 {
   setObjectName("hierarchy_viewer");  // for settings
+
+  QWidget* widget = new QWidget(this);
+  QVBoxLayout* layout = new QVBoxLayout;
+  widget->setLayout(layout);
+  layout->addWidget(display_controls_warning_);
+  layout->addWidget(view_);
+
+  display_controls_warning_->setStyleSheet("color: red;");
 
   model_->setHorizontalHeaderLabels(
       {"Instance", "Master", "Instances", "Macros", "Modules", "Area"});
@@ -90,7 +103,7 @@ BrowserWidget::BrowserWidget(
   header->setSectionResizeMode(Modules, QHeaderView::Interactive);
   header->setSectionResizeMode(Area, QHeaderView::Interactive);
 
-  setWidget(view_);
+  setWidget(widget);
 
   connect(view_,
           SIGNAL(clicked(const QModelIndex&)),
@@ -126,6 +139,25 @@ BrowserWidget::BrowserWidget(
           SIGNAL(updateModuleColor(odb::dbModule*, const QColor&, bool)),
           this,
           SLOT(updateModuleColorIcon(odb::dbModule*, const QColor&)));
+
+  connect(display_controls_warning_,
+          SIGNAL(pressed()),
+          this,
+          SLOT(enableModuleView()));
+}
+
+void BrowserWidget::displayControlsUpdated()
+{
+  const bool show_warning = !display_controls_->isModuleView();
+  if (display_controls_warning_->isEnabled() != show_warning) {
+    display_controls_warning_->setEnabled(show_warning);
+    display_controls_warning_->setVisible(show_warning);
+  }
+}
+
+void BrowserWidget::enableModuleView()
+{
+  display_controls_->setControlByPath("Misc/Module view", true, Qt::Checked);
 }
 
 void BrowserWidget::makeMenu()
@@ -226,11 +258,10 @@ Selected BrowserWidget::getSelectedFromIndex(const QModelIndex& index)
     auto* inst = data.value<odb::dbInst*>();
     if (inst != nullptr) {
       return gui->makeSelected(inst);
-    } else {
-      auto* module = data.value<odb::dbModule*>();
-      if (module != nullptr) {
-        return gui->makeSelected(module);
-      }
+    }
+    auto* module = data.value<odb::dbModule*>();
+    if (module != nullptr) {
+      return gui->makeSelected(module);
     }
   }
 
@@ -322,7 +353,7 @@ void BrowserWidget::updateModel()
 
     insts.push_back(inst);
   }
-  addInstanceItems(insts, "Physical only", root);
+  addInstanceItems(insts, "Physical only", root, true);
 
   view_->header()->resizeSections(QHeaderView::ResizeToContents);
   model_modified_ = false;
@@ -349,7 +380,7 @@ BrowserWidget::ModuleStats BrowserWidget::populateModule(odb::dbModule* module,
   for (auto* inst : module->getInsts()) {
     insts.push_back(inst);
   }
-  stats += addInstanceItems(insts, "Leaf instances", parent);
+  stats += addInstanceItems(insts, "Leaf instances", parent, false);
 
   return stats;
 }
@@ -357,7 +388,8 @@ BrowserWidget::ModuleStats BrowserWidget::populateModule(odb::dbModule* module,
 BrowserWidget::ModuleStats BrowserWidget::addInstanceItems(
     const std::vector<odb::dbInst*>& insts,
     const std::string& title,
-    QStandardItem* parent)
+    QStandardItem* parent,
+    bool check_instance_limits)
 {
   auto make_leaf_item = [](const std::string& title) -> QStandardItem* {
     QStandardItem* leaf = new QStandardItem(QString::fromStdString(title));
@@ -379,7 +411,9 @@ BrowserWidget::ModuleStats BrowserWidget::addInstanceItems(
       leaf_parent.item
           = make_leaf_item(inst_descriptor_->getInstanceTypeText(type));
     }
-    leaf_parent.stats += addInstanceItem(inst, leaf_parent.item);
+    const bool create_row = !check_instance_limits
+                            || leaf_parent.stats.insts < max_visible_leafs_;
+    leaf_parent.stats += addInstanceItem(inst, leaf_parent.item, create_row);
   }
 
   ModuleStats total;
@@ -400,17 +434,13 @@ BrowserWidget::ModuleStats BrowserWidget::addInstanceItems(
 }
 
 BrowserWidget::ModuleStats BrowserWidget::addInstanceItem(odb::dbInst* inst,
-                                                          QStandardItem* parent)
+                                                          QStandardItem* parent,
+                                                          bool create_row)
 {
-  QStandardItem* item = new QStandardItem(inst->getConstName());
-  item->setEditable(false);
-  item->setSelectable(true);
-  item->setData(QVariant::fromValue(inst));
-
   auto* box = inst->getBBox();
 
   ModuleStats stats;
-  stats.area = box->getDX() * box->getDY();
+  stats.area = box->getDX() * (int64_t) box->getDY();
 
   if (inst->isBlock()) {
     stats.incrementMacros();
@@ -418,7 +448,14 @@ BrowserWidget::ModuleStats BrowserWidget::addInstanceItem(odb::dbInst* inst,
     stats.incrementInstances();
   }
 
-  makeRowItems(item, inst->getMaster()->getConstName(), stats, parent, true);
+  if (create_row) {
+    QStandardItem* item = new QStandardItem(inst->getConstName());
+    item->setEditable(false);
+    item->setSelectable(true);
+    item->setData(QVariant::fromValue(inst));
+
+    makeRowItems(item, inst->getMaster()->getConstName(), stats, parent, true);
+  }
 
   return stats;
 }
@@ -496,9 +533,8 @@ void BrowserWidget::makeRowItems(QStandardItem* item,
       = [&locale](int current, int total, bool is_leaf) -> QString {
     if (!is_leaf) {
       return locale.toString(current) + "/" + locale.toString(total);
-    } else {
-      return locale.toString(total);
     }
+    return locale.toString(total);
   };
 
   QStandardItem* master_item
@@ -655,7 +691,7 @@ bool BrowserWidget::eventFilter(QObject* obj, QEvent* event)
   return QDockWidget::eventFilter(obj, event);
 }
 
-const QIcon BrowserWidget::makeModuleIcon(const QColor& color)
+QIcon BrowserWidget::makeModuleIcon(const QColor& color)
 {
   QPixmap swatch(20, 20);
   swatch.fill(color);

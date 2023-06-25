@@ -35,8 +35,13 @@
 #include "FlexPA.h"
 #include "FlexPA_graphics.h"
 #include "db/infra/frTime.h"
+#include "distributed/PinAccessJobDescription.h"
+#include "distributed/frArchive.h"
+#include "dst/Distributed.h"
+#include "dst/JobMessage.h"
 #include "frProfileTask.h"
 #include "gc/FlexGC.h"
+#include "serialization.h"
 #include "utl/exception.h"
 
 using namespace std;
@@ -257,9 +262,9 @@ void FlexPA::prepPoint_pin_genPoints_rect_ap_helper(
 
     Point e = fpt;
     if (fpt.x() != end.x())
-      e.x() = end.x();
+      e.setX(end.x());
     else if (fpt.y() != end.y())
-      e.y() = end.y();
+      e.setY(end.y());
     if (!(e == fpt)) {
       frPathSeg ps;
       ps.setPoints_safe(fpt, e);
@@ -343,8 +348,8 @@ void FlexPA::prepPoint_pin_genPoints_rect_genEnc(
   for (auto& viaDef : viaDefs) {
     frVia via(viaDef);
     Rect box = via.getLayer1BBox();
-    auto viaWidth = box.xMax() - box.xMin();
-    auto viaHeight = box.yMax() - box.yMin();
+    auto viaWidth = box.dx();
+    auto viaHeight = box.dy();
     if (viaWidth > rectWidth || viaHeight > rectHeight) {
       // cout <<"@@@" <<viaDef->getName() <<" rect " <<rectWidth <<" "
       // <<rectHeight <<" via " <<viaWidth <<" " <<viaHeight <<endl;
@@ -693,7 +698,7 @@ void FlexPA::prepPoint_pin_genPoints_layerShapes(
     allowVia = false;
   }
   // lower layer is current layer
-  // righway on grid only forbid off track up via access on upper layer
+  // rightway on grid only forbid off track up via access on upper layer
   auto upperLayer = (layerNum + 2 <= getDesign()->getTech()->getTopLayerNum())
                         ? getDesign()->getTech()->getLayer(layerNum + 2)
                         : nullptr;
@@ -795,7 +800,7 @@ bool FlexPA::prepPoint_pin_checkPoint_planar_ep(
     default:
       logger_->error(DRT, 70, "Unexpected direction in getPlanarEP.");
   }
-  ep.set(x, y);
+  ep = {x, y};
   gtl::point_data<frCoord> pt(x, y);
   bool outside = true;
   for (auto& layerPoly : layerPolys) {
@@ -831,18 +836,25 @@ void FlexPA::prepPoint_pin_checkPoint_planar(
     ap->setAccess(dir, false);
     return;
   }
-
+  // TODO: EDIT HERE Wrongdirection segments
+  auto layer = getDesign()->getTech()->getLayer(ap->getLayerNum());
   auto ps = make_unique<frPathSeg>();
-  auto style = getDesign()
-                   ->getTech()
-                   ->getLayer(ap->getLayerNum())
-                   ->getDefaultSegStyle();
+  auto style = layer->getDefaultSegStyle();
   if (dir == frDirEnum::W || dir == frDirEnum::S) {
     ps->setPoints(ep, bp);
     style.setEndStyle(frcTruncateEndStyle, 0);
   } else {
     ps->setPoints(bp, ep);
     style.setBeginStyle(frcTruncateEndStyle, 0);
+  }
+  if (layer->getDir() == dbTechLayerDir::VERTICAL) {
+    if (dir == frDirEnum::W || dir == frDirEnum::E) {
+      style.setWidth(layer->getWrongDirWidth());
+    }
+  } else {
+    if (dir == frDirEnum::S || dir == frDirEnum::N) {
+      style.setWidth(layer->getWrongDirWidth());
+    }
   }
   ps->setLayerNum(ap->getLayerNum());
   ps->setStyle(style);
@@ -856,7 +868,11 @@ void FlexPA::prepPoint_pin_checkPoint_planar(
   FlexGCWorker gcWorker(getTech(), logger_);
   gcWorker.setIgnoreMinArea();
   gcWorker.setIgnoreCornerSpacing();
-  Rect extBox(bp.x() - 3000, bp.y() - 3000, bp.x() + 3000, bp.y() + 3000);
+  const auto pitch = layer->getPitch();
+  const auto extension = 5 * pitch;
+  Rect tmpBox(bp, bp);
+  Rect extBox;
+  tmpBox.bloat(extension, extBox);
   gcWorker.setExtBox(extBox);
   gcWorker.setDrcBox(extBox);
   if (instTerm) {
@@ -1085,7 +1101,11 @@ bool FlexPA::prepPoint_pin_checkPoint_via_helper(frAccessPoint* ap,
   gcWorker.setIgnoreMinArea();
   gcWorker.setIgnoreLongSideEOL();
   gcWorker.setIgnoreCornerSpacing();
-  Rect extBox(bp.x() - 3000, bp.y() - 3000, bp.x() + 3000, bp.y() + 3000);
+  const auto pitch = getTech()->getLayer(ap->getLayerNum())->getPitch();
+  const auto extension = 5 * pitch;
+  Rect tmpBox(bp, bp);
+  Rect extBox;
+  tmpBox.bloat(extension, extBox);
   gcWorker.setExtBox(extBox);
   gcWorker.setDrcBox(extBox);
   if (instTerm) {
@@ -1392,6 +1412,26 @@ int FlexPA::prepPoint_pin(T* pin, frInstTerm* instTerm)
   return nAps;
 }
 
+static inline void serializePatterns(
+    const std::vector<std::vector<std::unique_ptr<FlexPinAccessPattern>>>&
+        patterns,
+    const std::string& file_name)
+{
+  std::ofstream file(file_name.c_str());
+  frOArchive ar(file);
+  registerTypes(ar);
+  ar << patterns;
+  file.close();
+}
+static inline void serializeInstRows(
+    const std::vector<std::vector<frInst*>>& inst_rows,
+    const std::string& file_name)
+{
+  paUpdate update;
+  update.setInstRows(inst_rows);
+  paUpdate::serialize(update, file_name);
+}
+
 void FlexPA::prepPoint()
 {
   ProfileTask profile("PA:point");
@@ -1488,6 +1528,115 @@ void FlexPA::prepPoint()
   }
 }
 
+void FlexPA::prepPatternInstRows(std::vector<std::vector<frInst*>> instRows)
+{
+  ThreadException exception;
+  int cnt = 0;
+  if (isDistributed()) {
+    omp_set_num_threads(cloud_sz_);
+    int batch_size = instRows.size() / cloud_sz_;
+    paUpdate allUpdates;
+#pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < cloud_sz_; i++) {
+      try {
+        vector<std::vector<frInst*>>::const_iterator start
+            = instRows.begin() + (i * batch_size);
+        vector<std::vector<frInst*>>::const_iterator end
+            = (i == cloud_sz_ - 1) ? instRows.end() : start + batch_size;
+        std::vector<std::vector<frInst*>> batch(start, end);
+        std::string path = fmt::format("{}/batch_{}.bin", shared_vol_, i);
+        serializeInstRows(batch, path);
+        dst::JobMessage msg(dst::JobMessage::PIN_ACCESS,
+                            dst::JobMessage::UNICAST),
+            result;
+        std::unique_ptr<PinAccessJobDescription> uDesc
+            = std::make_unique<PinAccessJobDescription>();
+        uDesc->setPath(path);
+        uDesc->setType(PinAccessJobDescription::INST_ROWS);
+        msg.setJobDescription(std::move(uDesc));
+        bool ok
+            = dist_->sendJob(msg, remote_host_.c_str(), remote_port_, result);
+        if (!ok)
+          logger_->error(utl::DRT, 329, "Error sending INST_ROWS Job to cloud");
+        auto desc
+            = static_cast<PinAccessJobDescription*>(result.getJobDescription());
+        paUpdate update;
+        paUpdate::deserialize(design_, update, desc->getPath());
+        for (const auto& [term, aps] : update.getGroupResults()) {
+          term->setAccessPoints(aps);
+        }
+#pragma omp critical
+        {
+          for (const auto& res : update.getGroupResults()) {
+            allUpdates.addGroupResult(res);
+          }
+          cnt += batch.size();
+          if (VERBOSE > 0) {
+            if (cnt < 10000) {
+              if (cnt % 1000 == 0) {
+                logger_->info(DRT, 110, "  Complete {} groups.", cnt);
+              }
+            } else {
+              if (cnt % 10000 == 0) {
+                logger_->info(DRT, 111, "  Complete {} groups.", cnt);
+              }
+            }
+          }
+        }
+      } catch (...) {
+        exception.capture();
+      }
+    }
+    // send updates back to workers
+    dst::JobMessage msg(dst::JobMessage::PIN_ACCESS,
+                        dst::JobMessage::BROADCAST),
+        result;
+    std::string updatesPath = fmt::format("{}/final_updates.bin", shared_vol_);
+    paUpdate::serialize(allUpdates, updatesPath);
+    std::unique_ptr<PinAccessJobDescription> uDesc
+        = std::make_unique<PinAccessJobDescription>();
+    uDesc->setPath(updatesPath);
+    uDesc->setType(PinAccessJobDescription::UPDATE_PA);
+    msg.setJobDescription(std::move(uDesc));
+    bool ok = dist_->sendJob(msg, remote_host_.c_str(), remote_port_, result);
+    if (!ok)
+      logger_->error(utl::DRT, 332, "Error sending UPDATE_PA Job to cloud");
+  } else {
+    omp_set_num_threads(MAX_THREADS);
+    // choose access pattern of a row of insts
+    int rowIdx = 0;
+#pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < (int) instRows.size(); i++) {
+      try {
+        auto& instRow = instRows[i];
+        genInstRowPattern(instRow);
+#pragma omp critical
+        {
+          rowIdx++;
+          cnt++;
+          if (VERBOSE > 0) {
+            if (cnt < 10000) {
+              if (cnt % 1000 == 0) {
+                logger_->info(DRT, 82, "  Complete {} groups.", cnt);
+              }
+            } else {
+              if (cnt % 10000 == 0) {
+                logger_->info(DRT, 83, "  Complete {} groups.", cnt);
+              }
+            }
+          }
+        }
+      } catch (...) {
+        exception.capture();
+      }
+    }
+  }
+  exception.rethrow();
+  if (VERBOSE > 0) {
+    logger_->info(DRT, 84, "  Complete {} groups.", cnt);
+  }
+}
+
 void FlexPA::prepPattern()
 {
   ProfileTask profile("PA:pattern");
@@ -1556,6 +1705,22 @@ void FlexPA::prepPattern()
   if (VERBOSE > 0) {
     logger_->info(DRT, 81, "  Complete {} unique inst patterns.", cnt);
   }
+  if (isDistributed()) {
+    dst::JobMessage msg(dst::JobMessage::PIN_ACCESS,
+                        dst::JobMessage::BROADCAST),
+        result;
+    std::unique_ptr<PinAccessJobDescription> uDesc
+        = std::make_unique<PinAccessJobDescription>();
+    std::string patterns_file = fmt::format("{}/patterns.bin", shared_vol_);
+    serializePatterns(uniqueInstPatterns_, patterns_file);
+    uDesc->setPath(patterns_file);
+    uDesc->setType(PinAccessJobDescription::UPDATE_PATTERNS);
+    msg.setJobDescription(std::move(uDesc));
+    bool ok = dist_->sendJob(msg, remote_host_.c_str(), remote_port_, result);
+    if (!ok)
+      logger_->error(
+          utl::DRT, 330, "Error sending UPDATE_PATTERNS Job to cloud");
+  }
 
   // prep pattern for each row
   std::vector<frInst*> insts;
@@ -1597,41 +1762,7 @@ void FlexPA::prepPattern()
   if (!rowInsts.empty()) {
     instRows.push_back(rowInsts);
   }
-
-  // choose access pattern of a row of insts
-  int rowIdx = 0;
-  cnt = 0;
-  // for (auto &instRow: instRows) {
-  omp_set_num_threads(MAX_THREADS);
-#pragma omp parallel for schedule(dynamic)
-  for (int i = 0; i < (int) instRows.size(); i++) {
-    try {
-      auto& instRow = instRows[i];
-      genInstRowPattern(instRow);
-#pragma omp critical
-      {
-        rowIdx++;
-        cnt++;
-        if (VERBOSE > 0) {
-          if (cnt < 10000) {
-            if (cnt % 1000 == 0) {
-              logger_->info(DRT, 82, "  Complete {} groups.", cnt);
-            }
-          } else {
-            if (cnt % 10000 == 0) {
-              logger_->info(DRT, 83, "  Complete {} groups.", cnt);
-            }
-          }
-        }
-      }
-    } catch (...) {
-      exception.capture();
-    }
-  }
-  exception.rethrow();
-  if (VERBOSE > 0) {
-    logger_->info(DRT, 84, "  Complete {} groups.", cnt);
-  }
+  prepPatternInstRows(instRows);
 }
 
 void FlexPA::revertAccessPoints()
@@ -1690,11 +1821,11 @@ void FlexPA::genInstRowPattern(std::vector<frInst*>& insts)
   genInstRowPattern_commit(nodes, insts);
 }
 
-// init dp node array for valide access patterns
+// init dp node array for valid access patterns
 void FlexPA::genInstRowPattern_init(std::vector<FlexDPNode>& nodes,
                                     const std::vector<frInst*>& insts)
 {
-  // init virutal nodes
+  // init virtual nodes
   int startNodeIdx = getFlatIdx(-1, 0, ACCESS_PATTERN_END_ITERATION_NUM);
   int endNodeIdx
       = getFlatIdx(insts.size(), 0, ACCESS_PATTERN_END_ITERATION_NUM);
@@ -2268,9 +2399,9 @@ bool FlexPA::genPatterns_gc(std::set<frBlockObject*> targetObjs,
   for (auto& [connFig, owner] : objs) {
     Rect bbox = connFig->getBBox();
     llx = std::min(llx, bbox.xMin());
-    lly = std::min(llx, bbox.yMin());
-    urx = std::max(llx, bbox.xMax());
-    ury = std::max(llx, bbox.yMax());
+    lly = std::min(lly, bbox.yMin());
+    urx = std::max(urx, bbox.xMax());
+    ury = std::max(ury, bbox.yMax());
   }
   Rect extBox(llx - 3000, lly - 3000, urx + 3000, ury + 3000);
   // Rect extBox(llx - 1000, lly - 1000, urx + 1000, ury + 1000);

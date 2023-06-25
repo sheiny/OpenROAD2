@@ -224,18 +224,6 @@ namespace odb {
     //User Code End CopyConstructor
   }
   
-  {% for i in range(klass.constructors|length) %}
-    _{{klass.name}}::_{{klass.name}}(_dbDatabase* db{% for arg in klass.constructors[i].args %},{{arg.type}} {{arg.name}}{% endfor %})
-    {
-      {% for arg in klass.constructors[i].args %}
-        {% if arg.get('field') is not none %}
-          this->{{arg.field}}={{arg.name}};
-        {% endif %}
-      {% endfor %}
-      //User Code Begin CustomConstructor{{i}}
-      //User Code End CustomConstructor{{i}}
-    }
-  {% endfor %}
   dbIStream& operator>>(dbIStream& stream, _{{klass.name}}& obj)
   {
     {% for field in klass.fields %}
@@ -248,6 +236,9 @@ namespace odb {
         stream >> *{{field.name}}_bit_field;
       {% else %}
         {% if 'no-serial' not in field.flags %}
+          {% if 'schema' in field %}
+          if (obj.getDatabase()->isSchema({{field.schema}}))
+          {% endif %}
           stream >> {% if field.table %}*{% endif %}obj.{{field.name}};
         {% endif %}
       {% endif %}
@@ -268,6 +259,9 @@ namespace odb {
         stream << *{{field.name}}_bit_field;
       {% else %}
         {% if 'no-serial' not in field.flags %}
+          {% if 'schema' in field %}
+          if (obj.getDatabase()->isSchema({{field.schema}}))
+          {% endif %}
           stream << {% if field.table %}*{% endif %}obj.{{field.name}};
         {% endif %}
       {% endif %}

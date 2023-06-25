@@ -37,6 +37,7 @@
 #include "cts/TritonCTS.h"
 #include "CtsOptions.h"
 #include "TechChar.h"
+#include "CtsGraphics.h"
 #include "ord/OpenRoad.hh"
 
 namespace ord {
@@ -51,13 +52,10 @@ using ord::getTritonCts;
 
 %include "../../Exception.i"
 
-%inline %{
+%ignore cts::CtsOptions::setObserver;
+%ignore cts::CtsOptions::getObserver;
 
-void
-set_simple_cts(bool enable)
-{
-  getTritonCts()->getParms()->setSimpleCts(enable);
-}
+%inline %{
 
 void
 set_sink_clustering(bool enable)
@@ -102,15 +100,15 @@ set_root_buffer(const char* buffer)
 }
 
 void
-set_slew_inter(double slew)
+set_slew_steps(int steps)
 {
-  getTritonCts()->getParms()->setSlewInter(slew);
+  getTritonCts()->getParms()->setSlewSteps(steps);
 }
 
 void
-set_cap_inter(double cap)
+set_cap_steps(int steps)
 {
-  getTritonCts()->getParms()->setCapInter(cap);
+  getTritonCts()->getParms()->setCapSteps(steps);
 }
 
 void
@@ -122,7 +120,7 @@ set_metric_output(const char* file)
 void
 set_debug_cmd()
 {
-  getTritonCts()->getParms()->setGuiDebug();
+  getTritonCts()->getParms()->setObserver(std::make_unique<CtsGraphics>());
 }
 
 void
@@ -149,12 +147,6 @@ set_branching_point_buffers_distance(double distance)
 {
   getTritonCts()->getParms()->setVertexBuffersEnabled(true);
   getTritonCts()->getParms()->setVertexBufferDistance(distance);
-}
-
-void
-set_disable_post_cts(bool disable)
-{
-  getTritonCts()->getParms()->setRunPostCtsOpt(!(disable));
 }
 
 void

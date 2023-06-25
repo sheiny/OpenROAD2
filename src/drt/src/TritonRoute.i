@@ -93,7 +93,8 @@ void detailed_route_cmd(const char* outputMazeFile,
                         bool noPa,
                         bool singleStepDR,
                         int minAccessPoints,
-                        bool saveGuideUpdates)
+                        bool saveGuideUpdates,
+                        const char* repairPDNLayerName)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->setParams({outputMazeFile,
@@ -114,8 +115,10 @@ void detailed_route_cmd(const char* outputMazeFile,
                     !noPa,
                     singleStepDR,
                     minAccessPoints,
-                    saveGuideUpdates});
+                    saveGuideUpdates,
+                    repairPDNLayerName});
   router->main();
+  router->setDistributed(false);
 }
 
 void pin_access_cmd(const char* dbProcessNode,
@@ -133,6 +136,7 @@ void pin_access_cmd(const char* dbProcessNode,
   params.minAccessPoints = minAccessPoints;
   router->setParams(params);
   router->pinAccess();
+  router->setDistributed(false);
 }
 
 void detailed_route_cmd(const char* param_file)
@@ -161,7 +165,8 @@ set_detailed_route_debug_cmd(const char* net_name,
                              bool pa_edge,
                              bool pa_commit,
                              const char* dumpDir,
-                             bool ta)
+                             bool ta,
+                             bool write_net_tracks)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->setDebugNetName(net_name);
@@ -178,30 +183,34 @@ set_detailed_route_debug_cmd(const char* net_name,
   router->setDebugPaEdge(pa_edge);
   router->setDebugPaCommit(pa_commit);
   router->setDebugTA(ta);
+  router->setDebugWriteNetTracks(write_net_tracks);
 }
 
 void
 set_worker_debug_params(int maze_end_iter,
                         int drc_cost,
                         int marker_cost,
+                        int fixed_shape_cost,
+                        int marker_decay,
                         int ripup_mode,
                         int follow_guide)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
-  router->setDebugWorkerParams(maze_end_iter, drc_cost, marker_cost, ripup_mode, follow_guide);
+  router->setDebugWorkerParams(maze_end_iter, drc_cost, marker_cost, fixed_shape_cost,
+                               marker_decay, ripup_mode, follow_guide);
 }
 
 void
-run_worker_cmd(const char* dump_dir, const char* drc_rpt)
+run_worker_cmd(const char* dump_dir, const char* worker_dir, const char* drc_rpt)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->updateGlobals(fmt::format("{}/init_globals.bin", dump_dir).c_str());
   router->resetDb(fmt::format("{}/design.odb", dump_dir).c_str());
-  router->updateGlobals(fmt::format("{}/globals.bin", dump_dir).c_str());
-  router->updateDesign(fmt::format("{}/updates.bin", dump_dir).c_str());
-  router->updateGlobals(fmt::format("{}/worker_globals.bin", dump_dir).c_str());
+  router->updateGlobals(fmt::format("{}/{}/globals.bin", dump_dir, worker_dir).c_str());
+  router->updateDesign(fmt::format("{}/{}/updates.bin", dump_dir, worker_dir).c_str());
+  router->updateGlobals(fmt::format("{}/{}/worker_globals.bin", dump_dir, worker_dir).c_str());
   
-  router->debugSingleWorker(dump_dir, drc_rpt);
+  router->debugSingleWorker(fmt::format("{}/{}", dump_dir, worker_dir), drc_rpt);
 }
 
 void detailed_route_step_drt(int size,
@@ -209,12 +218,15 @@ void detailed_route_step_drt(int size,
                              int mazeEndIter,
                              int workerDRCCost,
                              int workerMarkerCost,
+                             int workerFixedShapeCost,
+                             float workerMarkerDecay,
                              int ripupMode,
                              bool followGuide)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->stepDR(size, offset, mazeEndIter, workerDRCCost,
-                 workerMarkerCost, ripupMode, followGuide);
+                 workerMarkerCost, workerFixedShapeCost,
+                 workerMarkerDecay, ripupMode, followGuide);
 }
 
 void step_end()
@@ -223,7 +235,7 @@ void step_end()
   router->endFR();
 }
 
-void check_drc(const char* drc_file, int x1, int y1, int x2, int y2)
+void check_drc_cmd(const char* drc_file, int x1, int y1, int x2, int y2)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->checkDRC(drc_file, x1, y1, x2, y2);

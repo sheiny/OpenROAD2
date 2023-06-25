@@ -31,8 +31,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef __REPLACE_ROUTE_BASE__
-#define __REPLACE_ROUTE_BASE__
+#pragma once
 
 #include <memory>
 #include <vector>
@@ -51,6 +50,7 @@ class Logger;
 
 namespace gpl {
 
+class NesterovBaseCommon;
 class NesterovBase;
 class GNet;
 class Die;
@@ -223,7 +223,8 @@ class RouteBase
   RouteBase(RouteBaseVars rbVars,
             odb::dbDatabase* db,
             grt::GlobalRouter* grouter,
-            std::shared_ptr<NesterovBase> nb,
+            std::shared_ptr<NesterovBaseCommon> nbc,
+            std::vector<std::shared_ptr<NesterovBase>> nbVec,
             utl::Logger* log);
   ~RouteBase();
 
@@ -251,7 +252,8 @@ class RouteBase
   odb::dbDatabase* db_;
   grt::GlobalRouter* grouter_;
 
-  std::shared_ptr<NesterovBase> nb_;
+  std::shared_ptr<NesterovBaseCommon> nbc_;
+  std::vector<std::shared_ptr<NesterovBase>> nbVec_;
   utl::Logger* log_;
 
   std::unique_ptr<TileGrid> tg_;
@@ -282,5 +284,3 @@ class RouteBase
   void initGCells();
 };
 }  // namespace gpl
-
-#endif

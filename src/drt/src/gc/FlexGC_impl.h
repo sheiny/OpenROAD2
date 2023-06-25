@@ -26,8 +26,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FR_FLEXGC_IMPL_H_
-#define _FR_FLEXGC_IMPL_H_
+#pragma once
 
 #include <memory>
 
@@ -147,13 +146,7 @@ class FlexGCWorker::Impl
   std::vector<std::unique_ptr<gcNet>> nets_;
 
   std::vector<std::unique_ptr<frMarker>> markers_;
-  std::map<std::tuple<Rect,
-                      frLayerNum,
-                      frConstraint*,
-                      frBlockObject*,
-                      frBlockObject*>,
-           frMarker*>
-      mapMarkers_;
+  std::map<MarkerId, frMarker*> mapMarkers_;
   std::vector<std::unique_ptr<drPatchWire>> pwires_;
 
   FlexGCWorkerRegionQuery rq_;
@@ -465,6 +458,9 @@ class FlexGCWorker::Impl
       gcRect* ptr1,
       gcRect* ptr2,
       frLef58CutSpacingConstraint* con);
+  // LEF58_KEEPOUTZONE
+  void checKeepOutZone_main(gcRect* rect, frLef58KeepOutZoneConstraint* con);
+
   frCoord checkLef58CutSpacing_getMaxSpcVal(frLef58CutSpacingConstraint* con);
   void checkMetalShape_lef58MinStep(gcPin* pin);
   void checkMetalShape_lef58MinStep_noBetweenEol(gcPin* pin,
@@ -493,6 +489,8 @@ class FlexGCWorker::Impl
                                            odb::dbTechLayerAreaRule* db_rule,
                                            bool& check_rect_width);
   void checkMetalShape_addPatch(gcPin* pin, int min_area);
+  void checkMetalShape_patchOwner_helper(drPatchWire* patch,
+                                         const std::vector<drNet*>* dr_nets);
 
   void checkMetalWidthViaTable();
   void checkMetalWidthViaTable_main(gcRect* rect);
@@ -509,5 +507,3 @@ class FlexGCWorker::Impl
   bool isWrongDir(gcSegment* edge);
 };
 }  // namespace fr
-
-#endif

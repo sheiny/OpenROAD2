@@ -74,7 +74,7 @@ public:
                   // Max buffer count as percent of design instance count.
                   float max_buffer_percent,
                   int max_passes);
-  void repairHold(Pin *end_pin,
+  void repairHold(const Pin *end_pin,
                   double setup_margin,
                   double hold_margin,
                   bool allow_setup_violations,
@@ -130,6 +130,7 @@ private:
 
   int resize_count_;
   int inserted_buffer_count_;
+  int cloned_gate_count_;
   const MinMax *min_;
   const MinMax *max_;
   const int min_index_;
