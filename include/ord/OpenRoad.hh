@@ -111,7 +111,7 @@ namespace rcx {
 class Ext;
 }
 
-namespace triton_route {
+namespace drt {
 class TritonRoute;
 }
 
@@ -169,7 +169,10 @@ class OpenRoad
   // Tools should use their initialization functions to get the
   // OpenRoad object and/or any other tools they need to reference.
   static OpenRoad* openRoad();
-  void init(Tcl_Interp* tcl_interp);
+  static void setOpenRoad(OpenRoad* app, bool reinit_ok = false);
+  void init(Tcl_Interp* tcl_interp,
+            const char* log_filename,
+            const char* metrics_filename);
 
   Tcl_Interp* tclInterp() { return tcl_interp_; }
   utl::Logger* getLogger() { return logger_; }
@@ -187,7 +190,7 @@ class OpenRoad
   mpl::MacroPlacer* getMacroPlacer() { return macro_placer_; }
   mpl2::MacroPlacer2* getMacroPlacer2() { return macro_placer2_; }
   rcx::Ext* getOpenRCX() { return extractor_; }
-  triton_route::TritonRoute* getTritonRoute() { return detailed_router_; }
+  drt::TritonRoute* getTritonRoute() { return detailed_router_; }
   gpl::Replace* getReplace() { return replace_; }
   psm::PDNSim* getPDNSim() { return pdnsim_; }
   grt::GlobalRouter* getGlobalRouter() { return global_router_; }
@@ -208,16 +211,22 @@ class OpenRoad
 
   void readLef(const char* filename,
                const char* lib_name,
+               const char* tech_name,
                bool make_tech,
                bool make_library);
 
   void readDef(const char* filename,
+               odb::dbTech* tech,
                bool continue_on_errors,
                bool floorplan_init,
                bool incremental,
                bool child);
 
   void writeLef(const char* filename);
+
+  void writeAbstractLef(const char* filename,
+                        int bloat_factor,
+                        bool bloat_occupied_layers);
 
   void writeDef(const char* filename,
                 // major.minor (avoid including defout.h)
@@ -228,13 +237,14 @@ class OpenRoad
                 bool includeFillers);
 
   void readVerilog(const char* filename);
-  void linkDesign(const char* design_name);
-
+  void linkDesign(const char* design_name, bool hierarchy);
   // Used if a design is created programmatically rather than loaded
   // to notify the tools (eg dbSta, gui).
   void designCreated();
 
-  void readDb(const char* filename);
+  void readDb(std::istream& stream);
+  void readDb(const char* filename, bool hierarchy = false);
+  void writeDb(std::ostream& stream);
   void writeDb(const char* filename);
 
   void diffDbs(const char* filename1, const char* filename2, const char* diffs);
@@ -245,6 +255,14 @@ class OpenRoad
 
   void addObserver(OpenRoadObserver* observer);
   void removeObserver(OpenRoadObserver* observer);
+
+  static const char* getVersion();
+  static const char* getGitDescribe();
+
+  static bool getGPUCompileOption();
+  static bool getPythonCompileOption();
+  static bool getGUICompileOption();
+  static bool getChartsCompileOption();
 
  protected:
   ~OpenRoad();
@@ -269,7 +287,7 @@ class OpenRoad
   cts::TritonCTS* tritonCts_ = nullptr;
   tap::Tapcell* tapcell_ = nullptr;
   rcx::Ext* extractor_ = nullptr;
-  triton_route::TritonRoute* detailed_router_ = nullptr;
+  drt::TritonRoute* detailed_router_ = nullptr;
   ant::AntennaChecker* antenna_checker_ = nullptr;
   gpl::Replace* replace_ = nullptr;
   psm::PDNSim* pdnsim_ = nullptr;
@@ -284,8 +302,13 @@ class OpenRoad
   std::set<OpenRoadObserver*> observers_;
 
   int threads_ = 1;
+
+  static OpenRoad* app_;
+
+  friend class Tech;
 };
 
 int tclAppInit(Tcl_Interp* interp);
+int tclInit(Tcl_Interp* interp);
 
 }  // namespace ord

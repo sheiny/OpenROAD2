@@ -33,9 +33,9 @@
 #pragma once
 
 #include "dbCore.h"
-#include "dbId.h"
-#include "dbTypes.h"
-#include "odb.h"
+#include "odb/dbId.h"
+#include "odb/dbTypes.h"
+#include "odb/odb.h"
 
 namespace odb {
 
@@ -82,7 +82,7 @@ class _dbRow : public _dbObject
 
 inline _dbRow::_dbRow(_dbDatabase*, const _dbRow& r)
     : _flags(r._flags),
-      _name(NULL),
+      _name(nullptr),
       _lib(r._lib),
       _site(r._site),
       _x(r._x),
@@ -101,7 +101,7 @@ inline _dbRow::_dbRow(_dbDatabase*)
   _flags._orient = dbOrientType::R0;
   _flags._dir = dbRowDir::HORIZONTAL;
   _flags._spare_bits = 0;
-  _name = NULL;
+  _name = nullptr;
   _x = 0;
   _y = 0;
   _site_cnt = 0;
@@ -110,8 +110,9 @@ inline _dbRow::_dbRow(_dbDatabase*)
 
 inline _dbRow::~_dbRow()
 {
-  if (_name)
+  if (_name) {
     free((void*) _name);
+  }
 }
 
 inline dbOStream& operator<<(dbOStream& stream, const _dbRow& row)

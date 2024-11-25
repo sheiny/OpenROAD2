@@ -35,7 +35,9 @@
 
 %{
 #include "ppl/IOPlacer.h"
+#include "IOPlacerRenderer.h"
 #include "ord/OpenRoad.hh"
+
 
 namespace ord {
 // Defined in OpenRoad.i
@@ -116,21 +118,12 @@ tclSetStdSeq(Tcl_Obj *const source,
 
 %include "../../Exception.i"
 
+%ignore ppl::IOPlacer::getRenderer;
+%ignore ppl::IOPlacer::setRenderer;
+
 %inline %{
 
 namespace ppl {
-
-void
-set_num_slots(int numSlots)
-{
-  getIOPlacer()->getParameters()->setNumSlots(numSlots);
-}
-
-void
-set_slots_factor(float factor)
-{
-  getIOPlacer()->getParameters()->setSlotsFactor(factor);
-}
 
 void
 set_slots_per_section(int slots_per_section)
@@ -225,9 +218,9 @@ add_pin_group(PinList *pin_list, bool order)
 }
 
 void
-run_io_placement(bool randomMode)
+run_hungarian_matching(bool randomMode)
 {
-  getIOPlacer()->run(randomMode);
+  getIOPlacer()->runHungarianMatching(randomMode);
 }
 
 void
@@ -278,6 +271,11 @@ set_min_distance_in_tracks(bool in_tracks)
   getIOPlacer()->getParameters()->setMinDistanceInTracks(in_tracks);
 }
 
+void set_pin_placement_file(const char* file_name)
+{
+  getIOPlacer()->getParameters()->setPinPlacementFile(file_name);
+}
+
 void
 create_pin_shape_pattern(odb::dbTechLayer* layer, int x_step, int y_step,
                          const odb::Rect& region,
@@ -296,9 +294,9 @@ get_top_layer()
 void
 place_pin(odb::dbBTerm* bterm, odb::dbTechLayer* layer,
           int x, int y, int width, int height,
-          bool force_to_die_bound)
+          bool force_to_die_bound, bool placed_status)
 {
-  getIOPlacer()->placePin(bterm, layer, x, y, width, height, force_to_die_bound);
+  getIOPlacer()->placePin(bterm, layer, x, y, width, height, force_to_die_bound, placed_status);
 }
 
 void
@@ -311,6 +309,45 @@ void
 clear_constraints()
 {
   getIOPlacer()->clearConstraints();
+}
+
+void
+set_simulated_annealing(float temperature,
+                        int max_iterations,
+                        int perturb_per_iter,
+                        float alpha)
+{
+  getIOPlacer()->setAnnealingConfig(temperature, max_iterations, perturb_per_iter, alpha);
+}
+
+void
+simulated_annealing_debug(int iters_between_paintings,
+                          bool no_pause_mode)
+{
+  if (!gui::Gui::enabled()) {
+    return;
+  }
+
+  IOPlacer* ioplacer = getIOPlacer();
+  if(ioplacer->getRenderer() == nullptr) {
+    ioplacer->setRenderer(std::make_unique<IOPlacerRenderer>());
+  }
+
+  getIOPlacer()->setAnnealingDebugOn();
+  getIOPlacer()->setAnnealingDebugNoPauseMode(no_pause_mode);
+  getIOPlacer()->setAnnealingDebugPaintInterval(iters_between_paintings);
+}
+
+void
+run_annealing(bool random)
+{
+  getIOPlacer()->runAnnealing(random);
+}
+
+void
+write_pin_placement(const char* file_name, bool placed)
+{
+  getIOPlacer()->writePinPlacement(file_name, placed);
 }
 
 } // namespace

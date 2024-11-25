@@ -32,15 +32,15 @@
 
 #include "dbTechViaRule.h"
 
-#include "db.h"
 #include "dbDatabase.h"
 #include "dbDiff.hpp"
-#include "dbSet.h"
 #include "dbTable.h"
 #include "dbTable.hpp"
 #include "dbTech.h"
 #include "dbTechLayer.h"
 #include "dbTechVia.h"
+#include "odb/db.h"
+#include "odb/dbSet.h"
 
 namespace odb {
 
@@ -55,16 +55,20 @@ template class dbTable<_dbTechViaRule>;
 bool _dbTechViaRule::operator==(const _dbTechViaRule& rhs) const
 {
   if (_name && rhs._name) {
-    if (strcmp(_name, rhs._name) != 0)
+    if (strcmp(_name, rhs._name) != 0) {
       return false;
-  } else if (_name || rhs._name)
+    }
+  } else if (_name || rhs._name) {
     return false;
+  }
 
-  if (_layer_rules != rhs._layer_rules)
+  if (_layer_rules != rhs._layer_rules) {
     return false;
+  }
 
-  if (_vias != rhs._vias)
+  if (_vias != rhs._vias) {
     return false;
+  }
 
   return true;
 }
@@ -91,7 +95,7 @@ void _dbTechViaRule::out(dbDiff& diff, char side, const char* field) const
 
 _dbTechViaRule::_dbTechViaRule(_dbDatabase*, const _dbTechViaRule& v)
     : _flags(v._flags),
-      _name(NULL),
+      _name(nullptr),
       _layer_rules(v._layer_rules),
       _vias(v._vias)
 {
@@ -109,8 +113,9 @@ _dbTechViaRule::_dbTechViaRule(_dbDatabase*)
 
 _dbTechViaRule::~_dbTechViaRule()
 {
-  if (_name)
+  if (_name) {
     free((void*) _name);
+  }
 }
 
 dbOStream& operator<<(dbOStream& stream, const _dbTechViaRule& v)
@@ -162,8 +167,9 @@ dbTechVia* dbTechViaRule::getVia(uint idx)
   _dbTechViaRule* rule = (_dbTechViaRule*) this;
   dbTech* tech = (dbTech*) rule->getOwner();
 
-  if (idx >= rule->_vias.size())
-    return NULL;
+  if (idx >= rule->_vias.size()) {
+    return nullptr;
+  }
 
   dbId<dbTechVia> id = rule->_vias[idx];
   return dbTechVia::getTechVia(tech, id);
@@ -180,8 +186,9 @@ dbTechViaLayerRule* dbTechViaRule::getViaLayerRule(uint idx)
   _dbTechViaRule* rule = (_dbTechViaRule*) this;
   dbTech* tech = (dbTech*) rule->getOwner();
 
-  if (idx >= rule->_layer_rules.size())
-    return NULL;
+  if (idx >= rule->_layer_rules.size()) {
+    return nullptr;
+  }
 
   dbId<dbTechViaLayerRule> id = rule->_layer_rules[idx];
   return dbTechViaLayerRule::getTechViaLayerRule(tech, id);
@@ -189,8 +196,9 @@ dbTechViaLayerRule* dbTechViaRule::getViaLayerRule(uint idx)
 
 dbTechViaRule* dbTechViaRule::create(dbTech* tech_, const char* name)
 {
-  if (tech_->findViaRule(name))
-    return NULL;
+  if (tech_->findViaRule(name)) {
+    return nullptr;
+  }
 
   _dbTech* tech = (_dbTech*) tech_;
   _dbTechViaRule* rule = tech->_via_rule_tbl->create();

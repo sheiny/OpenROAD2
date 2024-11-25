@@ -41,23 +41,10 @@
 #include <string>
 #include <vector>
 
+#include "odb/db.h"
 #include "odb/dbTypes.h"
 #include "odb/geom.h"
 #include "odb/isotropy.h"
-
-namespace odb {
-class dbDatabase;
-class dbBlock;
-class dbInst;
-class dbITerm;
-class dbMaster;
-class dbNet;
-class dbRow;
-class dbSite;
-class dbTechLayer;
-class dbTechVia;
-class Point;
-}  // namespace odb
 
 namespace utl {
 class Logger;
@@ -86,7 +73,10 @@ class ICeWall
   void removeBump(odb::dbInst* inst);
   void removeBumpArray(odb::dbMaster* master);
 
-  void assignBump(odb::dbInst* inst, odb::dbNet* net);
+  void assignBump(odb::dbInst* inst,
+                  odb::dbNet* net,
+                  odb::dbITerm* terminal = nullptr,
+                  bool dont_route = false);
 
   void makeFakeSite(const std::string& name, int width, int height);
   odb::dbRow* findRow(const std::string& name) const;
@@ -108,6 +98,7 @@ class ICeWall
                 odb::dbRow* row,
                 int location,
                 bool mirror);
+  void placePads(const std::vector<odb::dbInst*>& insts, odb::dbRow* row);
   void placeCorner(odb::dbMaster* master, int ring_index);
   void placeFiller(const std::vector<odb::dbMaster*>& masters,
                    odb::dbRow* row,
@@ -119,16 +110,25 @@ class ICeWall
                      const odb::dbOrientType& rotation = odb::dbOrientType::R0,
                      const odb::Point& offset = {0, 0},
                      const std::string& prefix = "IO_BOND_");
+  void placeTerminals(const std::vector<odb::dbITerm*>& iterms,
+                      bool allow_non_top_layer);
   void routeRDL(odb::dbTechLayer* layer,
                 odb::dbTechVia* bump_via,
                 odb::dbTechVia* pad_via,
                 const std::vector<odb::dbNet*>& nets,
                 int width = 0,
                 int spacing = 0,
-                bool allow45 = false);
+                bool allow45 = false,
+                float turn_penalty = 2.0,
+                int max_iterations = 10);
   void routeRDLDebugGUI(bool enable);
+  void routeRDLDebugNet(const char* net);
 
   void connectByAbutment();
+
+  static std::vector<std::pair<odb::dbITerm*, odb::dbITerm*>> getTouchingIterms(
+      odb::dbInst* inst0,
+      odb::dbInst* inst1);
 
  private:
   odb::dbBlock* getBlock() const;
@@ -138,15 +138,11 @@ class ICeWall
   std::vector<odb::dbInst*> getPadInstsInRow(odb::dbRow* row) const;
   std::vector<odb::dbInst*> getPadInsts() const;
 
-  void placeInstance(odb::dbRow* row,
-                     int index,
-                     odb::dbInst* inst,
-                     const odb::dbOrientType& base_orient,
-                     bool allow_overlap = false) const;
-
-  std::vector<std::pair<odb::dbITerm*, odb::dbITerm*>> getTouchingIterms(
-      odb::dbInst* inst0,
-      odb::dbInst* inst1) const;
+  int placeInstance(odb::dbRow* row,
+                    int index,
+                    odb::dbInst* inst,
+                    const odb::dbOrientType& base_orient,
+                    bool allow_overlap = false) const;
 
   void makeBTerm(odb::dbNet* net,
                  odb::dbTechLayer* layer,
@@ -163,12 +159,49 @@ class ICeWall
   std::string getRowName(const std::string& name, int ring_index) const;
   odb::Direction2D::Value getRowEdge(odb::dbRow* row) const;
 
+  int64_t estimateWirelengths(odb::dbInst* inst,
+                              const std::set<odb::dbITerm*>& iterms) const;
+  int64_t computePadBumpDistance(odb::dbInst* inst,
+                                 int inst_width,
+                                 odb::dbITerm* bump,
+                                 odb::dbRow* row,
+                                 int center_pos) const;
+  void placePadsUniform(const std::vector<odb::dbInst*>& insts,
+                        odb::dbRow* row,
+                        const std::map<odb::dbInst*, int>& inst_widths,
+                        int pads_width,
+                        int row_width,
+                        int row_start) const;
+  void placePadsBumpAligned(
+      const std::vector<odb::dbInst*>& insts,
+      odb::dbRow* row,
+      const std::map<odb::dbInst*, int>& inst_widths,
+      int pads_width,
+      int row_width,
+      int row_start,
+      const std::map<odb::dbInst*, std::set<odb::dbITerm*>>& iterm_connections)
+      const;
+  std::map<odb::dbInst*, odb::dbITerm*> getBumpAlignmentGroup(
+      odb::dbRow* row,
+      int offset,
+      const std::map<odb::dbInst*, int>& inst_widths,
+      const std::map<odb::dbInst*, std::set<odb::dbITerm*>>& iterm_connections,
+      const std::vector<odb::dbInst*>::const_iterator& itr,
+      const std::vector<odb::dbInst*>::const_iterator& inst_end) const;
+  void performPadFlip(odb::dbRow* row,
+                      odb::dbInst* inst,
+                      const std::map<odb::dbInst*, std::set<odb::dbITerm*>>&
+                          iterm_connections) const;
+
   // Data members
   odb::dbDatabase* db_ = nullptr;
   utl::Logger* logger_ = nullptr;
 
+  std::map<odb::dbITerm*, odb::dbITerm*> routing_map_;
+
   std::unique_ptr<RDLRouter> router_;
   std::unique_ptr<RDLGui> router_gui_;
+  odb::dbNet* rdl_net_debug_ = nullptr;
 
   constexpr static const char* fake_library_name_ = "FAKE_IO";
   constexpr static const char* row_north_ = "IO_NORTH";

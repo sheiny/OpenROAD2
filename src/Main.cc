@@ -65,9 +65,10 @@
 #endif
 
 #include "gui/gui.h"
+#include "ord/Design.h"
 #include "ord/InitOpenRoad.hh"
 #include "ord/OpenRoad.hh"
-#include "ord/Version.hh"
+#include "ord/Tech.h"
 #include "sta/StaMain.hh"
 #include "sta/StringUtil.hh"
 #include "utl/Logger.h"
@@ -80,12 +81,6 @@ using sta::stringEq;
 using std::string;
 
 #ifdef ENABLE_PYTHON3
-// par causes abseil link error at startup on apple silicon
-#ifdef ENABLE_PAR
-#define TOOL_PAR X(par)
-#else
-#define TOOL_PAR
-#endif
 
 #define FOREACH_TOOL_WITHOUT_OPENROAD(X) \
   X(ifp)                                 \
@@ -101,7 +96,7 @@ using std::string;
   X(drt)                                 \
   X(dpo)                                 \
   X(fin)                                 \
-  TOOL_PAR                               \
+  X(par)                                 \
   X(rcx)                                 \
   X(rmp)                                 \
   X(stt)                                 \
@@ -122,8 +117,10 @@ FOREACH_TOOL(X)
 
 int cmd_argc;
 char** cmd_argv;
-const char* log_filename = nullptr;
-const char* metrics_filename = nullptr;
+static const char* log_filename = nullptr;
+static const char* metrics_filename = nullptr;
+static bool no_settings = false;
+static bool minimize = false;
 
 static const char* init_filename = ".openroad";
 
@@ -137,7 +134,11 @@ FOREACH_TOOL(X)
 #undef X
 }  // namespace sta
 
+#if PY_VERSION_HEX >= 0x03080000
+static void initPython(int argc, char* argv[])
+#else
 static void initPython()
+#endif
 {
 #define X(name)                                                             \
   if (PyImport_AppendInittab("_" #name "_py", PyInit__##name##_py) == -1) { \
@@ -146,7 +147,17 @@ static void initPython()
   }
   FOREACH_TOOL(X)
 #undef X
+#if PY_VERSION_HEX >= 0x03080000
+  bool inspect = !findCmdLineFlag(argc, argv, "-exit");
+  PyConfig config;
+  PyConfig_InitPythonConfig(&config);
+  PyConfig_SetBytesArgv(&config, argc, argv);
+  config.inspect = inspect;
+  Py_InitializeFromConfig(&config);
+  PyConfig_Clear(&config);
+#else
   Py_Initialize();
+#endif
 #define X(name)                                                       \
   {                                                                   \
     char* unencoded = sta::unencode(sta::name##_py_python_inits);     \
@@ -194,6 +205,20 @@ static void initPython()
 
 static volatile sig_atomic_t fatal_error_in_progress = 0;
 
+// When we enter through main() we have a single tech and design.
+// Custom applications using OR as a library might define multiple.
+// Such applications won't allocate or use these objects.
+//
+// Use a wrapper struct to ensure destruction ordering - design
+// then tech (members are destroyed in reverse order).
+struct TechAndDesign
+{
+  std::unique_ptr<ord::Tech> tech;
+  std::unique_ptr<ord::Design> design;
+};
+
+static TechAndDesign the_tech_and_design;
+
 static void handler(int sig)
 {
   if (fatal_error_in_progress) {
@@ -234,7 +259,9 @@ int main(int argc, char* argv[])
     return 0;
   }
   if (argc == 2 && stringEq(argv[1], "-version")) {
-    printf("%s %s\n", OPENROAD_VERSION, OPENROAD_GIT_DESCRIBE);
+    printf("%s %s\n",
+           ord::OpenRoad::getVersion(),
+           ord::OpenRoad::getGitDescribe());
     return 0;
   }
 
@@ -248,14 +275,22 @@ int main(int argc, char* argv[])
     remove(metrics_filename);
   }
 
+  no_settings = findCmdLineFlag(argc, argv, "-no_settings");
+  minimize = findCmdLineFlag(argc, argv, "-minimize");
+
   cmd_argc = argc;
   cmd_argv = argv;
+
 #ifdef ENABLE_PYTHON3
   if (findCmdLineFlag(cmd_argc, cmd_argv, "-python")) {
     // Setup the app with tcl
     auto* interp = Tcl_CreateInterp();
     Tcl_Init(interp);
-    ord::initOpenRoad(interp);
+    the_tech_and_design.tech = std::make_unique<ord::Tech>(interp);
+    the_tech_and_design.design
+        = std::make_unique<ord::Design>(the_tech_and_design.tech.get());
+    ord::OpenRoad::setOpenRoad(the_tech_and_design.design->getOpenRoad());
+    ord::initOpenRoad(interp, log_filename, metrics_filename);
     if (!findCmdLineFlag(cmd_argc, cmd_argv, "-no_splash")) {
       showSplash();
     }
@@ -278,6 +313,10 @@ int main(int argc, char* argv[])
           ord::OpenRoad::openRoad()->getThreadCount(), false);
     }
 
+#if PY_VERSION_HEX >= 0x03080000
+    initPython(cmd_argc, cmd_argv);
+    return Py_RunMain();
+#else
     initPython();
     bool exit = findCmdLineFlag(cmd_argc, cmd_argv, "-exit");
     std::vector<wchar_t*> args;
@@ -289,6 +328,7 @@ int main(int argc, char* argv[])
       args.push_back(Py_DecodeLocale(cmd_argv[i], nullptr));
     }
     return Py_Main(args.size(), args.data());
+#endif  // PY_VERSION_HEX >= 0x03080000
   }
 #endif  // ENABLE_PYTHON3
 
@@ -319,12 +359,60 @@ static int tclReadlineInit(Tcl_Interp* interp)
 }
 #endif
 
+namespace {
+// A stopgap fallback from the hardcoded TCLRL_LIBRARY path for OpenROAD,
+// not essential for OpenSTA
+std::string findPathToTclreadlineInit(Tcl_Interp* interp)
+{
+  // TL;DR it is possible to run the OpenROAD binary from within the
+  // official Docker image on a different distribution than the
+  // distribution within the Docker image.
+  //
+  // In this case we have to look up
+  // the location of the tclreadline scripts instead of using the hardcoded
+  // path.
+  //
+  // It is helpful to use the official Docker image as CI infrastructure and
+  // also because it is a good way to have as similar an environment as possible
+  // during testing and deployment.
+  //
+  // See
+  // https://github.com/The-OpenROAD-Project/bazel-orfs/blob/main/docker.BUILD.bazel
+  // for the details on how this is done.
+  //
+  // Running Docker within a bazel isolated environment introduces lots of
+  // problems and is not really done.
+  const char* tclScript = R"(
+      namespace eval temp {
+        foreach dir $::auto_path {
+            set folder [file join $dir]
+            set path [file join $folder "tclreadline)" TCLRL_VERSION_STR
+                          R"(" "tclreadlineInit.tcl"]
+            if {[file exists $path]} {
+                return $path
+            }
+        }
+        error "tclreadlineInit.tcl not found in any of the directories in auto_path"
+      }
+    )";
+
+  if (Tcl_Eval(interp, tclScript) == TCL_ERROR) {
+    std::cerr << "Tcl_Eval failed: " << Tcl_GetStringResult(interp)
+              << std::endl;
+    return "";
+  }
+
+  return Tcl_GetStringResult(interp);
+}
+}  // namespace
+
 // Tcl init executed inside Tcl_Main.
 static int tclAppInit(int& argc,
                       char* argv[],
                       const char* init_filename,
                       Tcl_Interp* interp)
 {
+  bool exit_after_cmd_file = false;
   // first check if gui was requested and launch.
   // gui will call this function again as part of setup
   // ensuring the else {} will be utilized to initialize tcl and OR.
@@ -335,7 +423,7 @@ static int tclAppInit(int& argc,
       ;
     }
 
-    gui::startGui(argc, argv, interp);
+    gui::startGui(argc, argv, interp, "", true, !no_settings, minimize);
   } else {
     // init tcl
     if (Tcl_Init(interp) == TCL_ERROR) {
@@ -346,40 +434,52 @@ static int tclAppInit(int& argc,
       return TCL_ERROR;
     }
 #endif
+    exit_after_cmd_file = findCmdLineFlag(argc, argv, "-exit");
 #ifdef ENABLE_READLINE
-    if (Tclreadline_Init(interp) == TCL_ERROR) {
-      return TCL_ERROR;
-    }
-    Tcl_StaticPackage(
-        interp, "tclreadline", Tclreadline_Init, Tclreadline_SafeInit);
-    if (Tcl_EvalFile(interp, TCLRL_LIBRARY "/tclreadlineInit.tcl") != TCL_OK) {
-      printf("Failed to load tclreadline\n");
+    if (!exit_after_cmd_file) {
+      if (Tclreadline_Init(interp) == TCL_ERROR) {
+        return TCL_ERROR;
+      }
+      // tclreadline is a bit of a tricky dependency because it
+      // uses absolute path references below, so we don't depend on
+      // tclreadline for the batch case where we exit as soon as the
+      // script is done.
+      Tcl_StaticPackage(
+          interp, "tclreadline", Tclreadline_Init, Tclreadline_SafeInit);
+
+      if (Tcl_EvalFile(interp, TCLRL_LIBRARY "/tclreadlineInit.tcl")
+          != TCL_OK) {
+        std::string path = findPathToTclreadlineInit(interp);
+        if (path.empty() || Tcl_EvalFile(interp, path.c_str()) != TCL_OK) {
+          printf("Failed to load tclreadline\n");
+        }
+      }
     }
 #endif
 
-    ord::initOpenRoad(interp);
+    ord::initOpenRoad(interp, log_filename, metrics_filename);
 
-    if (!findCmdLineFlag(argc, argv, "-no_splash")) {
+    bool no_splash = findCmdLineFlag(argc, argv, "-no_splash");
+    if (!no_splash) {
       showSplash();
     }
 
     const char* threads = findCmdLineKey(argc, argv, "-threads");
     if (threads) {
-      ord::OpenRoad::openRoad()->setThreadCount(threads);
+      ord::OpenRoad::openRoad()->setThreadCount(threads, !no_splash);
     } else {
       // set to default number of threads
       ord::OpenRoad::openRoad()->setThreadCount(
           ord::OpenRoad::openRoad()->getThreadCount(), false);
     }
 
-    bool exit_after_cmd_file = findCmdLineFlag(argc, argv, "-exit");
-
     const bool gui_enabled = gui::Gui::enabled();
 
-    if (!findCmdLineFlag(argc, argv, "-no_init")) {
+    const char* home = getenv("HOME");
+    if (!findCmdLineFlag(argc, argv, "-no_init") && home) {
       const char* restore_state_cmd = "source -echo -verbose {{{}}}";
 #ifdef USE_STD_FILESYSTEM
-      std::filesystem::path init(getenv("HOME"));
+      std::filesystem::path init(home);
       init /= init_filename;
       if (std::filesystem::is_regular_file(init)) {
         if (!gui_enabled) {
@@ -392,7 +492,7 @@ static int tclAppInit(int& argc,
         }
       }
 #else
-      string init_path = getenv("HOME");
+      string init_path = home;
       init_path += "/";
       init_path += init_filename;
       if (is_regular_file(init_path.c_str())) {
@@ -434,7 +534,7 @@ static int tclAppInit(int& argc,
     }
   }
 #ifdef ENABLE_READLINE
-  if (!gui::Gui::enabled()) {
+  if (!gui::Gui::enabled() && !exit_after_cmd_file) {
     return tclReadlineInit(interp);
   }
 #endif
@@ -443,14 +543,30 @@ static int tclAppInit(int& argc,
 
 int ord::tclAppInit(Tcl_Interp* interp)
 {
+  the_tech_and_design.tech = std::make_unique<ord::Tech>(interp);
+  the_tech_and_design.design
+      = std::make_unique<ord::Design>(the_tech_and_design.tech.get());
+  ord::OpenRoad::setOpenRoad(the_tech_and_design.design->getOpenRoad());
+
+  // This is to enable Design.i where a design arg can be
+  // retrieved from the interpreter.  This is necessary for
+  // cases with more than one interpreter (ie more than one Design).
+  // This should replace the use of the singleton OpenRoad::openRoad().
+  Tcl_SetAssocData(interp, "design", nullptr, the_tech_and_design.design.get());
+
+  return ord::tclInit(interp);
+}
+
+int ord::tclInit(Tcl_Interp* interp)
+{
   return tclAppInit(cmd_argc, cmd_argv, init_filename, interp);
 }
 
 static void showUsage(const char* prog, const char* init_filename)
 {
-  printf("Usage: %s [-help] [-version] [-no_init] [-exit] [-gui] ", prog);
-  printf("[-threads count|max] [-log file_name] [-metrics file_name] ");
-  printf("cmd_file\n");
+  printf("Usage: %s [-help] [-version] [-no_init] [-no_splash] [-exit] ", prog);
+  printf("[-gui] [-threads count|max] [-log file_name] [-metrics file_name] ");
+  printf("[-no_settings] [-minimize] cmd_file\n");
   printf("  -help                 show help and exit\n");
   printf("  -version              show version and exit\n");
   printf("  -no_init              do not read %s init file\n", init_filename);
@@ -458,6 +574,8 @@ static void showUsage(const char* prog, const char* init_filename)
   printf("  -no_splash            do not show the license splash at startup\n");
   printf("  -exit                 exit after reading cmd_file\n");
   printf("  -gui                  start in gui mode\n");
+  printf("  -minimize             start the gui minimized\n");
+  printf("  -no_settings          do not load the previous gui settings\n");
 #ifdef ENABLE_PYTHON3
   printf(
       "  -python               start with python interpreter [limited to db "
@@ -472,8 +590,19 @@ static void showUsage(const char* prog, const char* init_filename)
 static void showSplash()
 {
   utl::Logger* logger = ord::OpenRoad::openRoad()->getLogger();
-  string sha = OPENROAD_GIT_DESCRIBE;
-  logger->report("OpenROAD {} {}", OPENROAD_VERSION, sha.c_str());
+  logger->report("OpenROAD {} {}",
+                 ord::OpenRoad::getVersion(),
+                 ord::OpenRoad::getGitDescribe());
+  logger->report(
+      "Features included (+) or not (-): "
+      "{}Charts {}GPU {}GUI {}Python{}",
+      ord::OpenRoad::getChartsCompileOption() ? "+" : "-",
+      ord::OpenRoad::getGPUCompileOption() ? "+" : "-",
+      ord::OpenRoad::getGUICompileOption() ? "+" : "-",
+      ord::OpenRoad::getPythonCompileOption() ? "+" : "-",
+      strcasecmp(BUILD_TYPE, "release") == 0
+          ? ""
+          : fmt::format(" : {}", BUILD_TYPE));
   logger->report(
       "This program is licensed under the BSD-3 license. See the LICENSE file "
       "for details.");

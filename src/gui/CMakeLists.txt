@@ -29,10 +29,6 @@ if (Qt5_FOUND AND BUILD_GUI)
 
     target_compile_definitions(gui PRIVATE ENABLE_CHARTS)
 
-    list(APPEND CHARTS_SRC
-      "src/chartsWidget.cpp"
-    )
-
     list(APPEND CHARTS_LIB
       "Qt5::Charts"
     )
@@ -45,6 +41,7 @@ if (Qt5_FOUND AND BUILD_GUI)
   target_sources(gui
    PRIVATE
     src/layoutViewer.cpp
+    src/layoutTabs.cpp
     src/renderThread.cpp
     src/painter.cpp
     src/mainWindow.cpp
@@ -59,6 +56,7 @@ if (Qt5_FOUND AND BUILD_GUI)
     src/gotoDialog.cpp
     src/inspector.cpp
     src/dbDescriptors.cpp
+    src/staDescriptors.cpp
     src/highlightGroupDialog.cpp
     src/selectHighlightWindow.cpp
     src/staGui.cpp
@@ -75,7 +73,7 @@ if (Qt5_FOUND AND BUILD_GUI)
     src/gui_utils.cpp
     src/colorGenerator.cpp
     src/bufferTreeDescriptor.cpp
-    ${CHARTS_SRC}
+    src/chartsWidget.cpp
     resources/resource.qrc
   )
 
@@ -104,6 +102,10 @@ else()
     PUBLIC
       odb
   )
+  target_include_directories(gui
+    PRIVATE
+      ${OPENROAD_HOME}/include
+  )
 endif()
 
 target_include_directories(gui
@@ -113,3 +115,18 @@ target_include_directories(gui
     ${OPENSTA_HOME}/include
     ${DBSTA_HOME}/include
 )
+
+add_subdirectory(test)
+
+set(OPENROAD_SHARE_GUI_DIR ${OPENROAD_SHARE}/gui)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # configure desktop file
+  configure_file(
+    resources/openroad.desktop.cmake
+    resources/openroad.desktop
+  )
+
+  install(FILES resources/icon.png DESTINATION ${OPENROAD_SHARE_GUI_DIR})
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/resources/openroad.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications/)
+endif()

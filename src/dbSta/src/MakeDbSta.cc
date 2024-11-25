@@ -29,11 +29,6 @@ namespace ord {
 
 using sta::dbSta;
 
-dbSta* makeDbSta()
-{
-  return new dbSta;
-}
-
 void deleteDbSta(sta::dbSta* sta)
 {
   delete sta;
@@ -51,9 +46,9 @@ void initDbSta(OpenRoad* openroad)
 
   if (gui::Gui::enabled()) {
     sta->setPathRenderer(std::make_unique<sta::PathRenderer>(sta));
-    sta->setPowerDensityDataSource(
-        std::make_unique<sta::PowerDensityDataSource>(sta, logger));
   }
+  sta->setPowerDensityDataSource(
+      std::make_unique<sta::PowerDensityDataSource>(sta, logger));
 
   Tcl_Interp* tcl_interp = openroad->tclInterp();
 

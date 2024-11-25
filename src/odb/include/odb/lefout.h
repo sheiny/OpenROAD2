@@ -72,7 +72,7 @@ class lefout
   bool bloat_occupied_layers_;
 
   template <typename GenericBox>
-  void writeBoxes(dbSet<GenericBox>& boxes, const char* indent);
+  void writeBoxes(dbBlock* block, dbSet<GenericBox>& boxes, const char* indent);
 
   using ObstructionMap
       = std::map<dbTechLayer*, boost::polygon::polygon_90_set_data<int>>;
@@ -80,12 +80,14 @@ class lefout
   void writeTechBody(dbTech* tech);
   void writeLayer(dbTechLayer* layer);
   void writeVia(dbTechVia* via);
+  void writeBlockVia(dbBlock* db_block, dbVia* via);
   void writeHeader(dbLib* lib);
   void writeHeader(dbBlock* db_block);
   void writeLibBody(dbLib* lib);
   void writeMaster(dbMaster* master);
   void writeMTerm(dbMTerm* mterm);
   void writeSite(dbSite* site);
+  void writeViaMap(dbTech* tech, bool use_via_cut_class);
   void writeNonDefaultRule(dbTech* tech, dbTechNonDefaultRule* rule);
   void writeLayerRule(dbTechLayerRule* rule);
   void writeSameNetRule(dbTechSameNetRule* rule);
@@ -93,14 +95,15 @@ class lefout
   void writeTechViaGenerateRule(dbTechViaGenerateRule* rule);
   void writePropertyDefinition(dbProperty* prop);
   void writePropertyDefinitions(dbLib* lib);
-  void writeVersion(const char* version);
-  void writeNameCaseSensitive(const dbOnOffType on_off_type);
+  void writeVersion(const std::string& version);
+  void writeNameCaseSensitive(dbOnOffType on_off_type);
   void writeBusBitChars(char left_bus_delimeter, char right_bus_delimeter);
   void writeUnits(int database_units);
   void writeDividerChar(char hier_delimeter);
   void writeObstructions(dbBlock* db_block);
   void getObstructions(dbBlock* db_block, ObstructionMap& obstructions) const;
   void writeBox(const std::string& indent, dbBox* box);
+  void writePolygon(const std::string& indent, dbPolygon* polygon);
   void writeRect(const std::string& indent,
                  const boost::polygon::rectangle_data<int>& rect);
   void findInstsObstructions(ObstructionMap& obstructions,
@@ -118,7 +121,7 @@ class lefout
 
   inline void writeObjectPropertyDefinitions(
       dbObject* obj,
-      std::unordered_map<std::string, short>& propertiesMap);
+      std::unordered_map<std::string, int16_t>& propertiesMap);
 
   int determineBloat(dbTechLayer* layer) const;
   void insertObstruction(dbTechLayer* layer,
@@ -127,9 +130,8 @@ class lefout
   void insertObstruction(dbBox* box, ObstructionMap& obstructions) const;
 
  public:
-  double lefdist(int value) { return ((double) value * _dist_factor); }
-
-  double lefarea(int value) { return ((double) value * _area_factor); }
+  double lefdist(int value) { return value * _dist_factor; }
+  double lefarea(int value) { return value * _area_factor; }
 
   lefout(utl::Logger* logger, std::ostream& out) : _out(out)
   {
@@ -140,8 +142,6 @@ class lefout
     bloat_factor_ = 10;
     bloat_occupied_layers_ = false;
   }
-
-  ~lefout() {}
 
   void setWriteMarkedMasters(bool value) { _write_marked_masters = value; }
   void setUseLayerAlias(bool value) { _use_alias = value; }

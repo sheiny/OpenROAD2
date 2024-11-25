@@ -54,8 +54,11 @@ class dbPlacementStatus;
 class dbObstruction;
 class dbRegion;
 class dbRow;
+class dbSigType;
 class dbSBox;
 class dbSWire;
+class dbMarker;
+class dbMarkerCategory;
 
 ///////////////////////////////////////////////////////////////////////////////
 ///
@@ -85,6 +88,7 @@ class dbBlockCallBackObj
   // dbNet Start
   virtual void inDbNetCreate(dbNet*) {}
   virtual void inDbNetDestroy(dbNet*) {}
+  virtual void inDbNetPreMerge(dbNet*, dbNet*) {}
   // dbNet End
 
   // dbITerm Start
@@ -104,6 +108,7 @@ class dbBlockCallBackObj
   virtual void inDbBTermPreDisconnect(dbBTerm*) {}
   virtual void inDbBTermPostDisConnect(dbBTerm*, dbNet*) {}
   virtual void inDbBTermSetIoType(dbBTerm*, const dbIoType&) {}
+  virtual void inDbBTermSetSigType(dbBTerm*, const dbSigType&) {}
   // dbBTerm End
 
   // dbBPin Start
@@ -162,6 +167,16 @@ class dbBlockCallBackObj
   virtual void inDbFillCreate(dbFill*) {}
   // dbFill End
 
+  // dbMarkerCategory Start
+  virtual void inDbMarkerCategoryCreate(dbMarkerCategory*) {}
+  virtual void inDbMarkerCategoryDestroy(dbMarkerCategory*) {}
+  // dbMarkerCategory End
+
+  // dbMarker Start
+  virtual void inDbMarkerCreate(dbMarker*) {}
+  virtual void inDbMarkerDestroy(dbMarker*) {}
+  // dbMarker End
+
   virtual void inDbBlockStreamOutBefore(dbBlock*) {}
   virtual void inDbBlockStreamOutAfter(dbBlock*) {}
   virtual void inDbBlockReadNetsBefore(dbBlock*) {}
@@ -172,10 +187,10 @@ class dbBlockCallBackObj
 
   // Manipulate _callback list of owner -- in journal.cpp
   void addOwner(dbBlock* new_owner);
-  bool hasOwner() const { return (_owner != NULL); }
+  bool hasOwner() const { return (_owner != nullptr); }
   void removeOwner();
 
-  dbBlockCallBackObj() { _owner = NULL; }
+  dbBlockCallBackObj() { _owner = nullptr; }
   virtual ~dbBlockCallBackObj() { removeOwner(); }
 
  private:

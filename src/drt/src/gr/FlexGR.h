@@ -44,7 +44,7 @@ class Rect;
 namespace stt {
 class SteinerTreeBuilder;
 }
-namespace fr {
+namespace drt {
 using odb::Rect;
 
 class FlexGR
@@ -53,13 +53,15 @@ class FlexGR
   // constructors
   FlexGR(frDesign* designIn,
          Logger* logger,
-         stt::SteinerTreeBuilder* stt_builder)
+         stt::SteinerTreeBuilder* stt_builder,
+         RouterConfiguration* router_cfg)
       : db_(nullptr),
         design_(designIn),
         cmap_(nullptr),
         cmap2D_(nullptr),
         logger_(logger),
-        stt_builder_(stt_builder)
+        stt_builder_(stt_builder),
+        router_cfg_(router_cfg)
   {
   }
 
@@ -71,9 +73,8 @@ class FlexGR
   {
     if (is2DCMap) {
       return cmap2D_.get();
-    } else {
-      return cmap_.get();
     }
+    return cmap_.get();
   }
 
   // others
@@ -86,6 +87,7 @@ class FlexGR
   std::unique_ptr<FlexGRCMap> cmap2D_;
   Logger* logger_;
   stt::SteinerTreeBuilder* stt_builder_;
+  RouterConfiguration* router_cfg_;
   std::map<frNet*,
            std::map<std::pair<int, int>, std::vector<frNode*>>,
            frBlockObjectComp>
@@ -116,7 +118,7 @@ class FlexGR
                          unsigned workerHistCost,
                          double congThresh,
                          bool is2DRouting,
-                         int mode);
+                         RipUpMode mode);
   void searchRepair(int iter,
                     int size,
                     int offset,
@@ -125,7 +127,7 @@ class FlexGR
                     unsigned workerHistCost,
                     double congThresh,
                     bool is2DRouting,
-                    int mode,
+                    RipUpMode mode,
                     bool TEST);
 
   void end();
@@ -162,11 +164,12 @@ class FlexGR
       frNode* currNode,
       frNet* net,
       std::vector<std::vector<unsigned>>& bestLayerCosts,
-      std::vector<std::vector<unsigned>>& bestLayers);
-  void layerAssign_node_commit(frNode* currNode,
-                               frNet* net,
-                               frLayerNum layerNum,
-                               std::vector<std::vector<unsigned>>& bestLayers);
+      std::vector<std::vector<unsigned>>& bestLayerCombs);
+  void layerAssign_node_commit(
+      frNode* currNode,
+      frNet* net,
+      frLayerNum layerNum,
+      std::vector<std::vector<unsigned>>& bestLayerCombs);
 
   // cost
   double getCongCost(unsigned supply, unsigned demand);
@@ -253,10 +256,10 @@ class FlexGRWorkerRegionQuery
            std::vector<std::vector<rq_box_value_t<grConnFig*>>>& allShapes);
   void remove(grConnFig* connFig);
   void query(const Rect& box,
-             const frLayerNum layerNum,
+             frLayerNum layerNum,
              std::vector<grConnFig*>& result) const;
   void query(const Rect& box,
-             const frLayerNum layerNum,
+             frLayerNum layerNum,
              std::vector<rq_box_value_t<grConnFig*>>& result) const;
   void init(bool includeExt = false);
   void cleanup()
@@ -282,24 +285,10 @@ class FlexGRWorker
 {
  public:
   // constructors
-  FlexGRWorker(FlexGR* grIn)
+  FlexGRWorker(FlexGR* grIn, RouterConfiguration* router_cfg)
       : design_(grIn->getDesign()),
         gr_(grIn),
-        routeGCellIdxLL_(),
-        routeGCellIdxUR_(),
-        extBox_(),
-        routeBox_(),
-        grIter_(0),
-        mazeEndIter_(1),
-        workerCongCost_(0),
-        workerHistCost_(0),
-        congThresh_(1.0),
-        is2DRouting_(false),
-        ripupMode_(0),
-        nets_(),
-        owner2nets_(), /*owner2extBoundPtNodes(), owner2routeBoundPtNodes(),
-                          owner2pinGCellNodes(),*/
-        gridGraph_(grIn->getDesign(), this),
+        gridGraph_(grIn->getDesign(), this, router_cfg),
         rq_(this)
   {
   }
@@ -314,7 +303,7 @@ class FlexGRWorker
   void setHistCost(int in) { workerHistCost_ = in; }
   void setCongThresh(double in) { congThresh_ = in; }
   void set2D(bool in) { is2DRouting_ = in; }
-  void setRipupMode(int in) { ripupMode_ = in; }
+  void setRipupMode(RipUpMode in) { ripupMode_ = in; }
 
   // getters
   frTechObject* getTech() const { return design_->getTech(); }
@@ -343,9 +332,8 @@ class FlexGRWorker
     auto it = owner2nets_.find(net);
     if (it != owner2nets_.end()) {
       return &(it->second);
-    } else {
-      return nullptr;
     }
+    return nullptr;
   }
   const FlexGRWorkerRegionQuery& getWorkerRegionQuery() const { return rq_; }
   FlexGRWorkerRegionQuery& getWorkerRegionQuery() { return rq_; }
@@ -357,19 +345,19 @@ class FlexGRWorker
   void cleanup();
 
  private:
-  frDesign* design_;
-  FlexGR* gr_;
+  frDesign* design_{nullptr};
+  FlexGR* gr_{nullptr};
   Point routeGCellIdxLL_;
   Point routeGCellIdxUR_;
   Rect extBox_;
   Rect routeBox_;
-  int grIter_;
-  int mazeEndIter_;
-  int workerCongCost_;
-  int workerHistCost_;
-  double congThresh_;
-  bool is2DRouting_;
-  int ripupMode_;
+  int grIter_{0};
+  int mazeEndIter_{1};
+  int workerCongCost_{0};
+  int workerHistCost_{0};
+  double congThresh_{1.0};
+  bool is2DRouting_{false};
+  RipUpMode ripupMode_{RipUpMode::DRC};
 
   // local storage
   std::vector<std::unique_ptr<grNet>> nets_;
@@ -491,4 +479,4 @@ class FlexGRWorker
   // debug
   void routeNet_printNet(grNet* net);
 };
-}  // namespace fr
+}  // namespace drt

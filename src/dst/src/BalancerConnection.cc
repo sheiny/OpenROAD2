@@ -36,6 +36,7 @@
 #include <boost/bind/bind.hpp>
 #include <boost/serialization/export.hpp>
 #include <boost/thread/thread.hpp>
+#include <mutex>
 #include <thread>
 
 #include "LoadBalancer.h"
@@ -235,3 +236,14 @@ void BalancerConnection::handle_read(boost::system::error_code const& err,
     sock_.close();
   }
 }
+
+#if !SWIG && FMT_VERSION >= 100000
+namespace boost::asio::ip {
+
+static auto format_as(const boost::asio::ip::address& f)
+{
+  return fmt::streamed(f);
+}
+
+}  // namespace boost::asio::ip
+#endif

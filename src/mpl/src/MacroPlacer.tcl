@@ -33,8 +33,8 @@
 #############################################################################
 
 sta::define_cmd_args "macro_placement" {
-  [-halo {vertical_width horizontal_width}] \
-    [-channel {vertical_width horizontal_width}]\
+  [-halo {halo_x halo_y}] \
+    [-channel {channel_x channel_y}]\
     [-fence_region {lx ly ux uy}]\
     [-snap_layer snap_layer_number]\
     [-style corner_max_wl|corner_min_wl]}
@@ -77,7 +77,8 @@ proc macro_placement { args } {
   if { [info exists keys(-fence_region)] } {
     set fence_region $keys(-fence_region)
     if { [llength $fence_region] != 4 } {
-      utl::error "MPL" 94 "-fence_region receives a list with 4 values, [llength $fence_region] given."
+      utl::error "MPL" 94 "-fence_region receives a list with 4 values,\
+        [llength $fence_region] given."
     }
     lassign $fence_region lx ly ux uy
 
@@ -118,13 +119,13 @@ proc macro_placement { args } {
 
 sta::define_cmd_args "macro_placement_debug" {
     [-partitions]
-}
+} ;# checker off
 
-# This seg faults if the gui is not present -cherry
 proc macro_placement_debug { args } {
+  # This seg faults if the gui is not present -cherry
   sta::parse_key_args "macro_placement_debug" args \
-      keys {} \
-      flags {-partitions}
+    keys {} \
+    flags {-partitions} ;# checker off
 
   set partitions [info exists flags(-partitions)]
 

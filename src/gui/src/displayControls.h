@@ -155,7 +155,7 @@ class DisplayControlModel : public QStandardItemModel
 
 // This class shows the user the set of layers & objects that
 // they can control the visibility and selectablity of.  The
-// controls are show in a tree view to provide grouping of
+// controls are shown in a tree view to provide grouping of
 // related options.
 //
 // It also implements the Options interface so that other clients can
@@ -173,7 +173,7 @@ class DisplayControls : public QDockWidget,
 
   bool eventFilter(QObject* obj, QEvent* event) override;
 
-  void setDb(odb::dbDatabase* db);
+  void addTech(odb::dbTech* tech);
   void setLogger(utl::Logger* logger);
   void setSTA(sta::dbSta* sta);
   void setDBInstDescriptor(DbInstDescriptor* desciptor);
@@ -203,6 +203,8 @@ class DisplayControls : public QDockWidget,
   Qt::BrushStyle regionPattern() override;
   QColor instanceNameColor() override;
   QFont instanceNameFont() override;
+  QColor itermLabelColor() override;
+  QFont itermLabelFont() override;
   QColor siteColor(odb::dbSite* site) override;
   bool isVisible(const odb::dbTechLayer* layer) override;
   bool isSelectable(const odb::dbTechLayer* layer) override;
@@ -212,8 +214,9 @@ class DisplayControls : public QDockWidget,
   bool isInstanceSelectable(odb::dbInst* inst) override;
   bool areInstanceNamesVisible() override;
   bool areInstancePinsVisible() override;
+  bool areInstancePinsSelectable() override;
+  bool areInstancePinNamesVisible() override;
   bool areInstanceBlockagesVisible() override;
-  bool areFillsVisible() override;
   bool areBlockagesVisible() override;
   bool areBlockagesSelectable() override;
   bool areObstructionsVisible() override;
@@ -225,6 +228,14 @@ class DisplayControls : public QDockWidget,
   bool arePrefTracksVisible() override;
   bool areNonPrefTracksVisible() override;
 
+  bool areIOPinsVisible() const override;
+  bool areRoutingSegmentsVisible() const override;
+  bool areRoutingViasVisible() const override;
+  bool areSpecialRoutingSegmentsVisible() const override;
+  bool areSpecialRoutingViasVisible() const override;
+  bool areFillsVisible() const override;
+  QFont pinMarkersFont() const override;
+
   QColor rulerColor() override;
   QFont rulerFont() override;
   bool areRulersVisible() override;
@@ -235,8 +246,6 @@ class DisplayControls : public QDockWidget,
   bool areSelectedVisible() override;
 
   bool isScaleBarVisible() const override;
-  bool arePinMarkersVisible() const override;
-  QFont pinMarkersFont() override;
   bool areAccessPointsVisible() const override;
   bool areRegionsVisible() const override;
   bool areRegionsSelectable() const override;
@@ -263,7 +272,9 @@ class DisplayControls : public QDockWidget,
  public slots:
   // Tells this widget that a new design is loaded and the
   // options displayed need to match
-  void designLoaded(odb::dbBlock* block);
+  void blockLoaded(odb::dbBlock* block);
+
+  void setCurrentBlock(odb::dbBlock* block);
 
   // This is called by the check boxes to update the state
   void itemChanged(QStandardItem* item);
@@ -299,6 +310,12 @@ class DisplayControls : public QDockWidget,
     ModelRow power;
     ModelRow ground;
     ModelRow clock;
+  };
+
+  struct LayerModels
+  {
+    ModelRow implant;
+    ModelRow other;
   };
 
   struct InstanceModels
@@ -369,7 +386,6 @@ class DisplayControls : public QDockWidget,
   {
     ModelRow instances;
     ModelRow scale_bar;
-    ModelRow fills;
     ModelRow access_points;
     ModelRow regions;
     ModelRow detailed;
@@ -383,11 +399,28 @@ class DisplayControls : public QDockWidget,
   {
     ModelRow names;
     ModelRow pins;
+    ModelRow iterm_labels;
     ModelRow blockages;
   };
 
-  void techInit();
-  void libInit();
+  struct RoutingModels
+  {
+    ModelRow segments;
+    ModelRow vias;
+  };
+
+  struct ShapeTypeModels
+  {
+    ModelRow routing_group;
+    RoutingModels routing;
+    ModelRow special_routing_group;
+    RoutingModels special_routing;
+    ModelRow pins;
+    ModelRow fill;
+  };
+
+  void techInit(odb::dbTech* tech);
+  void libInit(odb::dbDatabase* db);
 
   void collectControls(const QStandardItem* parent,
                        Column column,
@@ -468,6 +501,7 @@ class DisplayControls : public QDockWidget,
 
   QTreeView* view_;
   DisplayControlModel* model_;
+  QMenu* routing_layers_menu_;
   QMenu* layers_menu_;
   odb::dbTechLayer* layers_menu_layer_;
 
@@ -484,8 +518,10 @@ class DisplayControls : public QDockWidget,
   ModelRow blockage_group_;
   ModelRow misc_group_;
   ModelRow site_group_;
+  ModelRow shape_type_group_;
 
   // instances
+  LayerModels layers_;
   InstanceModels instances_;
   StdCellModels stdcell_instances_;
   BufferInverterModels bufinv_instances_;
@@ -494,10 +530,10 @@ class DisplayControls : public QDockWidget,
   PhysicalModels physical_instances_;
 
   InstanceShapeModels instance_shapes_;
+  ShapeTypeModels shape_types_;
 
   // Object controls
   NetModels nets_;
-  ModelRow pin_markers_;
   ModelRow rulers_;
   BlockageModels blockages_;
   TrackModels tracks_;
@@ -509,12 +545,10 @@ class DisplayControls : public QDockWidget,
   std::map<std::string, Renderer::Settings> custom_controls_settings_;
   std::map<QStandardItem*, Qt::CheckState> saved_state_;
 
-  odb::dbDatabase* db_;
+  std::set<odb::dbTech*> techs_;
   utl::Logger* logger_;
   sta::dbSta* sta_;
   DbInstDescriptor* inst_descriptor_;
-
-  bool tech_inited_;
 
   std::map<const odb::dbTechLayer*, QColor> layer_color_;
   std::map<const odb::dbTechLayer*, Qt::BrushStyle> layer_pattern_;
@@ -526,6 +560,8 @@ class DisplayControls : public QDockWidget,
 
   QColor instance_name_color_;
   QFont instance_name_font_;
+  QColor iterm_label_color_;
+  QFont iterm_label_font_;
 
   QColor ruler_color_;
   QFont ruler_font_;

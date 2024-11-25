@@ -30,10 +30,10 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include "defin.h"
+#include "odb/defin.h"
 
-#include "db.h"
 #include "definReader.h"
+#include "odb/db.h"
 
 namespace odb {
 
@@ -97,16 +97,19 @@ void defin::useBlockName(const char* name)
   _reader->useBlockName(name);
 }
 
-dbChip* defin::createChip(std::vector<dbLib*>& libs, const char* def_file)
+dbChip* defin::createChip(std::vector<dbLib*>& libs,
+                          const char* def_file,
+                          dbTech* tech)
 {
-  return _reader->createChip(libs, def_file);
+  return _reader->createChip(libs, def_file, tech);
 }
 
 dbBlock* defin::createBlock(dbBlock* parent,
                             std::vector<dbLib*>& libs,
-                            const char* def_file)
+                            const char* def_file,
+                            dbTech* tech)
 {
-  return _reader->createBlock(parent, libs, def_file);
+  return _reader->createBlock(parent, libs, def_file, tech);
 }
 
 bool defin::replaceWires(dbBlock* block, const char* def_file)

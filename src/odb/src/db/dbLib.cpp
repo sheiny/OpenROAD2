@@ -32,7 +32,6 @@
 
 #include "dbLib.h"
 
-#include "db.h"
 #include "dbDatabase.h"
 #include "dbHashTable.hpp"
 #include "dbMaster.h"
@@ -43,7 +42,8 @@
 #include "dbTable.h"
 #include "dbTable.hpp"
 #include "dbTech.h"
-#include "dbTransform.h"
+#include "odb/db.h"
+#include "odb/dbTransform.h"
 
 namespace odb {
 
@@ -53,47 +53,65 @@ template class dbHashTable<_dbSite>;
 
 bool _dbLib::operator==(const _dbLib& rhs) const
 {
-  if (_lef_units != rhs._lef_units)
+  if (_lef_units != rhs._lef_units) {
     return false;
+  }
 
-  if (_dbu_per_micron != rhs._dbu_per_micron)
+  if (_dbu_per_micron != rhs._dbu_per_micron) {
     return false;
+  }
 
-  if (_hier_delimeter != rhs._hier_delimeter)
+  if (_hier_delimeter != rhs._hier_delimeter) {
     return false;
+  }
 
-  if (_left_bus_delimeter != rhs._left_bus_delimeter)
+  if (_left_bus_delimeter != rhs._left_bus_delimeter) {
     return false;
+  }
 
-  if (_right_bus_delimeter != rhs._right_bus_delimeter)
+  if (_right_bus_delimeter != rhs._right_bus_delimeter) {
     return false;
+  }
 
-  if (_spare != rhs._spare)
+  if (_spare != rhs._spare) {
     return false;
+  }
 
   if (_name && rhs._name) {
-    if (strcmp(_name, rhs._name) != 0)
+    if (strcmp(_name, rhs._name) != 0) {
       return false;
-  } else if (_name || rhs._name)
+    }
+  } else if (_name || rhs._name) {
     return false;
+  }
 
-  if (_master_hash != rhs._master_hash)
+  if (_master_hash != rhs._master_hash) {
     return false;
+  }
 
-  if (_site_hash != rhs._site_hash)
+  if (_site_hash != rhs._site_hash) {
     return false;
+  }
 
-  if (*_master_tbl != *rhs._master_tbl)
+  if (*_master_tbl != *rhs._master_tbl) {
     return false;
+  }
 
-  if (*_site_tbl != *rhs._site_tbl)
+  if (*_site_tbl != *rhs._site_tbl) {
     return false;
+  }
 
-  if (*_prop_tbl != *rhs._prop_tbl)
+  if (*_prop_tbl != *rhs._prop_tbl) {
     return false;
+  }
 
-  if (*_name_cache != *rhs._name_cache)
+  if (_tech != rhs._tech) {
     return false;
+  }
+
+  if (*_name_cache != *rhs._name_cache) {
+    return false;
+  }
 
   return true;
 }
@@ -110,6 +128,7 @@ void _dbLib::differences(dbDiff& diff,
   DIFF_FIELD(_right_bus_delimeter);
   DIFF_FIELD(_spare);
   DIFF_FIELD(_name);
+  DIFF_FIELD(_tech);
   DIFF_HASH_TABLE(_master_hash);
   DIFF_HASH_TABLE(_site_hash);
   DIFF_TABLE_NO_DEEP(_master_tbl);
@@ -129,6 +148,7 @@ void _dbLib::out(dbDiff& diff, char side, const char* field) const
   DIFF_OUT_FIELD(_right_bus_delimeter);
   DIFF_OUT_FIELD(_spare);
   DIFF_OUT_FIELD(_name);
+  DIFF_OUT_FIELD(_tech);
   DIFF_OUT_HASH_TABLE(_master_hash);
   DIFF_OUT_HASH_TABLE(_site_hash);
   DIFF_OUT_TABLE_NO_DEEP(_master_tbl);
@@ -178,7 +198,7 @@ _dbLib::_dbLib(_dbDatabase* db, const _dbLib& l)
       _left_bus_delimeter(l._left_bus_delimeter),
       _right_bus_delimeter(l._right_bus_delimeter),
       _spare(l._spare),
-      _name(NULL),
+      _name(nullptr),
       _master_hash(l._master_hash),
       _site_hash(l._site_hash)
 {
@@ -209,12 +229,14 @@ _dbLib::~_dbLib()
   delete _name_cache;
   delete _prop_itr;
 
-  if (_name)
+  if (_name) {
     free((void*) _name);
+  }
 }
 
 dbOStream& operator<<(dbOStream& stream, const _dbLib& lib)
 {
+  dbOStreamScope scope(stream, fmt::format("dbLib({})", lib._name));
   stream << lib._lef_units;
   stream << lib._dbu_per_micron;
   stream << lib._hier_delimeter;
@@ -224,9 +246,10 @@ dbOStream& operator<<(dbOStream& stream, const _dbLib& lib)
   stream << lib._name;
   stream << lib._master_hash;
   stream << lib._site_hash;
-  stream << *lib._master_tbl;
-  stream << *lib._site_tbl;
-  stream << *lib._prop_tbl;
+  stream << lib._tech;
+  stream << NamedTable("master_tbl", lib._master_tbl);
+  stream << NamedTable("site_tbl", lib._site_tbl);
+  stream << NamedTable("prop_tbl", lib._prop_tbl);
   stream << *lib._name_cache;
   return stream;
 }
@@ -242,6 +265,11 @@ dbIStream& operator>>(dbIStream& stream, _dbLib& lib)
   stream >> lib._name;
   stream >> lib._master_hash;
   stream >> lib._site_hash;
+  // In the older schema we can't set the tech here, we handle this later in
+  // dbDatabase.
+  if (lib.getDatabase()->isSchema(db_schema_block_tech)) {
+    stream >> lib._tech;
+  }
   stream >> *lib._master_tbl;
   stream >> *lib._site_tbl;
   stream >> *lib._prop_tbl;
@@ -286,8 +314,14 @@ const char* dbLib::getConstName()
 
 dbTech* dbLib::getTech()
 {
-  _dbDatabase* db = getImpl()->getDatabase();
-  return (dbTech*) db->_tech_tbl->getPtr(db->_tech);
+  _dbLib* lib = (_dbLib*) this;
+  return (dbTech*) lib->getTech();
+}
+
+_dbTech* _dbLib::getTech()
+{
+  _dbDatabase* db = getDatabase();
+  return db->_tech_tbl->getPtr(_tech);
 }
 
 int dbLib::getDbUnitsPerMicron()
@@ -352,18 +386,25 @@ void dbLib::getBusDelimeters(char& left, char& right)
   right = lib->_right_bus_delimeter;
 }
 
-dbLib* dbLib::create(dbDatabase* db_, const char* name, char hier_delimeter)
+dbLib* dbLib::create(dbDatabase* db_,
+                     const char* name,
+                     dbTech* tech,
+                     char hier_delimeter)
 {
-  if (db_->findLib(name))
-    return NULL;
+  if (db_->findLib(name)) {
+    return nullptr;
+  }
 
+  if (tech == nullptr) {
+    return nullptr;
+  }
   _dbDatabase* db = (_dbDatabase*) db_;
   _dbLib* lib = db->_lib_tbl->create();
   lib->_name = strdup(name);
   ZALLOCATED(lib->_name);
   lib->_hier_delimeter = hier_delimeter;
-  _dbTech* tech = (_dbTech*) db_->getTech();
-  lib->_dbu_per_micron = tech->_dbu_per_micron;
+  lib->_dbu_per_micron = tech->getDbUnitsPerMicron();
+  lib->_tech = tech->getId();
   return (dbLib*) lib;
 }
 

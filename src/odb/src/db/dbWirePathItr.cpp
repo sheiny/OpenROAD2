@@ -30,15 +30,15 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include "db.h"
 #include "dbBlock.h"
 #include "dbDatabase.h"
 #include "dbNet.h"
-#include "dbShape.h"
 #include "dbTable.h"
 #include "dbWire.h"
-#include "dbWireCodec.h"
 #include "dbWireOpcode.h"
+#include "odb/db.h"
+#include "odb/dbShape.h"
+#include "odb/dbWireCodec.h"
 #include "utl/Logger.h"
 
 namespace odb {
@@ -58,8 +58,8 @@ dbWirePathItr::dbWirePathItr()
   _prev_ext = 0;
   _has_prev_ext = false;
   _dw = 0;
-  _rule = NULL;
-  _wire = NULL;
+  _rule = nullptr;
+  _wire = nullptr;
 }
 
 dbWirePathItr::~dbWirePathItr()
@@ -75,7 +75,7 @@ void dbWirePathItr::begin(dbWire* wire)
   _prev_ext = 0;
   _has_prev_ext = false;
   _dw = 0;
-  _rule = NULL;
+  _rule = nullptr;
   _wire = wire;
 }
 
@@ -86,8 +86,8 @@ bool dbWirePathItr::getNextPath(dbWirePath& path)
   if ((_opcode == dbWireDecoder::PATH) || (_opcode == dbWireDecoder::JUNCTION)
       || (_opcode == dbWireDecoder::SHORT)
       || (_opcode == dbWireDecoder::VWIRE)) {
-    dbTechLayerRule* lyr_rule = NULL;
-    _rule = NULL;
+    dbTechLayerRule* lyr_rule = nullptr;
+    _rule = nullptr;
 
     if (_opcode == dbWireDecoder::JUNCTION) {
       path.junction_id = _decoder.getJunctionValue();
@@ -105,8 +105,8 @@ bool dbWirePathItr::getNextPath(dbWirePath& path)
       path.short_junction = 0;
     }
 
-    path.iterm = NULL;
-    path.bterm = NULL;
+    path.iterm = nullptr;
+    path.bterm = nullptr;
     path.layer = _decoder.getLayer();
 
   get_point:
@@ -118,14 +118,16 @@ bool dbWirePathItr::getNextPath(dbWirePath& path)
       _prev_ext = 0;
       _has_prev_ext = false;
 
-      if (path.is_branch == false)
+      if (path.is_branch == false) {
         path.junction_id = _decoder.getJunctionId();
+      }
     } else if (_opcode == dbWireDecoder::POINT_EXT) {
       _decoder.getPoint(_prev_x, _prev_y, _prev_ext);
       _has_prev_ext = true;
 
-      if (path.is_branch == false)
+      if (path.is_branch == false) {
         path.junction_id = _decoder.getJunctionId();
+      }
 
     } else if (_opcode == dbWireDecoder::RULE) {
       lyr_rule = _decoder.getRule();
@@ -164,10 +166,11 @@ bool dbWirePathItr::getNextPath(dbWirePath& path)
     }
 
     path.rule = _rule;
-    if (lyr_rule)
+    if (lyr_rule) {
       _dw = lyr_rule->getWidth() >> 1;
-    else
+    } else {
       _dw = _decoder.getLayer()->getWidth() >> 1;
+    }
     _opcode = _decoder.next();
     return true;
   }
@@ -205,8 +208,8 @@ inline void dbWirePathItr::getTerms(dbWirePathShape& s)
 
 bool dbWirePathItr::getNextShape(dbWirePathShape& s)
 {
-  s.iterm = NULL;
-  s.bterm = NULL;
+  s.iterm = nullptr;
+  s.bterm = nullptr;
 nextOpCode:
   switch (_opcode) {
     case dbWireDecoder::PATH:
@@ -308,8 +311,9 @@ nextOpCode:
       _dw = _decoder.getLayer()->getWidth() >> 1;
       if (_rule) {
         dbTechLayerRule* lyr_rule = _rule->getLayerRule(_decoder.getLayer());
-        if (lyr_rule)
+        if (lyr_rule) {
           _dw = lyr_rule->getWidth() >> 1;
+        }
       }
       _prev_ext = 0;
       _prev_ext = 0;
@@ -335,8 +339,9 @@ nextOpCode:
       _dw = _decoder.getLayer()->getWidth() >> 1;
       if (_rule) {
         dbTechLayerRule* lyr_rule = _rule->getLayerRule(_decoder.getLayer());
-        if (lyr_rule)
+        if (lyr_rule) {
           _dw = lyr_rule->getWidth() >> 1;
+        }
       }
       _prev_ext = 0;
       _has_prev_ext = false;
@@ -505,8 +510,9 @@ void dbShape::dump(utl::Logger* logger, const char* group, int level) const
 //
 void dumpWirePaths4Net(dbNet* innet, const char* group, int level)
 {
-  if (!innet)
+  if (!innet) {
     return;
+  }
   utl::Logger* logger = innet->getImpl()->getLogger();
 
   const char* prfx = "dumpWirePaths:";
@@ -530,8 +536,9 @@ void dumpWirePaths4Net(dbNet* innet, const char* group, int level)
 
   while (pitr.getNextPath(curpath)) {
     curpath.dump(logger, group, level);
-    while (pitr.getNextShape(curshp))
+    while (pitr.getNextShape(curshp)) {
       curshp.dump(logger, group, level);
+    }
   }
 }
 

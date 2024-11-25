@@ -32,12 +32,14 @@
 
 #pragma once
 
-#include "dbIterator.h"
-#include "odb.h"
+#include "odb/dbId.h"
+#include "odb/dbIterator.h"
+#include "odb/odb.h"
 
 namespace odb {
 
 class _dbBox;
+class _dbPolygon;
 template <class T>
 class dbTable;
 
@@ -45,19 +47,31 @@ class dbBoxItr : public dbIterator
 {
  protected:
   dbTable<_dbBox>* _box_tbl;
+  dbTable<_dbPolygon>* _pbox_tbl;
 
  public:
-  dbBoxItr(dbTable<_dbBox>* box_tbl) { _box_tbl = box_tbl; }
+  dbBoxItr(dbTable<_dbBox>* box_tbl,
+           dbTable<_dbPolygon>* pbox_tbl,
+           bool include_polygons)
+  {
+    _box_tbl = box_tbl;
+    _pbox_tbl = pbox_tbl;
+    include_polygons_ = include_polygons;
+  }
 
-  bool reversible();
-  bool orderReversed();
-  void reverse(dbObject* parent);
-  uint sequential();
-  uint size(dbObject* parent);
-  uint begin(dbObject* parent);
-  uint end(dbObject* parent);
-  uint next(uint id, ...);
-  dbObject* getObject(uint id, ...);
+  bool reversible() override;
+  bool orderReversed() override;
+  void reverse(dbObject* parent) override;
+  uint sequential() override;
+  uint size(dbObject* parent) override;
+  uint begin(dbObject* parent) override;
+  uint end(dbObject* parent) override;
+  uint next(uint id, ...) override;
+  dbObject* getObject(uint id, ...) override;
+
+ private:
+  // include polygons in iterations
+  bool include_polygons_;
 };
 
 }  // namespace odb

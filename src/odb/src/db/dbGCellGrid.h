@@ -34,18 +34,16 @@
 #pragma once
 
 #include "dbCore.h"
-#include "odb.h"
-
+#include "odb/db.h"
+#include "odb/odb.h"
 // User Code Begin Includes
 #include <map>
 
-#include "db.h"
-#include "dbMatrix.h"
 #include "dbVector.h"
+#include "odb/dbMatrix.h"
 // User Code End Includes
 
 namespace odb {
-
 class dbIStream;
 class dbOStream;
 class dbDiff;
@@ -61,14 +59,26 @@ struct dbGCellGridFlags
   bool y_grid_valid_ : 1;
   uint spare_bits_ : 30;
 };
-// User Code Begin Structs
-// User Code End Structs
 
 class _dbGCellGrid : public _dbObject
 {
  public:
-  // User Code Begin Enums
-  // User Code End Enums
+  _dbGCellGrid(_dbDatabase*, const _dbGCellGrid& r);
+  _dbGCellGrid(_dbDatabase*);
+
+  ~_dbGCellGrid() = default;
+
+  bool operator==(const _dbGCellGrid& rhs) const;
+  bool operator!=(const _dbGCellGrid& rhs) const { return !operator==(rhs); }
+  bool operator<(const _dbGCellGrid& rhs) const;
+  void differences(dbDiff& diff,
+                   const char* field,
+                   const _dbGCellGrid& rhs) const;
+  void out(dbDiff& diff, char side, const char* field) const;
+  // User Code Begin Methods
+  dbMatrix<dbGCellGrid::GCellData>& get(const dbId<_dbTechLayer>& lid);
+  dbTechLayer* getLayer(const dbId<_dbTechLayer>& lid) const;
+  // User Code End Methods
 
   dbGCellGridFlags flags_;
   dbVector<int> x_origin_;
@@ -81,22 +91,6 @@ class _dbGCellGrid : public _dbObject
   dbVector<int> y_grid_;
   std::map<dbId<_dbTechLayer>, dbMatrix<dbGCellGrid::GCellData>>
       congestion_map_;
-
-  // User Code Begin Fields
-  // User Code End Fields
-  _dbGCellGrid(_dbDatabase*, const _dbGCellGrid& r);
-  _dbGCellGrid(_dbDatabase*);
-  ~_dbGCellGrid();
-  bool operator==(const _dbGCellGrid& rhs) const;
-  bool operator!=(const _dbGCellGrid& rhs) const { return !operator==(rhs); }
-  bool operator<(const _dbGCellGrid& rhs) const;
-  void differences(dbDiff& diff,
-                   const char* field,
-                   const _dbGCellGrid& rhs) const;
-  void out(dbDiff& diff, char side, const char* field) const;
-  // User Code Begin Methods
-  dbMatrix<dbGCellGrid::GCellData>& get(const dbId<_dbTechLayer>& lid);
-  // User Code End Methods
 };
 dbIStream& operator>>(dbIStream& stream, _dbGCellGrid& obj);
 dbOStream& operator<<(dbOStream& stream, const _dbGCellGrid& obj);

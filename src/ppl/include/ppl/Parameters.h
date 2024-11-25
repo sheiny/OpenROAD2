@@ -45,12 +45,6 @@ class Parameters
   void setReportHPWL(bool report) { report_hpwl_ = report; }
   bool getReportHPWL() const { return report_hpwl_; }
 
-  void setNumSlots(int num_slots) { num_slots_ = num_slots; }
-  int getNumSlots() const { return num_slots_; }
-
-  void setSlotsFactor(float factor) { slots_factor_ = factor; }
-  float getSlotsFactor() const { return slots_factor_; }
-
   void setSlotsPerSection(float slots_per_section)
   {
     slots_per_section_ = slots_per_section;
@@ -106,10 +100,14 @@ class Parameters
   }
   bool getMinDistanceInTracks() const { return distance_in_tracks_; }
 
+  void setPinPlacementFile(const char* file_name)
+  {
+    pin_placement_file_ = file_name;
+  }
+  std::string getPinPlacementFile() const { return pin_placement_file_; }
+
  private:
   bool report_hpwl_ = false;
-  int num_slots_ = -1;
-  float slots_factor_ = -1;
   int slots_per_section_ = 200;
   float horizontal_thickness_multiplier_ = 1;
   float vertical_thickness_multiplier_ = 1;
@@ -118,9 +116,10 @@ class Parameters
   int horizontal_length_ = -1;
   int vertical_length_ = -1;
   unsigned int rand_seed_ = 42;
-  int corner_avoidance_ = 0;
+  int corner_avoidance_ = -1;
   int min_dist_ = 0;
   bool distance_in_tracks_ = false;
+  std::string pin_placement_file_;
 };
 
 }  // namespace ppl

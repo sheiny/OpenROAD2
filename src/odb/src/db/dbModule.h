@@ -34,43 +34,34 @@
 #pragma once
 
 #include "dbCore.h"
-#include "odb.h"
-
+#include "dbVector.h"
+#include "odb/dbSet.h"
+#include "odb/odb.h"
 // User Code Begin Includes
+#include <unordered_map>
+
 #include "dbHashTable.h"
+#include "dbModulePortItr.h"
 // User Code End Includes
 
 namespace odb {
-
 class dbIStream;
 class dbOStream;
 class dbDiff;
 class _dbDatabase;
 class _dbInst;
 class _dbModInst;
-// User Code Begin Classes
-// User Code End Classes
-
-// User Code Begin Structs
-// User Code End Structs
+class _dbModNet;
+class _dbModBTerm;
 
 class _dbModule : public _dbObject
 {
  public:
-  // User Code Begin Enums
-  // User Code End Enums
-
-  char* _name;
-  dbId<_dbModule> _next_entry;
-  dbId<_dbInst> _insts;
-  dbId<_dbModInst> _modinsts;
-  dbId<_dbModInst> _mod_inst;
-
-  // User Code Begin Fields
-  // User Code End Fields
   _dbModule(_dbDatabase*, const _dbModule& r);
   _dbModule(_dbDatabase*);
+
   ~_dbModule();
+
   bool operator==(const _dbModule& rhs) const;
   bool operator!=(const _dbModule& rhs) const { return !operator==(rhs); }
   bool operator<(const _dbModule& rhs) const;
@@ -82,10 +73,26 @@ class _dbModule : public _dbObject
   void removeInst(dbInst* inst);
 
   // User Code End Methods
+
+  char* _name;
+  dbId<_dbModule> _next_entry;
+  dbId<_dbInst> _insts;
+  dbId<_dbModInst> _mod_inst;
+  dbId<_dbModInst> _modinsts;
+  dbId<_dbModNet> _modnets;
+  dbId<_dbModBTerm> _modbterms;
+
+  // User Code Begin Fields
+  // custom iterator for traversing ports
+  // fast access
+  std::unordered_map<std::string, dbId<_dbInst>> _dbinst_hash;
+  std::unordered_map<std::string, dbId<_dbModInst>> _modinst_hash;
+  std::unordered_map<std::string, dbId<_dbModBTerm>> _modbterm_hash;
+  std::unordered_map<std::string, dbId<_dbModNet>> _modnet_hash;
+  dbModulePortItr* _port_iter = nullptr;
+  // User Code End Fields
 };
 dbIStream& operator>>(dbIStream& stream, _dbModule& obj);
 dbOStream& operator<<(dbOStream& stream, const _dbModule& obj);
-// User Code Begin General
-// User Code End General
 }  // namespace odb
    // Generator Code End Header

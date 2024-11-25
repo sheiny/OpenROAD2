@@ -39,20 +39,13 @@
 #include "dbHashTable.h"
 #include "dbIntHashTable.h"
 #include "dbPagedVector.h"
-#include "dbTransform.h"
-#include "dbTypes.h"
 #include "dbVector.h"
-#include "geom.h"
-#include "odb.h"
+#include "odb/dbTransform.h"
+#include "odb/dbTypes.h"
+#include "odb/geom.h"
+#include "odb/odb.h"
 
-/*DELETE
-#include "ISdb.h"
-*/
 namespace odb {
-
-// class ISdb : public ZObject
-//{
-//};
 
 template <class T>
 class dbTable;
@@ -86,6 +79,8 @@ class _dbFill;
 class _dbRegion;
 class _dbHier;
 class _dbBPin;
+class _dbTech;
+class _dbTechLayer;
 class _dbTechLayerRule;
 class _dbTechNonDefaultRule;
 class _dbModule;
@@ -93,12 +88,18 @@ class _dbPowerDomain;
 class _dbLogicPort;
 class _dbPowerSwitch;
 class _dbIsolation;
+class _dbLevelShifter;
 class _dbModInst;
+class _dbModITerm;
+class _dbModBTerm;
+class _dbModNet;
+class _dbBusPort;
 class _dbGroup;
 class _dbAccessPoint;
 class _dbGlobalConnect;
 class _dbGuide;
 class _dbNetTrack;
+class _dbMarkerCategory;
 class dbJournal;
 
 class dbNetBTermItr;
@@ -108,6 +109,13 @@ class dbInstITermItr;
 class dbRegionInstItr;
 class dbModuleInstItr;
 class dbModuleModInstItr;
+class dbModuleModBTermItr;
+class dbModuleModInstModITermItr;
+class dbModuleModNetItr;
+class dbModuleModNetModBTermItr;
+class dbModuleModNetModITermItr;
+class dbModuleModNetITermItr;
+class dbModuleModNetBTermItr;
 class dbRegionGroupItr;
 class dbGlobalConnect;
 class dbGroupItr;
@@ -130,25 +138,12 @@ class dbBlockSearch;
 class dbBlockCallBackObj;
 class dbGuideItr;
 class dbNetTrackItr;
-
-struct _dbBTermPin
-{
-  _dbBTerm* _bterm;
-  int _x;
-  int _y;
-  uint _pin;
-  dbPlacementStatus::Value _status;
-  dbOrientType::Value _orient;
-};
+class _dbDft;
 
 struct _dbBlockFlags
 {
   uint _valid_bbox : 1;
-  uint _buffer_altered : 1;
-  uint _active_pins : 1;
-  uint _mme : 1;
-  uint _skip_hier_stream : 1;
-  uint _spare_bits_27 : 27;
+  uint _spare_bits : 31;
 };
 
 class _dbBlock : public _dbObject
@@ -157,8 +152,7 @@ class _dbBlock : public _dbObject
   enum Field  // dbJournal field names
   {
     CORNERCOUNT,
-    WRITEDB,
-    INVALIDATETIMING,
+    WRITEDB
   };
 
   // PERSISTANT-MEMBERS
@@ -173,6 +167,8 @@ class _dbBlock : public _dbObject
   char* _corner_name_list;
   char* _name;
   Rect _die_area;
+  std::vector<Rect> _blocked_regions_for_pins;
+  dbId<_dbTech> _tech;
   dbId<_dbChip> _chip;
   dbId<_dbBox> _bbox;
   dbId<_dbBlock> _parent;
@@ -189,16 +185,23 @@ class _dbBlock : public _dbObject
   dbHashTable<_dbLogicPort> _logicport_hash;
   dbHashTable<_dbPowerSwitch> _powerswitch_hash;
   dbHashTable<_dbIsolation> _isolation_hash;
+  dbHashTable<_dbMarkerCategory> _marker_category_hash;
+
+  dbHashTable<_dbLevelShifter> _levelshifter_hash;
   dbHashTable<_dbGroup> _group_hash;
   dbIntHashTable<_dbInstHdr> _inst_hdr_hash;
   dbHashTable<_dbBTerm> _bterm_hash;
   uint _maxCapNodeId;
   uint _maxRSegId;
   uint _maxCCSegId;
-  int _minExtModelIndex;
-  int _maxExtModelIndex;
   dbVector<dbId<_dbBlock>> _children;
+  dbVector<dbId<_dbTechLayer>> _component_mask_shift;
   uint _currentCcAdjOrder;
+  dbId<_dbDft> _dft;
+  int _min_routing_layer;
+  int _max_routing_layer;
+  int _min_layer_for_clock;
+  int _max_layer_for_clock;
 
   // NON-PERSISTANT-STREAMED-MEMBERS
   dbTable<_dbBTerm>* _bterm_tbl;
@@ -228,6 +231,7 @@ class _dbBlock : public _dbObject
   dbTable<_dbLogicPort>* _logicport_tbl;
   dbTable<_dbPowerSwitch>* _powerswitch_tbl;
   dbTable<_dbIsolation>* _isolation_tbl;
+  dbTable<_dbLevelShifter>* _levelshifter_tbl;
   dbTable<_dbModInst>* _modinst_tbl;
   dbTable<_dbGroup>* _group_tbl;
   dbTable<_dbAccessPoint>* ap_tbl_;
@@ -235,10 +239,18 @@ class _dbBlock : public _dbObject
   dbTable<_dbGuide>* _guide_tbl;
   dbTable<_dbNetTrack>* _net_tracks_tbl;
   _dbNameCache* _name_cache;
+  dbTable<_dbDft>* _dft_tbl;
+  dbTable<_dbMarkerCategory>* _marker_categories_tbl;
 
   dbPagedVector<float, 4096, 12>* _r_val_tbl;
   dbPagedVector<float, 4096, 12>* _c_val_tbl;
   dbPagedVector<float, 4096, 12>* _cc_val_tbl;
+
+  dbTable<_dbModBTerm>* _modbterm_tbl;
+  dbTable<_dbModITerm>* _moditerm_tbl;
+  dbTable<_dbModNet>* _modnet_tbl;
+  dbTable<_dbBusPort>* _busport_tbl;
+
   dbTable<_dbCapNode>* _cap_node_tbl;
   dbTable<_dbRSeg>* _r_seg_tbl;
   dbTable<_dbCCSeg>* _cc_seg_tbl;
@@ -257,6 +269,15 @@ class _dbBlock : public _dbObject
   dbRegionInstItr* _region_inst_itr;
   dbModuleInstItr* _module_inst_itr;
   dbModuleModInstItr* _module_modinst_itr;
+  dbModuleModBTermItr* _module_modbterm_itr;
+  dbModuleModInstModITermItr* _module_modinstmoditerm_itr;
+
+  dbModuleModNetItr* _module_modnet_itr;
+  dbModuleModNetModITermItr* _module_modnet_moditerm_itr;
+  dbModuleModNetModBTermItr* _module_modnet_modbterm_itr;
+  dbModuleModNetITermItr* _module_modnet_iterm_itr;
+  dbModuleModNetBTermItr* _module_modnet_bterm_itr;
+
   dbRegionGroupItr* _region_group_itr;
   dbGroupItr* _group_itr;
   dbGuideItr* _guide_itr;
@@ -269,19 +290,13 @@ class _dbBlock : public _dbObject
   dbPropertyItr* _prop_itr;
   dbBlockSearch* _searchDb;
 
-  float _WNS[2];
-  float _TNS[2];
   unsigned char _num_ext_dbs;
 
   std::list<dbBlockCallBackObj*> _callbacks;
   void* _extmi;
-  FILE* _ptFile;
 
   dbJournal* _journal;
   dbJournal* _journal_pending;
-
-  // This is a temporary vector to fix bterm pins pre dbBPin...
-  std::vector<_dbBTermPin>* _bterm_pins;
 
   _dbBlock(_dbDatabase* db);
   _dbBlock(_dbDatabase* db, const _dbBlock& block);
@@ -291,6 +306,7 @@ class _dbBlock : public _dbObject
   void remove_rect(const Rect& rect);
   void invalidate_bbox() { _flags._valid_bbox = 0; }
   void initialize(_dbChip* chip,
+                  _dbTech* tech,
                   _dbBlock* parent,
                   const char* name,
                   char delimeter);
@@ -301,6 +317,7 @@ class _dbBlock : public _dbObject
   void out(dbDiff& diff, char side, const char* field) const;
 
   int globalConnect(const std::vector<dbGlobalConnect*>& connects);
+  _dbTech* getTech();
 
   dbObjectTable* getObjectTable(dbObjectType type);
 };

@@ -34,10 +34,10 @@
 
 #include "dbCore.h"
 #include "dbDatabase.h"
-#include "dbId.h"
-#include "dbTypes.h"
 #include "dbVector.h"  // disconnect the child-iterm
-#include "odb.h"
+#include "odb/dbId.h"
+#include "odb/dbTypes.h"
+#include "odb/odb.h"
 
 namespace odb {
 
@@ -78,8 +78,7 @@ class _dbInst : public _dbObject
   enum Field  // dbJournalField name
   {
     FLAGS,
-    ORIGIN,
-    INVALIDATETIMING
+    ORIGIN
   };
 
   _dbInstFlags _flags;

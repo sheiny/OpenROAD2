@@ -23,7 +23,8 @@ class OpendpTest : public ::testing::Test
     odb::lefin lef_reader(
         db_.get(), &logger_, /*ignore_non_routing_layers=*/false);
     lib_ = OdbUniquePtr<odb::dbLib>(
-        lef_reader.createTechAndLib("isPlacedTestLibName",
+        lef_reader.createTechAndLib("tech",
+                                    "isPlacedTestLibName",
                                     "sky130hd/sky130_fd_sc_hd_merged.lef"),
         &odb::dbLib::destroy);
 
@@ -41,21 +42,5 @@ class OpendpTest : public ::testing::Test
   OdbUniquePtr<odb::dbChip> chip_{nullptr, &odb::dbChip::destroy};
   OdbUniquePtr<odb::dbBlock> block_{nullptr, &odb::dbBlock::destroy};
 };
-
-TEST_F(OpendpTest, IsPlaced)
-{
-  odb::dbMaster* and_gate = lib_->findMaster("sky130_fd_sc_hd__and2_1");
-  auto and_placed = OdbUniquePtr<odb::dbInst>(
-      odb::dbInst::create(block_.get(), and_gate, "and_1"),
-      &odb::dbInst::destroy);
-
-  and_placed->setPlacementStatus(odb::dbPlacementStatus::PLACED);
-
-  Cell placed;
-  placed.db_inst_ = and_placed.get();
-
-  // Act & Assert
-  ASSERT_TRUE(Opendp::isPlaced(&placed));
-}
 
 }  // namespace dpl

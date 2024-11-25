@@ -38,17 +38,17 @@
 #include <string>
 
 #include "clockWidget.h"
-#include "db.h"
-#include "dbShape.h"
-#include "defin.h"
 #include "displayControls.h"
 #include "drcWidget.h"
-#include "geom.h"
 #include "heatMapPlacementDensity.h"
 #include "inspector.h"
 #include "layoutViewer.h"
-#include "lefin.h"
 #include "mainWindow.h"
+#include "odb/db.h"
+#include "odb/dbShape.h"
+#include "odb/defin.h"
+#include "odb/geom.h"
+#include "odb/lefin.h"
 #include "ord/OpenRoad.hh"
 #include "ruler.h"
 #include "scriptWidget.h"
@@ -96,7 +96,7 @@ static void message_handler(QtMsgType type,
   }
   switch (type) {
     case QtDebugMsg:
-      logger->debug(utl::GUI, "qt", print_msg);
+      debugPrint(logger, utl::GUI, "qt", 1, print_msg);
       break;
     case QtInfoMsg:
       logger->info(utl::GUI, 75, print_msg);
@@ -287,10 +287,11 @@ Selected Gui::makeSelected(const std::any& object)
   if (it != descriptors_.end()) {
     return it->second->makeSelected(object);
   }
-  logger_->warn(utl::GUI,
-                33,
-                "No descriptor is registered for {}.",
-                object.type().name());
+  char* type_name
+      = abi::__cxa_demangle(object.type().name(), nullptr, nullptr, nullptr);
+  logger_->warn(
+      utl::GUI, 33, "No descriptor is registered for type {}.", type_name);
+  free(type_name);
   return Selected();  // FIXME: null descriptor
 }
 
@@ -369,6 +370,7 @@ void Gui::addInstToHighlightSet(const char* name, int highlight_group)
 
   auto inst = block->findInst(name);
   if (!inst) {
+    logger_->error(utl::GUI, 100, "No instance named {} found.", name);
     return;
   }
   SelectionSet sel_inst_set;
@@ -385,6 +387,7 @@ void Gui::addNetToHighlightSet(const char* name, int highlight_group)
 
   auto net = block->findNet(name);
   if (!net) {
+    logger_->error(utl::GUI, 101, "No net named {} found.", name);
     return;
   }
   SelectionSet selection_set;
@@ -430,17 +433,19 @@ void Gui::deleteRuler(const std::string& name)
 
 int Gui::select(const std::string& type,
                 const std::string& name_filter,
+                const std::string& attribute,
+                const std::any& value,
                 bool filter_case_sensitive,
                 int highlight_group)
 {
   for (auto& [object_type, descriptor] : descriptors_) {
     if (descriptor->getTypeName() == type) {
-      SelectionSet selected;
-      if (descriptor->getAllObjects(selected)) {
+      SelectionSet selected_set;
+      if (descriptor->getAllObjects(selected_set)) {
         if (!name_filter.empty()) {
           // convert to vector
-          std::vector<Selected> selected_vector(selected.begin(),
-                                                selected.end());
+          std::vector<Selected> selected_vector(selected_set.begin(),
+                                                selected_set.end());
           // remove elements
           QRegExp reg_filter(
               QString::fromStdString(name_filter),
@@ -450,30 +455,94 @@ int Gui::select(const std::string& type,
               selected_vector.begin(),
               selected_vector.end(),
               [&name_filter, &reg_filter](auto sel) -> bool {
-                const std::string name = sel.getName();
-                if (name == name_filter) {
+                const std::string sel_name = sel.getName();
+                if (sel_name == name_filter) {
                   // direct match, so don't remove
                   return false;
                 }
-                return !reg_filter.exactMatch(QString::fromStdString(name));
+                return !reg_filter.exactMatch(QString::fromStdString(sel_name));
               });
           selected_vector.erase(remove_if, selected_vector.end());
           // rebuild selectionset
-          selected.clear();
-          selected.insert(selected_vector.begin(), selected_vector.end());
+          selected_set.clear();
+          selected_set.insert(selected_vector.begin(), selected_vector.end());
         }
-        main_window->addSelected(selected);
+
+        if (!attribute.empty()) {
+          bool is_valid_attribute = false;
+          for (SelectionSet::iterator selected_iter = selected_set.begin();
+               selected_iter != selected_set.end();) {
+            Descriptor::Properties properties
+                = descriptor->getProperties(selected_iter->getObject());
+            if (filterSelectionProperties(
+                    properties, attribute, value, is_valid_attribute)) {
+              ++selected_iter;
+            } else {
+              selected_iter = selected_set.erase(selected_iter);
+            }
+          }
+
+          if (!is_valid_attribute) {
+            logger_->error(
+                utl::GUI, 59, "Entered attribute {} is not valid.", attribute);
+          } else if (selected_set.empty()) {
+            logger_->error(utl::GUI,
+                           75,
+                           "Couldn't find any object for the specified value.");
+          }
+        }
+
+        main_window->addSelected(selected_set, true);
         if (highlight_group != -1) {
-          main_window->addHighlighted(selected, highlight_group);
+          main_window->addHighlighted(selected_set, highlight_group);
         }
       }
 
       // already found the descriptor, so return to exit loop
-      return selected.size();
+      return selected_set.size();
     }
   }
 
   logger_->error(utl::GUI, 35, "Unable to find descriptor for: {}", type);
+}
+
+bool Gui::filterSelectionProperties(const Descriptor::Properties& properties,
+                                    const std::string& attribute,
+                                    const std::any& value,
+                                    bool& is_valid_attribute)
+{
+  for (const Descriptor::Property& property : properties) {
+    if (attribute == property.name) {
+      is_valid_attribute = true;
+      if (auto props_selected_set
+          = std::any_cast<SelectionSet>(&property.value)) {
+        if (Descriptor::Property::toString(value) == "CONNECTED"
+            && (*props_selected_set).size() != 0) {
+          return true;
+        }
+        for (const auto& selected : *props_selected_set) {
+          if (Descriptor::Property::toString(value) == selected.getName()) {
+            return true;
+          }
+        }
+      } else if (auto props_list
+                 = std::any_cast<Descriptor::PropertyList>(&property.value)) {
+        for (const auto& prop : *props_list) {
+          if (Descriptor::Property::toString(prop.first)
+                  == Descriptor::Property::toString(value)
+              || Descriptor::Property::toString(prop.second)
+                     == Descriptor::Property::toString(value)) {
+            return true;
+          }
+        }
+      } else if (Descriptor::Property::toString(value)
+                 == Descriptor::Property::toString(property.value)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 void Gui::clearSelections()
@@ -532,11 +601,9 @@ std::string Gui::requestUserInput(const std::string& title,
                                        QString::fromStdString(question));
 }
 
-void Gui::loadDRC(const std::string& filename)
+void Gui::selectMarkers(odb::dbMarkerCategory* markers)
 {
-  if (!filename.empty()) {
-    main_window->getDRCViewer()->loadReport(QString::fromStdString(filename));
-  }
+  main_window->getDRCViewer()->selectCategory(markers);
 }
 
 void Gui::setDisplayControlsVisible(const std::string& name, bool value)
@@ -608,6 +675,7 @@ void Gui::setResolution(double pixels_per_dbu)
 
 void Gui::saveImage(const std::string& filename,
                     const odb::Rect& region,
+                    int width_px,
                     double dbu_per_pixel,
                     const std::map<std::string, bool>& display_settings)
 {
@@ -665,6 +733,7 @@ void Gui::saveImage(const std::string& filename,
     save_cmds += std::to_string(save_region.yMin() / dbu_per_micron) + " ";
     save_cmds += std::to_string(save_region.xMax() / dbu_per_micron) + " ";
     save_cmds += std::to_string(save_region.yMax() / dbu_per_micron) + " ";
+    save_cmds += std::to_string(width_px) + " ";
     save_cmds += std::to_string(dbu_per_pixel) + " ";
     save_cmds += "$::gui::display_settings\n";
     // delete display settings map
@@ -681,33 +750,98 @@ void Gui::saveImage(const std::string& filename,
     }
 
     main_window->getLayoutViewer()->saveImage(
-        filename.c_str(), save_region, dbu_per_pixel);
+        filename.c_str(), save_region, width_px, dbu_per_pixel);
     // restore settings
     main_window->getControls()->restore();
   }
 }
 
 void Gui::saveClockTreeImage(const std::string& clock_name,
-                             const std::string& filename)
+                             const std::string& filename,
+                             const std::string& corner,
+                             int width_px,
+                             int height_px)
 {
   if (!enabled()) {
     return;
   }
-  main_window->getClockViewer()->saveImage(clock_name, filename);
+  std::optional<int> width;
+  std::optional<int> height;
+  if (width_px > 0) {
+    width = width_px;
+  }
+  if (height_px > 0) {
+    height = height_px;
+  }
+  main_window->getClockViewer()->saveImage(
+      clock_name, filename, corner, width, height);
 }
 
-void Gui::showWidget(const std::string& name, bool show)
+void Gui::selectClockviewerClock(const std::string& clock_name)
 {
+  if (!enabled()) {
+    return;
+  }
+  main_window->getClockViewer()->selectClock(clock_name);
+}
+
+static QWidget* findWidget(const std::string& name)
+{
+  if (name == "main_window" || name == "OpenROAD") {
+    return main_window;
+  }
+
   const QString find_name = QString::fromStdString(name);
   for (const auto& widget : main_window->findChildren<QDockWidget*>()) {
     if (widget->objectName() == find_name
         || widget->windowTitle() == find_name) {
-      if (show) {
-        widget->show();
-        widget->raise();
-      } else {
-        widget->hide();
-      }
+      return widget;
+    }
+  }
+  return nullptr;
+}
+
+void Gui::showWidget(const std::string& name, bool show)
+{
+  auto* widget = findWidget(name);
+  if (widget == nullptr) {
+    return;
+  }
+
+  if (show) {
+    widget->show();
+    widget->raise();
+  } else {
+    widget->hide();
+  }
+}
+
+void Gui::triggerAction(const std::string& name)
+{
+  const size_t dot_idx = name.find_last_of('.');
+  auto* widget = findWidget(name.substr(0, dot_idx));
+  if (widget == nullptr) {
+    return;
+  }
+
+  const QString find_name = QString::fromStdString(name.substr(dot_idx + 1));
+
+  // Find QAction
+  for (QAction* action : widget->findChildren<QAction*>()) {
+    logger_->report("{} {}",
+                    action->objectName().toStdString(),
+                    action->text().toStdString());
+    if (action->objectName() == find_name || action->text() == find_name) {
+      action->trigger();
+      return;
+    }
+  }
+
+  // Find QPushButton
+  for (QPushButton* button : widget->findChildren<QPushButton*>()) {
+    if (button->objectName() == find_name || button->text() == find_name) {
+      button->click();
+      return;
     }
   }
 }
@@ -769,6 +903,7 @@ void Gui::setHeatMapSetting(const std::string& name,
   const std::string rebuild_map_option = "rebuild";
   if (option == rebuild_map_option) {
     source->destroyMap();
+    source->ensureMap();
   } else {
     auto settings = source->getSettings();
 
@@ -785,7 +920,7 @@ void Gui::setHeatMapSetting(const std::string& name,
                      options.join(", ").toStdString());
     }
 
-    auto current_value = settings[option];
+    auto& current_value = settings[option];
     if (std::holds_alternative<bool>(current_value)) {
       // is bool
       if (auto* s = std::get_if<bool>(&value)) {
@@ -829,6 +964,33 @@ void Gui::setHeatMapSetting(const std::string& name,
   }
 
   source->getRenderer()->redraw();
+}
+
+Renderer::Setting Gui::getHeatMapSetting(const std::string& name,
+                                         const std::string& option)
+{
+  HeatMapDataSource* source = getHeatMap(name);
+
+  const std::string map_has_option = "has_data";
+  if (option == map_has_option) {
+    return source->hasData();
+  }
+
+  auto settings = source->getSettings();
+
+  if (settings.count(option) == 0) {
+    QStringList options;
+    for (const auto& [key, kv] : settings) {
+      options.append(QString::fromStdString(key));
+    }
+    logger_->error(utl::GUI,
+                   95,
+                   "{} is not a valid option. Valid options are: {}",
+                   option,
+                   options.join(", ").toStdString());
+  }
+
+  return settings[option];
 }
 
 void Gui::dumpHeatMap(const std::string& name, const std::string& file)
@@ -1024,47 +1186,47 @@ void Gui::timingPathsThrough(const std::set<odbTerm>& terms)
 
 void Gui::addFocusNet(odb::dbNet* net)
 {
-  main_window->getLayoutViewer()->addFocusNet(net);
+  main_window->getLayoutTabs()->addFocusNet(net);
 }
 
 void Gui::addRouteGuides(odb::dbNet* net)
 {
-  main_window->getLayoutViewer()->addRouteGuides(net);
+  main_window->getLayoutTabs()->addRouteGuides(net);
 }
 
 void Gui::removeRouteGuides(odb::dbNet* net)
 {
-  main_window->getLayoutViewer()->removeRouteGuides(net);
+  main_window->getLayoutTabs()->removeRouteGuides(net);
 }
 
 void Gui::addNetTracks(odb::dbNet* net)
 {
-  main_window->getLayoutViewer()->addNetTracks(net);
+  main_window->getLayoutTabs()->addNetTracks(net);
 }
 
 void Gui::removeNetTracks(odb::dbNet* net)
 {
-  main_window->getLayoutViewer()->removeNetTracks(net);
+  main_window->getLayoutTabs()->removeNetTracks(net);
 }
 
 void Gui::removeFocusNet(odb::dbNet* net)
 {
-  main_window->getLayoutViewer()->removeFocusNet(net);
+  main_window->getLayoutTabs()->removeFocusNet(net);
 }
 
 void Gui::clearFocusNets()
 {
-  main_window->getLayoutViewer()->clearFocusNets();
+  main_window->getLayoutTabs()->clearFocusNets();
 }
 
 void Gui::clearRouteGuides()
 {
-  main_window->getLayoutViewer()->clearRouteGuides();
+  main_window->getLayoutTabs()->clearRouteGuides();
 }
 
 void Gui::clearNetTracks()
 {
-  main_window->getLayoutViewer()->clearNetTracks();
+  main_window->getLayoutTabs()->clearNetTracks();
 }
 
 void Gui::setLogger(utl::Logger* logger)
@@ -1089,7 +1251,7 @@ void Gui::hideGui()
   main_window->exit();
 }
 
-void Gui::showGui(const std::string& cmds, bool interactive)
+void Gui::showGui(const std::string& cmds, bool interactive, bool load_settings)
 {
   if (enabled()) {
     logger_->warn(utl::GUI, 8, "GUI already active.");
@@ -1100,7 +1262,17 @@ void Gui::showGui(const std::string& cmds, bool interactive)
   // passing in cmd_argc and cmd_argv to meet Qt application requirement for
   // arguments nullptr for tcl interp to indicate nothing to setup and commands
   // and interactive setting
-  startGui(cmd_argc, cmd_argv, nullptr, cmds, interactive);
+  startGui(cmd_argc, cmd_argv, nullptr, cmds, interactive, load_settings);
+}
+
+void Gui::minimize()
+{
+  main_window->showMinimized();
+}
+
+void Gui::unminimize()
+{
+  main_window->showNormal();
 }
 
 void Gui::init(odb::dbDatabase* db, utl::Logger* logger)
@@ -1114,6 +1286,23 @@ void Gui::init(odb::dbDatabase* db, utl::Logger* logger)
   placement_density_heat_map_->registerHeatMap();
 }
 
+class SafeApplication : public QApplication
+{
+ public:
+  using QApplication::QApplication;
+
+  bool notify(QObject* receiver, QEvent* event) override
+  {
+    try {
+      return QApplication::notify(receiver, event);
+    } catch (std::exception& ex) {
+      // Ignored here as the message will be logged in the GUI
+    }
+
+    return false;
+  }
+};
+
 //////////////////////////////////////////////////
 
 // This is the main entry point to start the GUI.  It only
@@ -1122,13 +1311,15 @@ int startGui(int& argc,
              char* argv[],
              Tcl_Interp* interp,
              const std::string& script,
-             bool interactive)
+             bool interactive,
+             bool load_settings,
+             bool minimize)
 {
   auto gui = gui::Gui::get();
   // ensure continue after close is false
   gui->clearContinueAfterClose();
 
-  QApplication app(argc, argv);
+  SafeApplication app(argc, argv);
   application = &app;
 
   // Default to 12 point for easier reading
@@ -1139,7 +1330,10 @@ int startGui(int& argc,
   auto* open_road = ord::OpenRoad::openRoad();
 
   // create new MainWindow
-  main_window = new gui::MainWindow;
+  main_window = new gui::MainWindow(load_settings);
+  if (minimize) {
+    main_window->showMinimized();
+  }
 
   open_road->addObserver(main_window);
   if (!interactive) {
@@ -1168,7 +1362,7 @@ int startGui(int& argc,
       });
 
   // Exit the app if someone chooses exit from the menu in the window
-  QObject::connect(main_window, SIGNAL(exit()), &app, SLOT(quit()));
+  QObject::connect(main_window, &MainWindow::exit, &app, &QApplication::quit);
   // Track the exit in case it originated during a script
   bool exit_requested = false;
   int exit_code = EXIT_SUCCESS;
@@ -1180,7 +1374,7 @@ int startGui(int& argc,
 
   // Save the window's status into the settings when quitting.
   QObject::connect(
-      &app, SIGNAL(aboutToQuit()), main_window, SLOT(saveSettings()));
+      &app, &QApplication::aboutToQuit, main_window, &MainWindow::saveSettings);
 
   // execute commands to restore state of gui
   std::string restore_commands;
@@ -1201,7 +1395,7 @@ int startGui(int& argc,
     // disconnect tcl return lister
     QObject::disconnect(tcl_return_code_connect);
 
-    if (!tcl_ok) {
+    if (!exit_requested && !tcl_ok) {
       auto& cmds = gui->getRestoreStateCommands();
       if (cmds[cmds.size() - 1]
           == "exit") {  // exit, will be the last command if it is present
@@ -1260,7 +1454,19 @@ int startGui(int& argc,
   // rethow exception, if one happened after cleanup of main_window
   exception.rethrow();
 
-  if (interactive && (!gui->isContinueAfterClose() || exit_requested)) {
+  debugPrint(open_road->getLogger(),
+             utl::GUI,
+             "init",
+             1,
+             "Exit state: interactive ({}), isContinueAfterClose ({}), "
+             "exit_requested ({}), exit_code ({})",
+             interactive,
+             gui->isContinueAfterClose(),
+             exit_requested,
+             exit_code);
+
+  const bool do_exit = !gui->isContinueAfterClose() && exit_requested;
+  if (interactive && do_exit) {
     // if exiting, go ahead and exit with gui return code.
     exit(exit_code);
   }
@@ -1288,6 +1494,12 @@ Descriptor::Properties Selected::getProperties() const
   odb::Rect bbox;
   if (getBBox(bbox)) {
     props.push_back({"BBox", bbox});
+    // convenience; the user may want to know the dimensions
+    props.push_back(
+        {"BBox Width, Height",
+         std::string("(") + Descriptor::Property::convert_dbu(bbox.dx(), false)
+             + ", " + Descriptor::Property::convert_dbu(bbox.dy(), false)
+             + ")"});
   }
 
   return props;
@@ -1331,10 +1543,14 @@ std::string Descriptor::Property::toString(const std::any& value)
     return *v ? "True" : "False";
   } else if (auto v = std::any_cast<odb::Rect>(&value)) {
     std::string text = "(";
-    text += convert_dbu(v->xMin(), false) + ",";
+    text += convert_dbu(v->xMin(), false) + ", ";
     text += convert_dbu(v->yMin(), false) + "), (";
-    text += convert_dbu(v->xMax(), false) + ",";
+    text += convert_dbu(v->xMax(), false) + ", ";
     text += convert_dbu(v->yMax(), false) + ")";
+    return text;
+  } else if (auto v = std::any_cast<odb::Point>(&value)) {
+    std::string text = fmt::format(
+        "({},{})", convert_dbu(v->x(), false), convert_dbu(v->y(), false));
     return text;
   }
 

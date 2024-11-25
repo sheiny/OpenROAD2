@@ -56,6 +56,7 @@ ScriptWidget::ScriptWidget(QWidget* parent)
       input_(new TclCmdInputWidget(this)),
       pauser_(new QPushButton("Idle", this)),
       pause_timer_(std::make_unique<QTimer>()),
+      report_timer_(std::make_unique<QTimer>()),
       paused_(false),
       logger_(nullptr),
       buffer_outputs_(false),
@@ -67,6 +68,7 @@ ScriptWidget::ScriptWidget(QWidget* parent)
   output_->setReadOnly(true);
   pauser_->setEnabled(false);
   pauser_->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Expanding);
+  pause_timer_->setSingleShot(true);
 
   QHBoxLayout* inner_layout = new QHBoxLayout;
   inner_layout->addWidget(pauser_);
@@ -79,48 +81,91 @@ ScriptWidget::ScriptWidget(QWidget* parent)
   QWidget* container = new QWidget(this);
   container->setLayout(layout);
 
-  connect(input_, SIGNAL(textChanged()), this, SLOT(outputChanged()));
+  connect(input_,
+          &TclCmdInputWidget::textChanged,
+          this,
+          &ScriptWidget::outputChanged);
 
-  connect(input_, SIGNAL(exiting()), this, SIGNAL(exiting()));
+  connect(input_, &TclCmdInputWidget::exiting, this, &ScriptWidget::exiting);
   connect(input_,
-          SIGNAL(commandAboutToExecute()),
+          &TclCmdInputWidget::commandAboutToExecute,
           this,
-          SIGNAL(commandAboutToExecute()));
+          &ScriptWidget::commandAboutToExecute);
   connect(input_,
-          SIGNAL(commandAboutToExecute()),
+          &TclCmdInputWidget::commandAboutToExecute,
           this,
-          SLOT(setPauserToRunning()));
+          &ScriptWidget::setPauserToRunning);
   connect(input_,
-          SIGNAL(addCommandToOutput(const QString&)),
+          &TclCmdInputWidget::addCommandToOutput,
           this,
-          SLOT(addCommandToOutput(const QString&)));
+          &ScriptWidget::addCommandToOutput);
   connect(input_,
-          SIGNAL(addResultToOutput(const QString&, bool)),
+          &TclCmdInputWidget::addResultToOutput,
           this,
-          SLOT(addResultToOutput(const QString&, bool)));
+          &ScriptWidget::addResultToOutput);
   connect(input_,
-          SIGNAL(commandFinishedExecuting(bool)),
+          &TclCmdInputWidget::commandFinishedExecuting,
           this,
-          SLOT(resetPauser()));
+          &ScriptWidget::resetPauser);
   connect(input_,
-          SIGNAL(commandFinishedExecuting(bool)),
+          &TclCmdInputWidget::commandFinishedExecuting,
           this,
-          SIGNAL(commandExecuted(bool)));
-  connect(output_, SIGNAL(textChanged()), this, SLOT(outputChanged()));
-  connect(pauser_, SIGNAL(pressed()), this, SLOT(pauserClicked()));
-  connect(pause_timer_.get(), SIGNAL(timeout()), this, SLOT(unpause()));
+          &ScriptWidget::commandExecuted);
+  connect(input_,
+          &TclCmdInputWidget::commandFinishedExecuting,
+          this,
+          &ScriptWidget::flushReportBufferToOutput);
+  connect(output_,
+          &QPlainTextEdit::textChanged,
+          this,
+          &ScriptWidget::outputChanged);
+  connect(pauser_, &QPushButton::pressed, this, &ScriptWidget::pauserClicked);
+  connect(pause_timer_.get(), &QTimer::timeout, this, &ScriptWidget::unpause);
+  connect(report_timer_.get(),
+          &QTimer::timeout,
+          this,
+          &ScriptWidget::flushReportBufferToOutput);
 
   connect(this,
-          SIGNAL(addToOutput(const QString&, const QColor&)),
+          &ScriptWidget::addToOutput,
           this,
-          SLOT(addTextToOutput(const QString&, const QColor&)),
+          &ScriptWidget::addTextToOutput,
           Qt::QueuedConnection);
 
   setWidget(container);
 }
 
+// When displaying text in Scripting, processing events in order to
+// ensure the text is visible to the user can considerably slow down
+// the logging, so, for reports, we use a buffer.
+void ScriptWidget::flushReportBufferToOutput()
+{
+  std::unique_lock guard(reporting_, std::try_to_lock);
+  if (!guard.owns_lock()) {
+    // failed to aquire lock
+    // return and this will be called at some point later
+    QTimer::singleShot(report_display_interval,
+                       this,
+                       &ScriptWidget::flushReportBufferToOutput);
+    return;
+  }
+  if (report_buffer_.isEmpty()) {
+    return;
+  }
+
+  // this comes from a ->report
+  addTextToOutput(report_buffer_, buffer_msg_);
+  report_buffer_.clear();
+}
+
 ScriptWidget::~ScriptWidget()
 {
+  // When _input is destroyed it can trigger this connection resulting
+  // in a crash.
+  disconnect(input_,
+             &TclCmdInputWidget::textChanged,
+             this,
+             &ScriptWidget::outputChanged);
   if (logger_ != nullptr) {
     // make sure to remove the Gui sink from logger
     logger_->removeSink(sink_);
@@ -179,11 +224,13 @@ void ScriptWidget::addResultToOutput(const QString& result, bool is_ok)
     addToOutput(result, ok_msg_);
   } else {
     try {
-      logger_->error(utl::GUI, 70, result.toStdString());
+      auto msg = result.toStdString();
+      if (msg.find(TclCmdInputWidget::exit_string) == std::string::npos) {
+        logger_->error(utl::GUI, 70, msg);
+      }
     } catch (const std::runtime_error& e) {
       if (!is_interactive_) {
-        // rethrow error
-        throw e;
+        throw;
       }
     }
   }
@@ -194,9 +241,15 @@ void ScriptWidget::addLogToOutput(const QString& text, const QColor& color)
   addToOutput(text, color);
 }
 
-void ScriptWidget::addReportToOutput(const QString& text)
+void ScriptWidget::startReportTimer()
 {
-  addToOutput(text, buffer_msg_);
+  report_timer_->start(report_display_interval);
+}
+
+void ScriptWidget::addMsgToReportBuffer(const QString& text)
+{
+  std::lock_guard guard(reporting_);
+  report_buffer_ += text;
 }
 
 void ScriptWidget::addTextToOutput(const QString& text, const QColor& color)
@@ -276,6 +329,11 @@ void ScriptWidget::pause(int timeout)
   QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
+void ScriptWidget::setCommand(const QString& command)
+{
+  input_->setText(command);
+}
+
 void ScriptWidget::unpause()
 {
   paused_ = false;
@@ -289,7 +347,7 @@ void ScriptWidget::triggerPauseCountDown(int timeout)
 
   pause_timer_->setInterval(timeout);
   pause_timer_->start();
-  QTimer::singleShot(timeout, this, SLOT(updatePauseTimeout()));
+  QTimer::singleShot(timeout, this, &ScriptWidget::updatePauseTimeout);
   updatePauseTimeout();
 }
 
@@ -302,10 +360,12 @@ void ScriptWidget::updatePauseTimeout()
 
   const int one_second = 1000;
 
-  int seconds = pause_timer_->remainingTime() / one_second;
-  pauser_->setText("Continue (" + QString::number(seconds) + "s)");
+  if (pause_timer_->isActive()) {
+    const int seconds = pause_timer_->remainingTime() / one_second;
+    pauser_->setText("Continue (" + QString::number(seconds) + "s)");
 
-  QTimer::singleShot(one_second, this, SLOT(updatePauseTimeout()));
+    QTimer::singleShot(one_second, this, &ScriptWidget::updatePauseTimeout);
+  }
 }
 
 void ScriptWidget::pauserClicked()
@@ -366,14 +426,24 @@ class ScriptWidget::GuiSink : public spdlog::sinks::base_sink<Mutex>
         std::string(formatted.data(), formatted.size()));
 
     if (msg.level == spdlog::level::level_enum::off) {
-      // this comes from a ->report
-      widget_->addReportToOutput(formatted_msg);
+      widget_->addMsgToReportBuffer(formatted_msg);
+
+      if (QThread::currentThread() == widget_->thread()) {
+        if (!widget_->report_timer_->isActive()) {
+          widget_->startReportTimer();
+        }
+
+        // the event loop is blocked so we need to manually process
+        // events so that the timer keeps going
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+      }
     } else {
       // select error message color if message level is error or above.
       const QColor& msg_color = msg.level >= spdlog::level::level_enum::err
                                     ? widget_->error_msg_
                                     : widget_->buffer_msg_;
 
+      widget_->flushReportBufferToOutput();
       widget_->addLogToOutput(formatted_msg, msg_color);
     }
 

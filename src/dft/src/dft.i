@@ -56,17 +56,28 @@ utl::Logger* getLogger()
 
 void preview_dft(bool verbose)
 {
-  getDft()->preview_dft(verbose);
+  getDft()->previewDft(verbose);
 }
+
+void scan_replace()
+{
+  getDft()->scanReplace();
+}
+
 
 void insert_dft()
 {
-  getDft()->insert_dft();
+  getDft()->insertDft();
 }
 
 void set_dft_config_max_length(int max_length)
 {
   getDft()->getMutableDftConfig()->getMutableScanArchitectConfig()->setMaxLength(max_length);
+}
+
+void set_dft_config_max_chains(int max_chains)
+{
+  getDft()->getMutableDftConfig()->getMutableScanArchitectConfig()->setMaxChains(max_chains);
 }
 
 void set_dft_config_clock_mixing(const char* clock_mixing_ptr)
@@ -77,7 +88,7 @@ void set_dft_config_clock_mixing(const char* clock_mixing_ptr)
   } else if (clock_mixing == "clock_mix") {
     getDft()->getMutableDftConfig()->getMutableScanArchitectConfig()->setClockMixing(dft::ScanArchitectConfig::ClockMixing::ClockMix);
   } else {
-    getLogger()->error(utl::DFT, 5, "Requested clock mixing config not valid");
+    getLogger()->error(utl::DFT, 6, "Requested clock mixing config not valid");
   }
 }
 

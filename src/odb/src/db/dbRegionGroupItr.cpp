@@ -87,8 +87,9 @@ uint dbRegionGroupItr::size(dbObject* parent)
 
   for (id = dbRegionGroupItr::begin(parent);
        id != dbRegionGroupItr::end(parent);
-       id = dbRegionGroupItr::next(id))
+       id = dbRegionGroupItr::next(id)) {
     ++cnt;
+  }
 
   return cnt;
 }
@@ -118,7 +119,5 @@ dbObject* dbRegionGroupItr::getObject(uint id, ...)
 {
   return _group_tbl->getPtr(id);
 }
-// User Code Begin Methods
-// User Code End Methods
 }  // namespace odb
    // Generator Code End Cpp

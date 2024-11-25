@@ -44,7 +44,6 @@
 #include "db_sta/dbSta.hh"
 #include "db_sta/dbNetwork.hh"
 #include "db_sta/dbReadVerilog.hh"
-#include "ord/Version.hh"
 #include "utl/Logger.h"
 #include "ord/OpenRoad.hh"
 
@@ -162,7 +161,7 @@ getOpenRCX()
   return openroad->getOpenRCX();
 }
 
-triton_route::TritonRoute *
+drt::TritonRoute *
 getTritonRoute()
 {
   OpenRoad *openroad = getOpenRoad();
@@ -302,34 +301,72 @@ using odb::dbTech;
 const char *
 openroad_version()
 {
-  return OPENROAD_VERSION;
+  return ord::OpenRoad::getVersion();
 }
 
 const char *
 openroad_git_describe()
 {
-  return OPENROAD_GIT_DESCRIBE;
+  return ord::OpenRoad::getGitDescribe();
+}
+
+const bool 
+openroad_gpu_compiled()
+{
+  return ord::OpenRoad::getGUICompileOption();
+}
+
+const bool
+openroad_python_compiled()
+{
+  return ord::OpenRoad::getPythonCompileOption();
+}
+
+const bool
+openroad_gui_compiled()
+{
+  return ord::OpenRoad::getGUICompileOption();
+}
+
+const bool
+openroad_charts_compiled()
+{
+  return ord::OpenRoad::getChartsCompileOption();
 }
 
 void
 read_lef_cmd(const char *filename,
 	     const char *lib_name,
+	     const char *tech_name,
 	     bool make_tech,
 	     bool make_library)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->readLef(filename, lib_name, make_tech, make_library);
+  ord->readLef(filename, lib_name, tech_name, make_tech, make_library);
 }
 
 void
 read_def_cmd(const char *filename,
+             const char* tech_name,
              bool continue_on_errors,
              bool floorplan_init,
              bool incremental,
              bool child)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->readDef(filename, continue_on_errors, floorplan_init, incremental, child);
+  auto* db = ord->getDb();
+  dbTech* tech;
+  if (tech_name[0] != '\0') {
+    tech = db->findTech(tech_name);
+  } else {
+    tech = db->getTech();
+  }
+  if (!tech) {
+    auto logger = getLogger();
+    logger->error(utl::ORD, 52, "Technology {} not found", tech_name);
+  }
+  ord->readDef(filename, tech, continue_on_errors,
+               floorplan_init, incremental, child);
 }
 
 void
@@ -347,6 +384,15 @@ write_lef_cmd(const char *filename)
   ord->writeLef(filename);
 }
 
+void
+write_abstract_lef_cmd(const char *filename,
+                       int bloat_factor,
+                       bool bloat_occupied_layers)
+{
+  OpenRoad *ord = getOpenRoad();
+  ord->writeAbstractLef(filename, bloat_factor, bloat_occupied_layers);
+}
+
 
 void 
 write_cdl_cmd(const char *outFilename,
@@ -358,10 +404,10 @@ write_cdl_cmd(const char *outFilename,
 }
 
 void
-read_db_cmd(const char *filename)
+read_db_cmd(const char *filename, bool hierarchy)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->readDb(filename);
+  ord->readDb(filename,hierarchy);
 }
 
 void
@@ -386,10 +432,10 @@ read_verilog_cmd(const char *filename)
 }
 
 void
-link_design_db_cmd(const char *design_name)
+link_design_db_cmd(const char *design_name,bool hierarchy)
 {
   OpenRoad *ord = getOpenRoad();
-  ord->linkDesign(design_name);
+  ord->linkDesign(design_name, hierarchy);
 }
 
 void
@@ -430,7 +476,7 @@ get_db_tech()
 bool
 db_has_tech()
 {
-  return getDb()->getTech() != nullptr;
+  return !getDb()->getTechs().empty();
 }
 
 odb::dbBlock *
@@ -455,13 +501,23 @@ get_db_core()
 double
 dbu_to_microns(int dbu)
 {
-  return static_cast<double>(dbu) / getDb()->getTech()->getLefUnits();
+  auto tech = getDb()->getTech();
+  if (!tech) {
+    auto logger = getLogger();
+    logger->error(utl::ORD, 49, "No tech is loaded");
+  }
+  return static_cast<double>(dbu) / tech->getDbUnitsPerMicron();
 }
 
 int
 microns_to_dbu(double microns)
 {
-  return std::round(microns * getDb()->getTech()->getLefUnits());
+  auto tech = getDb()->getTech();
+  if (!tech) {
+    auto logger = getLogger();
+    logger->error(utl::ORD, 50, "No tech is loaded");
+  }
+  return std::round(microns * tech->getDbUnitsPerMicron());
 }
 
 // Common check for placement tools.

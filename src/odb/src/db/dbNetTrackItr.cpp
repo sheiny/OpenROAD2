@@ -86,8 +86,9 @@ uint dbNetTrackItr::size(dbObject* parent)
   uint cnt = 0;
 
   for (id = dbNetTrackItr::begin(parent); id != dbNetTrackItr::end(parent);
-       id = dbNetTrackItr::next(id))
+       id = dbNetTrackItr::next(id)) {
     ++cnt;
+  }
 
   return cnt;
 }
@@ -117,7 +118,5 @@ dbObject* dbNetTrackItr::getObject(uint id, ...)
 {
   return _net_tracks_tbl->getPtr(id);
 }
-// User Code Begin Methods
-// User Code End Methods
 }  // namespace odb
    // Generator Code End Cpp

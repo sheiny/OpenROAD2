@@ -43,14 +43,17 @@ swig_lib(NAME      rsz
 
 add_library(rsz_lib
     BufferedNet.cc
-    GateCloner.cc
+    PreChecks.cc      
+    RecoverPower.cc    
     RepairDesign.cc
     RepairHold.cc
     RepairSetup.cc
     Rebuffer.cc
+    SpefWriter.cc
     SteinerTree.cc
     EstimateWireParasitics.cc
     Resizer.cc
+    OdbCallBack.cc
 )
 
 target_sources(rsz

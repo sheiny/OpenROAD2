@@ -66,6 +66,19 @@ class Logger;
 
 namespace par {
 
+struct CompareInstancePtr
+{
+ public:
+  CompareInstancePtr(sta::dbNetwork* db_network = nullptr)
+      : db_network_(db_network)
+  {
+  }
+  bool operator()(const sta::Instance* lhs, const sta::Instance* rhs) const;
+
+ private:
+  sta::dbNetwork* db_network_ = nullptr;
+};
+
 class PartitionMgr
 {
  public:
@@ -85,6 +98,8 @@ class PartitionMgr
   // attributes both follows the hMETIS format
   void tritonPartHypergraph(unsigned int num_parts,
                             float balance_constraint,
+                            const std::vector<float>& base_balance,
+                            const std::vector<float>& scale_factor,
                             unsigned int seed,
                             int vertex_dimension,
                             int hyperedge_dimension,
@@ -127,6 +142,8 @@ class PartitionMgr
   // The vertex balance should be satisfied
   void evaluateHypergraphSolution(unsigned int num_parts,
                                   float balance_constraint,
+                                  const std::vector<float>& base_balance,
+                                  const std::vector<float>& scale_factor,
                                   int vertex_dimension,
                                   int hyperedge_dimension,
                                   const char* hypergraph_file,
@@ -148,6 +165,8 @@ class PartitionMgr
   // partitioning, placement information is extracted from OpenDB
   void tritonPartDesign(unsigned int num_parts_arg,
                         float balance_constraint_arg,
+                        const std::vector<float>& base_balance_arg,
+                        const std::vector<float>& scale_factor_arg,
                         unsigned int seed_arg,
                         bool timing_aware_flag_arg,
                         int top_n_arg,
@@ -197,6 +216,8 @@ class PartitionMgr
 
   void evaluatePartDesignSolution(unsigned int num_parts_arg,
                                   float balance_constraint_arg,
+                                  const std::vector<float>& base_balance_arg,
+                                  const std::vector<float>& scale_factor_arg,
                                   bool timing_aware_flag_arg,
                                   int top_n_arg,
                                   bool fence_flag_arg,
@@ -244,7 +265,7 @@ class PartitionMgr
       sta::Library* library,
       sta::NetworkReader* network,
       sta::Instance* parent,
-      const std::set<sta::Instance*>* insts,
+      const std::set<sta::Instance*, CompareInstancePtr>* insts,
       std::map<sta::Net*, sta::Port*>* port_map);
 
   sta::Instance* buildPartitionedTopInstance(const char* name,

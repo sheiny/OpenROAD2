@@ -32,7 +32,7 @@
 
 #include "dbCCSegItr.h"
 
-#include <stdarg.h>
+#include <cstdarg>
 
 #include "dbBlock.h"
 #include "dbCCSeg.h"
@@ -86,8 +86,9 @@ uint dbCCSegItr::size(dbObject* parent)
   uint cnt = 0;
 
   for (id = dbCCSegItr::begin(parent); id != dbCCSegItr::end(parent);
-       id = dbCCSegItr::next(id))
+       id = dbCCSegItr::next(id)) {
     ++cnt;
+  }
 
   return cnt;
 }

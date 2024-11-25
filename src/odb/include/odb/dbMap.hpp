@@ -44,12 +44,12 @@ inline dbMap<T, D>::dbMap(const dbSet<T>& set)
   // Use a vector if this set represents a sequential iterator
   if (_set.sequential()) {
     _vector = new std::vector<D>(_set.sequential() + 1);
-    _map = NULL;
+    _map = nullptr;
   }
 
   // Use a map if this set represents random iterator
   else {
-    _vector = NULL;
+    _vector = nullptr;
     _map = new std::map<T*, D>;
     typename dbSet<T>::iterator itr;
 
@@ -88,9 +88,7 @@ template <class T, class D>
 inline D& dbMap<T, D>::operator[](T* object)
 {
   if (_map) {
-    typename std::map<T*, D>::iterator itr = _map->find(object);
-    ZASSERT(itr != _map->end());
-    return (*itr).second;
+    return _map->at(object);
   }
 
   uint idx = object->getId();

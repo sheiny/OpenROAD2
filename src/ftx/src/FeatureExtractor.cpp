@@ -308,8 +308,7 @@ FeatureExtractor::extractCNNFeatures()
 
     odb::Rect bbox_inst = inst->getBBox()->getBox();
     std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
-    odb::dbTransform transform;
-    inst->getTransform(transform);
+    odb::dbTransform transform = inst->getTransform();
     for(auto node : nodes)
     {
       odb::Rect node_rect = node->rect;
@@ -833,8 +832,7 @@ FeatureExtractor::extractInstFeatures(odb::dbInst* inst)
   odb::dbBox *box = inst->getBBox();
   odb::Rect bbox_inst = box->getBox();
   std::vector<ftx::Node*> nodes = gridGraph_->intersectingNodes(bbox_inst);
-  odb::dbTransform transform;
-  inst->getTransform(transform);
+  odb::dbTransform transform = inst->getTransform();
   odb::dbMaster *master = inst->getMaster();
 
   for(auto node : nodes)

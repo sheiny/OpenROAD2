@@ -35,133 +35,106 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 %{
 #include "ord/OpenRoad.hh"
 #include "psm/pdnsim.h"
+#include "sta/Corner.hh"
 
 namespace ord {
 psm::PDNSim*
 getPDNSim();
 }
 
+namespace odb {
+class dbNet;
+}
+
 using ord::getPDNSim;
 using psm::PDNSim;
+using sta::Corner;
+
 %}
+
+%typemap(in) psm::GeneratedSourceType {
+  int length;
+  const char *arg = Tcl_GetStringFromObj($input, &length);
+
+  if (strcmp(arg, "BUMPS") == 0) {
+    $1 = psm::GeneratedSourceType::BUMPS;
+  } else if (strcmp(arg, "FULL") == 0) {
+    $1 = psm::GeneratedSourceType::FULL;
+  } else if (strcmp(arg, "STRAPS") == 0) {
+    $1 = psm::GeneratedSourceType::STRAPS;
+  } else {
+    $1 = psm::GeneratedSourceType::BUMPS;
+  }
+}
 
 %inline %{
 
+
 void 
-import_vsrc_cfg_cmd(const char* vsrc)
+set_net_voltage_cmd(odb::dbNet* net, Corner* corner, double voltage)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->import_vsrc_cfg(vsrc);
+  pdnsim->setNetVoltage(net, corner, voltage);
 }
 
 void 
-set_power_net_cmd(const char* net)
+analyze_power_grid_cmd(odb::dbNet* net, Corner* corner, psm::GeneratedSourceType type, const char* error_file, bool enable_em, const char* em_file, const char* voltage_file, const char* voltage_source_file)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->set_power_net(net);
-}
-
-void 
-set_bump_pitch_x_cmd(float bump_pitch)
-{
-  PDNSim* pdnsim = getPDNSim();
-  pdnsim->set_bump_pitch_x(bump_pitch);
-}
-
-void 
-set_bump_pitch_y_cmd(float bump_pitch)
-{
-  PDNSim* pdnsim = getPDNSim();
-  pdnsim->set_bump_pitch_y(bump_pitch);
+  pdnsim->analyzePowerGrid(net, corner, type, voltage_file, enable_em, em_file, error_file, voltage_source_file);
 }
 
 void
-set_node_density(float node_density)
+add_decap_master(odb::dbMaster *master, float cap)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->set_node_density(node_density);
+  pdnsim->addDecapMaster(master, cap);
 }
 
 void
-set_node_density_factor(int node_density_factor)
+insert_decap_cmd(const float target, const char* net_name)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->set_node_density_factor(node_density_factor);
+  pdnsim->insertDecapCells(target, net_name);
 }
 
-
-
-void 
-set_net_voltage_cmd(const char* net_name, float voltage)
+bool
+check_connectivity_cmd(odb::dbNet* net, bool floorplanning, const char* error_file)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->set_pdnsim_net_voltage(net_name, voltage);
-}
-
-
-
-void 
-import_em_enable(int enable_em)
-{
-  PDNSim* pdnsim = getPDNSim();
-  pdnsim->import_enable_em(enable_em);
-}
-
-
-void 
-import_out_file_cmd(const char* out_file)
-{
-  PDNSim* pdnsim = getPDNSim();
-  pdnsim->import_out_file(out_file);
+  return pdnsim->checkConnectivity(net, floorplanning, error_file);
 }
 
 void
-import_error_file_cmd(const char* error_file)
+write_spice_file_cmd(odb::dbNet* net, Corner* corner, psm::GeneratedSourceType type, const char* file, const char* voltage_source_file)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->import_error_file(error_file);
+  return pdnsim->writeSpiceNetwork(net, corner, type, file, voltage_source_file);
 }
 
-void 
-import_em_out_file_cmd(const char* out_file)
+void set_debug_gui(bool enable)
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->import_em_out_file(out_file);
+  pdnsim->setDebugGui(enable);
 }
 
-
-void 
-import_spice_out_file_cmd(const char* out_file)
+void clear_solvers()
 {
   PDNSim* pdnsim = getPDNSim();
-  pdnsim->import_spice_out_file(out_file);
+  pdnsim->clearSolvers();
 }
 
-void 
-analyze_power_grid_cmd()
+void set_source_settings(int bump_dx, int bump_dy, int bump_size, int bump_interval, int track_pitch)
 {
-  PDNSim* pdnsim = getPDNSim();
-  pdnsim->analyze_power_grid();
-}
+  PDNSim::GeneratedSourceSettings settings;
+  settings.bump_dx = bump_dx;
+  settings.bump_dy = bump_dy;
+  settings.bump_size = bump_size;
+  settings.bump_interval = bump_interval;
+  settings.strap_track_pitch = track_pitch;
 
-int
-check_connectivity_cmd()
-{
   PDNSim* pdnsim = getPDNSim();
-  return pdnsim->check_connectivity();
-}
-
-void
-write_pg_spice_cmd()
-{
-  PDNSim* pdnsim = getPDNSim();
-  return pdnsim->write_pg_spice();
-}
-
-void set_debug_gui_cmd()
-{
-  PDNSim* pdnsim = getPDNSim();
-  pdnsim->setDebugGui();
+  pdnsim->setGeneratedSourceSettings(settings);
 }
 
 %} // inline

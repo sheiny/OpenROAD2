@@ -34,10 +34,10 @@
 
 #include <vector>
 
-#include "ZException.h"
 #include "dbCore.h"
 #include "dbVector.h"
-#include "odb.h"
+#include "odb/ZException.h"
+#include "odb/odb.h"
 
 namespace odb {
 
@@ -90,7 +90,7 @@ class dbArrayTable : public dbObjectTable
   // The copy is identical including the ordering of all free-lists.
   dbArrayTable(_dbDatabase* db, dbObject* owner, const dbArrayTable<T>&);
 
-  virtual ~dbArrayTable();
+  ~dbArrayTable() override;
 
   // returns the number of instances of "T" allocated
   uint size() const { return _alloc_cnt; }
@@ -159,7 +159,8 @@ class dbArrayTable : public dbObjectTable
   void readPage(dbIStream& stream, dbArrayTablePage* page);
   void writePage(dbOStream& stream, const dbArrayTablePage* page) const;
   void getObjects(std::vector<T*>& objects);
-  dbObject* getObject(uint id, ...) { return getPtr(id); }
+  dbObject* getObject(uint id, ...) override { return getPtr(id); }
+  bool validObject(uint id, ...) override { return validId(id); }
 
  private:
   T* create();

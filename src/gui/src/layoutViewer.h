@@ -143,34 +143,22 @@ class LayoutViewer : public QWidget
                const SelectionSet& selected,
                const HighlightSet& highlighted,
                const Rulers& rulers,
+               const std::map<odb::dbModule*, ModuleSettings>& module_settings,
+               const std::set<odb::dbNet*>& focus_nets,
+               const std::set<odb::dbNet*>& route_guides,
+               const std::set<odb::dbNet*>& net_tracks,
                Gui* gui,
                const std::function<bool(void)>& usingDBU,
                const std::function<bool(void)>& showRulerAsEuclidian,
+               const std::function<bool(void)>& showDBView,
                QWidget* parent = nullptr);
 
+  odb::dbBlock* getBlock() const { return block_; }
   void setLogger(utl::Logger* logger);
   qreal getPixelsPerDBU() { return pixels_per_dbu_; }
   void setScroller(LayoutScroll* scroller);
 
   void restoreTclCommands(std::vector<std::string>& cmds);
-
-  void addFocusNet(odb::dbNet* net);
-  void removeFocusNet(odb::dbNet* net);
-  void addRouteGuides(odb::dbNet* net);
-  void removeRouteGuides(odb::dbNet* net);
-  void addNetTracks(odb::dbNet* net);
-  void removeNetTracks(odb::dbNet* net);
-  void clearFocusNets();
-  void clearRouteGuides();
-  void clearNetTracks();
-  const std::set<odb::dbNet*>& getFocusNets() { return focus_nets_; }
-  const std::set<odb::dbNet*>& getRouteGuides() { return route_guides_; }
-  const std::set<odb::dbNet*>& getNetTracks() { return net_tracks_; }
-
-  const std::map<odb::dbModule*, ModuleSettings>& getModuleSettings()
-  {
-    return modules_;
-  }
 
   // conversion functions
   odb::Rect screenToDBU(const QRectF& rect) const;
@@ -181,6 +169,7 @@ class LayoutViewer : public QWidget
   // save image of the layout
   void saveImage(const QString& filepath,
                  const odb::Rect& region = odb::Rect(),
+                 int width_px = 0,
                  double dbu_per_pixel = 0);
 
   // From QWidget
@@ -194,6 +183,9 @@ class LayoutViewer : public QWidget
   {
     return screenToDBU(visibleRegion().boundingRect());
   }
+
+  bool isCursorInsideViewport();
+  void updateCursorCoordinates();
 
  signals:
   // indicates the current location of the mouse
@@ -233,8 +225,8 @@ class LayoutViewer : public QWidget
   // zoom to the specified rect
   void zoomTo(const odb::Rect& rect_dbu);
 
-  // indicates a design has been loaded
-  void designLoaded(odb::dbBlock* block);
+  // indicates a block has been loaded
+  void blockLoaded(odb::dbBlock* block);
 
   // fit the whole design in the window
   void fit();
@@ -280,26 +272,26 @@ class LayoutViewer : public QWidget
     selectionAnimation(inspector_selection_, repeats, update_interval);
   }
 
-  void updateModuleVisibility(odb::dbModule* module, bool visible);
-  void updateModuleColor(odb::dbModule* module,
-                         const QColor& color,
-                         bool user_selected);
-
   void exit();
+
+  void resetCache();
 
   void commandAboutToExecute();
   void commandFinishedExecuting();
   void executionPaused();
 
+  static QColor background() { return Qt::black; }
+
  private slots:
   void setBlock(odb::dbBlock* block);
   void updatePixmap(const QImage& image, const QRect& bounds);
+  void handleLoadingIndication();
 
  private:
   struct Boxes
   {
-    std::vector<QRect> obs;
-    std::vector<QRect> mterms;
+    std::vector<QPolygon> obs;
+    std::map<odb::dbMTerm*, std::vector<QPolygon>> mterms;
   };
 
   using LayerBoxes = std::map<odb::dbTechLayer*, Boxes>;
@@ -331,7 +323,7 @@ class LayoutViewer : public QWidget
   int instanceSizeLimit() const;
   int shapeSizeLimit() const;
 
-  std::vector<std::pair<odb::dbObject*, odb::Rect>> getRowRects(
+  std::vector<std::tuple<odb::dbObject*, odb::Rect, int>> getRowRects(
       odb::dbBlock* block,
       const odb::Rect& bounds);
 
@@ -365,6 +357,10 @@ class LayoutViewer : public QWidget
   bool isNetVisible(odb::dbNet* net);
 
   void drawScaleBar(QPainter* painter, const QRect& rect);
+  void drawLoadingIndicator(QPainter* painter, const QRect& bounds);
+  QRect computeIndicatorBackground(QPainter* painter,
+                                   const QRect& bounds) const;
+  void setLoadingState();
 
   void populateModuleColors();
 
@@ -395,12 +391,14 @@ class LayoutViewer : public QWidget
   QPoint mouse_press_pos_;
   QPoint mouse_move_pos_;
   bool rubber_band_showing_;
+  bool is_view_dragging_;
   Gui* gui_;
 
   std::function<bool(void)> usingDBU_;
   std::function<bool(void)> showRulerAsEuclidian_;
+  std::function<bool(void)> showDBView_;
 
-  std::map<odb::dbModule*, ModuleSettings> modules_;
+  const std::map<odb::dbModule*, ModuleSettings>& modules_;
 
   bool building_ruler_;
   std::unique_ptr<odb::Point> ruler_start_;
@@ -444,24 +442,21 @@ class LayoutViewer : public QWidget
   // drawn.
   std::map<odb::dbTechLayer*, int> cut_maximum_size_;
 
-  // Set of nets to focus drawing on, if empty draw everything
-  std::set<odb::dbNet*> focus_nets_;
-  // Set of nets to draw route guides for, if empty draw nothing
-  std::set<odb::dbNet*> route_guides_;
-  // Set of nets to draw assigned tracks for, if empty draw nothing
-  std::set<odb::dbNet*> net_tracks_;
+  const std::set<odb::dbNet*>& focus_nets_;
+  const std::set<odb::dbNet*>& route_guides_;
+  const std::set<odb::dbNet*>& net_tracks_;
 
   RenderThread viewer_thread_;
   QPixmap draw_pixmap_;
   QRect draw_pixmap_bounds_;
+  QTimer* loading_timer_;
+  std::string loading_indicator_;
 
   static constexpr qreal zoom_scale_factor_ = 1.2;
 
   // parameters used to animate the selection of objects
   static constexpr int animation_repeats_ = 6;
   static constexpr int animation_interval_ = 300;
-
-  const QColor background_ = Qt::black;
 
   friend class RenderThread;
 };
@@ -472,8 +467,11 @@ class LayoutScroll : public QScrollArea
 {
   Q_OBJECT
  public:
-  LayoutScroll(LayoutViewer* viewer, QWidget* parent = 0);
-
+  LayoutScroll(LayoutViewer* viewer,
+               const std::function<bool(void)>& default_mouse_wheel_zoom,
+               const std::function<int(void)>& arrow_keys_scroll_step,
+               QWidget* parent = nullptr);
+  bool isScrollingWithCursor();
  signals:
   // indicates that the viewport (visible area of the layout) has changed
   void viewportChanged();
@@ -486,9 +484,15 @@ class LayoutScroll : public QScrollArea
   void resizeEvent(QResizeEvent* event) override;
   void scrollContentsBy(int dx, int dy) override;
   void wheelEvent(QWheelEvent* event) override;
+  bool eventFilter(QObject* object, QEvent* event) override;
+  void keyPressEvent(QKeyEvent* event) override;
 
  private:
+  std::function<bool(void)> default_mouse_wheel_zoom_;
+  std::function<int(void)> arrow_keys_scroll_step_;
   LayoutViewer* viewer_;
+
+  bool scrolling_with_cursor_;
 };
 
 }  // namespace gui

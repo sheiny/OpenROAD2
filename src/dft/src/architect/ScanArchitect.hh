@@ -39,6 +39,7 @@
 #include "ScanArchitectConfig.hh"
 #include "ScanCell.hh"
 #include "ScanChain.hh"
+#include "utl/Logger.h"
 
 namespace dft {
 
@@ -53,11 +54,11 @@ class ScanCellsBucket
   ScanCellsBucket& operator=(const ScanCellsBucket&) = delete;
 
   // Gets the next scan cell of the given hash domain
-  std::shared_ptr<ScanCell> pop(size_t hash_domain);
+  std::unique_ptr<ScanCell> pop(size_t hash_domain);
 
   // Init the scan cell bucket with with the given config and scan cells
   void init(const ScanArchitectConfig& config,
-            const std::vector<std::shared_ptr<ScanCell>>& scan_cells);
+            std::vector<std::unique_ptr<ScanCell>>& scan_cells);
 
   // Returns the number of bits we need to include in each hash domain
   std::unordered_map<size_t, uint64_t> getTotalBitsPerHashDomain() const;
@@ -66,7 +67,7 @@ class ScanCellsBucket
   uint64_t numberOfCells(size_t hash_domain) const;
 
  private:
-  std::unordered_map<size_t, std::vector<std::shared_ptr<ScanCell>>> buckets_;
+  std::unordered_map<size_t, std::vector<std::unique_ptr<ScanCell>>> buckets_;
   utl::Logger* logger_;
 };
 
@@ -103,7 +104,8 @@ class ScanArchitect
   // max_length
   static std::map<size_t, HashDomainLimits> inferChainCountFromMaxLength(
       const std::unordered_map<size_t, uint64_t>& hash_domains_total_bit,
-      uint64_t max_length);
+      uint64_t max_length,
+      const std::optional<uint64_t>& max_chains);
 
   // Returns an ScanArchitect object based on the configuration.
   //
@@ -112,7 +114,8 @@ class ScanArchitect
   // since some of them could generate better scan chains for some designs
   static std::unique_ptr<ScanArchitect> ConstructScanScanArchitect(
       const ScanArchitectConfig& config,
-      std::unique_ptr<ScanCellsBucket> scan_cells_bucket);
+      std::unique_ptr<ScanCellsBucket> scan_cells_bucket,
+      utl::Logger* logger);
 
  protected:
   void createScanChains();

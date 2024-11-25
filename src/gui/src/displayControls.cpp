@@ -44,10 +44,10 @@
 #include <random>
 #include <vector>
 
-#include "db.h"
 #include "dbDescriptors.h"
 #include "db_sta/dbNetwork.hh"
 #include "db_sta/dbSta.hh"
+#include "odb/db.h"
 #include "sta/Liberty.hh"
 #include "utl/Logger.h"
 
@@ -134,8 +134,14 @@ void DisplayColorDialog::buildUI()
 
   main_layout_->addWidget(color_dialog_);
 
-  connect(color_dialog_, SIGNAL(accepted()), this, SLOT(acceptDialog()));
-  connect(color_dialog_, SIGNAL(rejected()), this, SLOT(rejectDialog()));
+  connect(color_dialog_,
+          &QColorDialog::accepted,
+          this,
+          &DisplayColorDialog::acceptDialog);
+  connect(color_dialog_,
+          &QColorDialog::rejected,
+          this,
+          &DisplayColorDialog::rejectDialog);
 
   setLayout(main_layout_);
   setWindowTitle("Layer Config");
@@ -186,7 +192,7 @@ QVariant DisplayControlModel::data(const QModelIndex& index, int role) const
           QString information;
 
           auto add_prop
-              = [props](const std::string& prop, QString& info) -> bool {
+              = [&props](const std::string& prop, QString& info) -> bool {
             auto prop_find = std::find_if(
                 props.begin(), props.end(), [prop](const auto& p) {
                   return p.name == prop;
@@ -198,6 +204,9 @@ QVariant DisplayControlModel::data(const QModelIndex& index, int role) const
             info += QString::fromStdString(prop_find->toString());
             return true;
           };
+
+          // type
+          add_prop("Layer type", information);
 
           // direction
           add_prop("Direction", information);
@@ -255,16 +264,15 @@ DisplayControls::DisplayControls(QWidget* parent)
     : QDockWidget("Display Control", parent),
       view_(new QTreeView(this)),
       model_(new DisplayControlModel(user_data_item_idx_, this)),
+      routing_layers_menu_(new QMenu(this)),
       layers_menu_(new QMenu(this)),
       layers_menu_layer_(nullptr),
       ignore_callback_(false),
       ignore_selection_(false),
       default_site_color_(QColor(0, 0xff, 0, 0x70)),
-      db_(nullptr),
       logger_(nullptr),
       sta_(nullptr),
-      inst_descriptor_(nullptr),
-      tech_inited_(false)
+      inst_descriptor_(nullptr)
 {
   setObjectName("layers");  // for settings
   view_->setModel(model_);
@@ -288,6 +296,13 @@ DisplayControls::DisplayControls(QWidget* parent)
   auto layers
       = makeParentItem(layers_group_, "Layers", root, Qt::Checked, true);
   view_->expand(layers->index());
+  auto implant_layer
+      = makeParentItem(layers_.implant, "Implant", layers, Qt::Checked, true);
+  auto other_layer
+      = makeParentItem(layers_.other, "Other", layers, Qt::Unchecked, true);
+  // hide initially
+  view_->setRowHidden(implant_layer->row(), layers->index(), true);
+  view_->setRowHidden(other_layer->row(), layers->index(), true);
 
   // Nets group
   auto nets_parent
@@ -418,14 +433,6 @@ DisplayControls::DisplayControls(QWidget* parent)
   // Rows / sites
   makeParentItem(site_group_, "Rows", root, Qt::Unchecked, true);
 
-  // Rows
-  makeParentItem(pin_markers_, "Pin Markers", root, Qt::Checked);
-  pin_markers_font_ = QApplication::font();  // use default font
-  setNameItemDoubleClickAction(pin_markers_, [this]() {
-    pin_markers_font_ = QFontDialog::getFont(
-        nullptr, pin_markers_font_, this, "Pin marker font");
-  });
-
   // Track patterns group
   auto tracks = makeParentItem(tracks_group_, "Tracks", root, Qt::Unchecked);
 
@@ -433,21 +440,63 @@ DisplayControls::DisplayControls(QWidget* parent)
   makeLeafItem(tracks_.non_pref, "Non Pref", tracks, Qt::Unchecked);
   toggleParent(tracks_group_);
 
+  // Shape type group
+  auto shape_types
+      = makeParentItem(shape_type_group_, "Shape Types", root, Qt::Checked);
+  auto shape_types_routing = makeParentItem(
+      shape_types_.routing_group, "Routing", shape_types, Qt::Checked);
+  makeLeafItem(shape_types_.routing.segments,
+               "Segments",
+               shape_types_routing,
+               Qt::Checked);
+  makeLeafItem(
+      shape_types_.routing.vias, "Vias", shape_types_routing, Qt::Checked);
+  auto shape_types_srouting = makeParentItem(shape_types_.special_routing_group,
+                                             "Special Routing",
+                                             shape_types,
+                                             Qt::Checked);
+  makeLeafItem(shape_types_.special_routing.segments,
+               "Segments",
+               shape_types_srouting,
+               Qt::Checked);
+  makeLeafItem(shape_types_.special_routing.vias,
+               "Vias",
+               shape_types_srouting,
+               Qt::Checked);
+  makeLeafItem(shape_types_.pins, "Pins", shape_types, Qt::Checked);
+  pin_markers_font_ = QApplication::font();  // use default font
+  setNameItemDoubleClickAction(shape_types_.pins, [this]() {
+    pin_markers_font_ = QFontDialog::getFont(
+        nullptr, pin_markers_font_, this, "Pin marker font");
+  });
+  makeLeafItem(shape_types_.fill, "Fills", shape_types, Qt::Unchecked);
+  toggleParent(shape_type_group_);
+
   // Misc group
   auto misc = makeParentItem(misc_group_, "Misc", root, Qt::Unchecked, true);
 
   instance_name_font_ = QApplication::font();  // use default font
   instance_name_color_ = Qt::yellow;
 
+  iterm_label_font_ = QApplication::font();  // use default font
+  iterm_label_color_ = Qt::yellow;
+
   auto instance_shape
-      = makeParentItem(misc_.instances, "Instances", misc, Qt::Checked);
+      = makeParentItem(misc_.instances, "Instances", misc, Qt::Checked, true);
   makeLeafItem(instance_shapes_.names,
                "Names",
                instance_shape,
                Qt::Checked,
                false,
                instance_name_color_);
-  makeLeafItem(instance_shapes_.pins, "Pins", instance_shape, Qt::Checked);
+  makeLeafItem(
+      instance_shapes_.pins, "Pins", instance_shape, Qt::Checked, true);
+  makeLeafItem(instance_shapes_.iterm_labels,
+               "Pin Names",
+               instance_shape,
+               Qt::Unchecked,
+               false,
+               iterm_label_color_);
   makeLeafItem(
       instance_shapes_.blockages, "Blockages", instance_shape, Qt::Checked);
   toggleParent(misc_.instances);
@@ -455,11 +504,14 @@ DisplayControls::DisplayControls(QWidget* parent)
     instance_name_font_ = QFontDialog::getFont(
         nullptr, instance_name_font_, this, "Instance name font");
   });
+  setNameItemDoubleClickAction(instance_shapes_.iterm_labels, [this]() {
+    iterm_label_font_ = QFontDialog::getFont(
+        nullptr, iterm_label_font_, this, "Instance pin name font");
+  });
 
   region_color_ = QColor(0x70, 0x70, 0x70, 0x70);  // semi-transparent mid-gray
   region_pattern_ = Qt::SolidPattern;
   makeLeafItem(misc_.scale_bar, "Scale bar", misc, Qt::Checked);
-  makeLeafItem(misc_.fills, "Fills", misc, Qt::Unchecked);
   makeLeafItem(misc_.access_points, "Access points", misc, Qt::Unchecked);
   makeLeafItem(
       misc_.regions, "Regions", misc, Qt::Checked, true, region_color_);
@@ -475,24 +527,23 @@ DisplayControls::DisplayControls(QWidget* parent)
 
   setWidget(view_);
   connect(model_,
-          SIGNAL(itemChanged(QStandardItem*)),
+          &DisplayControlModel::itemChanged,
           this,
-          SLOT(itemChanged(QStandardItem*)));
+          &DisplayControls::itemChanged);
 
-  connect(
-      view_->selectionModel(),
-      SIGNAL(selectionChanged(const QItemSelection&, const QItemSelection&)),
-      this,
-      SLOT(displayItemSelected(const QItemSelection&)));
-  connect(view_,
-          SIGNAL(doubleClicked(const QModelIndex&)),
+  connect(view_->selectionModel(),
+          &QItemSelectionModel::selectionChanged,
           this,
-          SLOT(displayItemDblClicked(const QModelIndex&)));
+          &DisplayControls::displayItemSelected);
+  connect(view_,
+          &QTreeView::doubleClicked,
+          this,
+          &DisplayControls::displayItemDblClicked);
 
   connect(view_,
-          SIGNAL(customContextMenuRequested(const QPoint&)),
+          &QTreeView::customContextMenuRequested,
           this,
-          SLOT(itemContextMenu(const QPoint&)));
+          &DisplayControls::itemContextMenu);
 
   // register renderers
   if (gui::Gui::get() != nullptr) {
@@ -513,10 +564,14 @@ void DisplayControls::createLayerMenu()
           &QAction::triggered,
           [this]() { layerShowOnlySelectedNeighbors(0, 0); });
 
+  connect(routing_layers_menu_->addAction("Show only selected"),
+          &QAction::triggered,
+          [this]() { layerShowOnlySelectedNeighbors(0, 0); });
+
   const QString show_range = "Show layer range ";
-  const QString updown_arrow = "\u2195";
-  const QString down_arrow = "\u2193";
-  const QString up_arrow = "\u2191";
+  const QString updown_arrow = "↕";
+  const QString down_arrow = "↓";
+  const QString up_arrow = "↑";
   auto add_range_action = [&](int up, int down) {
     QString arrows;
     for (int n = 1; n < down; n++) {
@@ -533,7 +588,7 @@ void DisplayControls::createLayerMenu()
       arrows += down_arrow;
     }
 
-    connect(layers_menu_->addAction(show_range + arrows),
+    connect(routing_layers_menu_->addAction(show_range + arrows),
             &QAction::triggered,
             [this, up, down]() { layerShowOnlySelectedNeighbors(down, up); });
   };
@@ -638,9 +693,9 @@ void DisplayControls::readSettings(QSettings* settings)
   readSettingsForRow(settings, nets_group_);
   readSettingsForRow(settings, instance_group_);
   readSettingsForRow(settings, blockage_group_);
-  readSettingsForRow(settings, pin_markers_);
   readSettingsForRow(settings, rulers_);
   readSettingsForRow(settings, tracks_group_);
+  readSettingsForRow(settings, shape_type_group_);
   readSettingsForRow(settings, misc_group_);
 
   readSettingsForRow(settings, site_group_, false);
@@ -651,6 +706,7 @@ void DisplayControls::readSettings(QSettings* settings)
       blockages_.blockages, placement_blockage_color_, "blockages_placement");
   getColor(rulers_, ruler_color_, "ruler");
   getColor(instance_shapes_.names, instance_name_color_, "instance_name");
+  getColor(instance_shapes_.iterm_labels, iterm_label_color_, "iterm_label");
   getColor(misc_.regions, region_color_, "region");
   settings->endGroup();
   settings->beginGroup("pattern");
@@ -661,6 +717,7 @@ void DisplayControls::readSettings(QSettings* settings)
   getFont(pin_markers_font_, "pin_markers");
   getFont(ruler_font_, "ruler");
   getFont(instance_name_font_, "instance_name");
+  getFont(iterm_label_font_, "iterm_label");
   settings->endGroup();
   settings->endGroup();
 
@@ -710,9 +767,9 @@ void DisplayControls::writeSettings(QSettings* settings)
   writeSettingsForRow(settings, nets_group_);
   writeSettingsForRow(settings, instance_group_);
   writeSettingsForRow(settings, blockage_group_);
-  writeSettingsForRow(settings, pin_markers_);
   writeSettingsForRow(settings, rulers_);
   writeSettingsForRow(settings, tracks_group_);
+  writeSettingsForRow(settings, shape_type_group_);
   writeSettingsForRow(settings, misc_group_);
   writeSettingsForRow(settings, site_group_, false);
 
@@ -721,6 +778,7 @@ void DisplayControls::writeSettings(QSettings* settings)
   settings->setValue("blockages_placement", placement_blockage_color_);
   settings->setValue("ruler", ruler_color_);
   settings->setValue("instance_name", instance_name_color_);
+  settings->setValue("iterm_label", iterm_label_color_);
   settings->setValue("region", region_color_);
   settings->endGroup();
   settings->beginGroup("pattern");
@@ -733,6 +791,7 @@ void DisplayControls::writeSettings(QSettings* settings)
   settings->setValue("pin_markers", pin_markers_font_);
   settings->setValue("ruler", ruler_font_);
   settings->setValue("instance_name", instance_name_font_);
+  settings->setValue("iterm_label", iterm_label_font_);
   settings->endGroup();
   settings->endGroup();
 
@@ -813,6 +872,9 @@ void DisplayControls::toggleParent(const QStandardItem* parent,
   bool all_checked = true;
 
   for (int row = 0; row < parent->rowCount(); ++row) {
+    if (view_->isRowHidden(row, parent->index())) {
+      continue;
+    }
     auto child = parent->child(row, column);
     if (child) {
       bool checked = child->checkState() == Qt::Checked;
@@ -969,6 +1031,8 @@ void DisplayControls::displayItemDblClicked(const QModelIndex& index)
       item_pattern = &region_pattern_;
     } else if (color_item == instance_shapes_.names.swatch) {
       item_color = &instance_name_color_;
+    } else if (color_item == instance_shapes_.iterm_labels.swatch) {
+      item_color = &iterm_label_color_;
     } else if (color_item == rulers_.swatch) {
       item_color = &ruler_color_;
     } else {
@@ -1018,7 +1082,7 @@ void DisplayControls::displayItemDblClicked(const QModelIndex& index)
           cut_color_item->setIcon(makeSwatchIcon(chosen_color));
         }
       }
-      *item_color = chosen_color;
+      *item_color = std::move(chosen_color);
       if (item_pattern != nullptr) {
         *item_pattern = display_dialog->getSelectedPattern();
       }
@@ -1142,37 +1206,58 @@ void DisplayControls::restore()
   }
 }
 
-void DisplayControls::setDb(odb::dbDatabase* db)
+void DisplayControls::addTech(odb::dbTech* tech)
 {
-  db_ = db;
-  if (!db) {
-    return;
-  }
-
-  odb::dbTech* tech = db->getTech();
   if (!tech) {
     return;
   }
 
-  if (tech_inited_) {
+  if (techs_.find(tech) != techs_.end()) {
     return;
   }
 
-  techInit();
-  libInit();
+  techInit(tech);
+  libInit(tech->getDb());
 
   for (dbTechLayer* layer : tech->getLayers()) {
-    dbTechLayerType type = layer->getType();
-    if (type == dbTechLayerType::ROUTING || type == dbTechLayerType::CUT) {
-      auto& row = layer_controls_[layer];
-      makeLeafItem(row,
-                   QString::fromStdString(layer->getName()),
-                   layers_group_.name,
-                   Qt::Checked,
-                   true,
-                   color(layer),
-                   QVariant::fromValue(layer));
+    auto& row = layer_controls_[layer];
+    QStandardItem* parent;
+    Qt::CheckState checked;
+    switch (layer->getType()) {
+      case dbTechLayerType::ROUTING:
+      case dbTechLayerType::CUT:
+        parent = layers_group_.name;
+        checked = Qt::Checked;
+        break;
+      case dbTechLayerType::IMPLANT:
+        parent = layers_.implant.name;
+        checked = Qt::Checked;
+        break;
+      default:
+        parent = layers_.other.name;
+        checked = Qt::Unchecked;
+        break;
     }
+    makeLeafItem(row,
+                 QString::fromStdString(layer->getName()),
+                 parent,
+                 checked,
+                 true,
+                 color(layer),
+                 QVariant::fromValue(layer));
+  }
+
+  if (layers_.implant.name->hasChildren()) {
+    view_->setRowHidden(layers_.implant.name->row(),
+                        layers_group_.name->index(),
+                        !layers_.implant.name->hasChildren());
+    toggleParent(layers_.implant);
+  }
+  if (layers_.other.name->hasChildren()) {
+    view_->setRowHidden(layers_.other.name->row(),
+                        layers_group_.name->index(),
+                        !layers_.other.name->hasChildren());
+    toggleParent(layers_.other);
   }
 
   toggleParent(layers_group_);
@@ -1339,6 +1424,16 @@ QFont DisplayControls::instanceNameFont()
   return instance_name_font_;
 }
 
+QColor DisplayControls::itermLabelColor()
+{
+  return iterm_label_color_;
+}
+
+QFont DisplayControls::itermLabelFont()
+{
+  return iterm_label_font_;
+}
+
 bool DisplayControls::isModelRowVisible(
     const DisplayControls::ModelRow* row) const
 {
@@ -1405,58 +1500,61 @@ bool DisplayControls::isInstanceVisible(odb::dbInst* inst)
 const DisplayControls::ModelRow* DisplayControls::getInstRow(
     odb::dbInst* inst) const
 {
-  switch (inst_descriptor_->getInstanceType(inst)) {
-    case DbInstDescriptor::BLOCK:
+  switch (sta_->getInstanceType(inst)) {
+    case sta::dbSta::InstType::BLOCK:
       return &instances_.blocks;
-    case DbInstDescriptor::PAD:
+    case sta::dbSta::InstType::PAD:
       return &pad_instances_.other;
-    case DbInstDescriptor::PAD_INPUT:
+    case sta::dbSta::InstType::PAD_INPUT:
       return &pad_instances_.input;
-    case DbInstDescriptor::PAD_OUTPUT:
+    case sta::dbSta::InstType::PAD_OUTPUT:
       return &pad_instances_.output;
-    case DbInstDescriptor::PAD_INOUT:
+    case sta::dbSta::InstType::PAD_INOUT:
       return &pad_instances_.inout;
-    case DbInstDescriptor::PAD_POWER:
+    case sta::dbSta::InstType::PAD_POWER:
       return &pad_instances_.power;
-    case DbInstDescriptor::PAD_SPACER:
+    case sta::dbSta::InstType::PAD_SPACER:
       return &pad_instances_.spacer;
-    case DbInstDescriptor::PAD_AREAIO:
+    case sta::dbSta::InstType::PAD_AREAIO:
       return &pad_instances_.areaio;
-    case DbInstDescriptor::ENDCAP:
+    case sta::dbSta::InstType::ENDCAP:
       return &physical_instances_.endcap;
-    case DbInstDescriptor::FILL:
+    case sta::dbSta::InstType::FILL:
       return &physical_instances_.fill;
-    case DbInstDescriptor::TAPCELL:
+    case sta::dbSta::InstType::TAPCELL:
       return &physical_instances_.tap;
-    case DbInstDescriptor::BUMP:
+    case sta::dbSta::InstType::BUMP:
       return &physical_instances_.bump;
-    case DbInstDescriptor::COVER:
+    case sta::dbSta::InstType::COVER:
       return &physical_instances_.cover;
-    case DbInstDescriptor::ANTENNA:
+    case sta::dbSta::InstType::ANTENNA:
       return &physical_instances_.antenna;
-    case DbInstDescriptor::TIE:
+    case sta::dbSta::InstType::TIE:
       return &physical_instances_.tie;
-    case DbInstDescriptor::LEF_OTHER:
+    case sta::dbSta::InstType::LEF_OTHER:
       return &physical_instances_.other;
-    case DbInstDescriptor::STD_CELL:
+    case sta::dbSta::InstType::STD_CELL:
       return &instances_.stdcells;
-    case DbInstDescriptor::STD_BUFINV:
+    case sta::dbSta::InstType::STD_INV: /* fallthru */
+    case sta::dbSta::InstType::STD_BUF:
       return &bufinv_instances_.other;
-    case DbInstDescriptor::STD_BUFINV_CLK_TREE:
+    case sta::dbSta::InstType::STD_BUF_CLK_TREE: /* fallthru */
+    case sta::dbSta::InstType::STD_INV_CLK_TREE:
       return &clock_tree_instances_.bufinv;
-    case DbInstDescriptor::STD_BUFINV_TIMING_REPAIR:
+    case sta::dbSta::InstType::STD_BUF_TIMING_REPAIR: /* fallthru */
+    case sta::dbSta::InstType::STD_INV_TIMING_REPAIR:
       return &bufinv_instances_.timing;
-    case DbInstDescriptor::STD_CLOCK_GATE:
+    case sta::dbSta::InstType::STD_CLOCK_GATE:
       return &clock_tree_instances_.clock_gates;
-    case DbInstDescriptor::STD_LEVEL_SHIFT:
+    case sta::dbSta::InstType::STD_LEVEL_SHIFT:
       return &stdcell_instances_.level_shiters;
-    case DbInstDescriptor::STD_SEQUENTIAL:
+    case sta::dbSta::InstType::STD_SEQUENTIAL:
       return &stdcell_instances_.sequential;
-    case DbInstDescriptor::STD_PHYSICAL:
+    case sta::dbSta::InstType::STD_PHYSICAL:
       return &instances_.physical;
-    case DbInstDescriptor::STD_COMBINATIONAL:
+    case sta::dbSta::InstType::STD_COMBINATIONAL:
       return &stdcell_instances_.combinational;
-    case DbInstDescriptor::STD_OTHER:
+    case sta::dbSta::InstType::STD_OTHER:
       return &instance_group_;
   }
 
@@ -1505,14 +1603,19 @@ bool DisplayControls::areInstancePinsVisible()
   return isModelRowVisible(&instance_shapes_.pins);
 }
 
+bool DisplayControls::areInstancePinsSelectable()
+{
+  return isModelRowSelectable(&instance_shapes_.pins);
+}
+
+bool DisplayControls::areInstancePinNamesVisible()
+{
+  return isModelRowVisible(&instance_shapes_.iterm_labels);
+}
+
 bool DisplayControls::areInstanceBlockagesVisible()
 {
   return isModelRowVisible(&instance_shapes_.blockages);
-}
-
-bool DisplayControls::areFillsVisible()
-{
-  return isModelRowVisible(&misc_.fills);
 }
 
 bool DisplayControls::areRulersVisible()
@@ -1610,16 +1713,6 @@ bool DisplayControls::isScaleBarVisible() const
   return isModelRowVisible(&misc_.scale_bar);
 }
 
-bool DisplayControls::arePinMarkersVisible() const
-{
-  return isModelRowVisible(&pin_markers_);
-}
-
-QFont DisplayControls::pinMarkersFont()
-{
-  return pin_markers_font_;
-}
-
 bool DisplayControls::areAccessPointsVisible() const
 {
   return isModelRowVisible(&misc_.access_points);
@@ -1643,6 +1736,41 @@ bool DisplayControls::isModuleView() const
 bool DisplayControls::isGCellGridVisible() const
 {
   return isModelRowVisible(&misc_.gcell_grid);
+}
+
+bool DisplayControls::areIOPinsVisible() const
+{
+  return isModelRowVisible(&shape_types_.pins);
+}
+
+bool DisplayControls::areRoutingSegmentsVisible() const
+{
+  return isModelRowVisible(&shape_types_.routing.segments);
+}
+
+bool DisplayControls::areRoutingViasVisible() const
+{
+  return isModelRowVisible(&shape_types_.routing.vias);
+}
+
+bool DisplayControls::areSpecialRoutingSegmentsVisible() const
+{
+  return isModelRowVisible(&shape_types_.special_routing.segments);
+}
+
+bool DisplayControls::areSpecialRoutingViasVisible() const
+{
+  return isModelRowVisible(&shape_types_.special_routing.vias);
+}
+
+bool DisplayControls::areFillsVisible() const
+{
+  return isModelRowVisible(&shape_types_.fill);
+}
+
+QFont DisplayControls::pinMarkersFont() const
+{
+  return pin_markers_font_;
 }
 
 void DisplayControls::registerRenderer(Renderer* renderer)
@@ -1750,18 +1878,14 @@ void DisplayControls::unregisterRenderer(Renderer* renderer)
   custom_controls_.erase(renderer);
 }
 
-void DisplayControls::inDbRowCreate(odb::dbRow* /* row */)
+void DisplayControls::inDbRowCreate(odb::dbRow* row)
 {
-  libInit();
+  libInit(row->getDb());
 }
 
-void DisplayControls::libInit()
+void DisplayControls::libInit(odb::dbDatabase* db)
 {
-  if (db_ == nullptr) {
-    return;
-  }
-
-  for (auto* lib : db_->getLibs()) {
+  for (auto* lib : db->getLibs()) {
     for (auto* site : lib->getSites()) {
       if (site_controls_.find(site) == site_controls_.end()) {
         makeLeafItem(site_controls_[site],
@@ -1781,17 +1905,8 @@ void DisplayControls::libInit()
   toggleParent(site_group_);
 }
 
-void DisplayControls::techInit()
+void DisplayControls::techInit(odb::dbTech* tech)
 {
-  if (tech_inited_ || !db_) {
-    return;
-  }
-
-  odb::dbTech* tech = db_->getTech();
-  if (!tech) {
-    return;
-  }
-
   // disable if grid is not present
   misc_.manufacturing_grid.name->setEnabled(tech->hasManufacturingGrid());
   misc_.manufacturing_grid.visible->setEnabled(tech->hasManufacturingGrid());
@@ -1802,7 +1917,7 @@ void DisplayControls::techInit()
                            QColor(254, 0, 0),
                            QColor(9, 221, 0),
                            QColor(190, 244, 81),
-                           QColor(159, 24, 69),
+                           QColor(222, 33, 96),  // Metal 5
                            QColor(32, 216, 253),
                            QColor(253, 108, 160),
                            QColor(117, 63, 194),
@@ -1849,20 +1964,43 @@ void DisplayControls::techInit()
                        50 + gen_color() % 200);
       }
     } else {
-      continue;
+      // Do not draw from the existing palette so the metal layers can claim
+      // those colors.
+      color = QColor(50 + gen_color() % 200,
+                     50 + gen_color() % 200,
+                     50 + gen_color() % 200);
     }
     color.setAlpha(180);
-    layer_color_[layer] = color;
+    layer_color_[layer] = std::move(color);
     layer_pattern_[layer] = Qt::SolidPattern;  // Default pattern is fill solid
   }
-
-  tech_inited_ = true;
+  techs_.insert(tech);
 }
 
-void DisplayControls::designLoaded(odb::dbBlock* block)
+void DisplayControls::blockLoaded(odb::dbBlock* block)
 {
-  setDb(block->getDb());
-  addOwner(block);
+  addTech(block->getTech());
+}
+
+void DisplayControls::setCurrentBlock(odb::dbBlock* block)
+{
+  if (!block) {
+    return;
+  }
+  auto tech = block->getTech();
+  addTech(tech);
+
+  std::set<odb::dbTech*> visible_techs{tech};
+  for (auto child : block->getChildren()) {
+    visible_techs.insert(child->getTech());
+  }
+
+  for (auto& [layer, row] : layer_controls_) {
+    const bool visible
+        = visible_techs.find(layer->getTech()) != visible_techs.end();
+    QModelIndex idx = model_->indexFromItem(row.name);
+    view_->setRowHidden(idx.row(), idx.parent(), !visible);
+  }
 }
 
 void DisplayControls::restoreTclCommands(std::vector<std::string>& cmds)
@@ -1913,18 +2051,22 @@ void DisplayControls::itemContextMenu(const QPoint& point)
     return;
   }
 
-  auto* parent_item = model_->itemFromIndex(parent);
-  if (parent_item != layers_group_.name) {
-    // not a member of the layers
-    return;
-  }
-
   const QModelIndex name_index = model_->index(index.row(), Name, parent);
   auto* name_item = model_->itemFromIndex(name_index);
   layers_menu_layer_
       = name_item->data(user_data_item_idx_).value<dbTechLayer*>();
 
-  layers_menu_->popup(view_->viewport()->mapToGlobal(point));
+  if (layers_menu_layer_ != nullptr) {
+    switch (layers_menu_layer_->getType()) {
+      case dbTechLayerType::CUT:
+      case dbTechLayerType::ROUTING:
+        routing_layers_menu_->popup(view_->viewport()->mapToGlobal(point));
+        break;
+      default:
+        layers_menu_->popup(view_->viewport()->mapToGlobal(point));
+        break;
+    }
+  }
 }
 
 void DisplayControls::layerShowOnlySelectedNeighbors(int lower, int upper)

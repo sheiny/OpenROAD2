@@ -6,6 +6,10 @@ record_tests {
   simple01-uniform
   simple01-ref
   simple01-skip-io
+  simple01-rd
+  simple02-rd
+  simple03-rd
+  simple04-rd
   simple02
   simple03
   simple04
@@ -14,6 +18,7 @@ record_tests {
   simple07
   simple08
   simple09
+  simple10
   core01
   ar01
   ar02
@@ -22,7 +27,10 @@ record_tests {
   error01
   diverge01
   density01
-  upf_test
   convergence01
   nograd01
+  clust01
+  #gpl_man_tcl_check
+  #gpl_readme_msgs_check
 }
+#  clust02

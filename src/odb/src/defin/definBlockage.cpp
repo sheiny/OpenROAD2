@@ -36,9 +36,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "db.h"
-#include "dbShape.h"
 #include "definPolygon.h"
+#include "odb/db.h"
+#include "odb/dbShape.h"
 #include "utl/Logger.h"
 namespace odb {
 
@@ -59,16 +59,17 @@ void definBlockage::init()
 void definBlockage::blockageRoutingBegin(const char* layer)
 {
   _layer = _tech->findLayer(layer);
-  _inst = NULL;
+  _inst = nullptr;
   _slots = false;
   _fills = false;
+  _except_pg_nets = false;
   _pushdown = false;
   _has_min_spacing = false;
   _has_effective_width = false;
   _min_spacing = 0;
   _effective_width = 0;
 
-  if (_layer == NULL) {
+  if (_layer == nullptr) {
     _logger->warn(
         utl::ODB, 88, "error: undefined layer ({}) referenced", layer);
     ++_errors;
@@ -79,7 +80,7 @@ void definBlockage::blockageRoutingComponent(const char* comp)
 {
   _inst = _block->findInst(comp);
 
-  if (_inst == NULL) {
+  if (_inst == nullptr) {
     _logger->warn(
         utl::ODB, 89, "error: undefined component ({}) referenced", comp);
     ++_errors;
@@ -94,6 +95,11 @@ void definBlockage::blockageRoutingSlots()
 void definBlockage::blockageRoutingFills()
 {
   _fills = true;
+}
+
+void definBlockage::blockageRoutingExceptPGNets()
+{
+  _except_pg_nets = true;
 }
 
 void definBlockage::blockageRoutingPushdown()
@@ -115,8 +121,9 @@ void definBlockage::blockageRoutingEffectiveWidth(int width)
 
 void definBlockage::blockageRoutingRect(int x1, int y1, int x2, int y2)
 {
-  if (_layer == NULL)
+  if (_layer == nullptr) {
     return;
+  }
 
   x1 = dbdist(x1);
   y1 = dbdist(y1);
@@ -125,26 +132,32 @@ void definBlockage::blockageRoutingRect(int x1, int y1, int x2, int y2)
   dbObstruction* o
       = dbObstruction::create(_block, _layer, x1, y1, x2, y2, _inst);
 
-  if (_pushdown)
+  if (_pushdown) {
     o->setPushedDown();
+  }
 
-  if (_fills)
+  if (_fills) {
     o->setFillObstruction();
+  }
 
-  if (_slots)
+  if (_slots) {
     o->setSlotObstruction();
+  }
 
-  if (_has_min_spacing)
+  if (_has_min_spacing) {
     o->setMinSpacing(dbdist(_min_spacing));
+  }
 
-  if (_has_effective_width)
+  if (_has_effective_width) {
     o->setEffectiveWidth(dbdist(_effective_width));
+  }
 }
 
 void definBlockage::blockageRoutingPolygon(const std::vector<Point>& points)
 {
-  if (_layer == NULL)
+  if (_layer == nullptr) {
     return;
+  }
 
   definPolygon polygon(points);
   std::vector<Rect> R;
@@ -157,19 +170,28 @@ void definBlockage::blockageRoutingPolygon(const std::vector<Point>& points)
 
     dbObstruction* o = dbObstruction::create(
         _block, _layer, r.xMin(), r.yMin(), r.xMax(), r.yMax(), _inst);
-    if (_pushdown)
+    if (_pushdown) {
       o->setPushedDown();
+    }
 
-    if (_fills)
+    if (_fills) {
       o->setFillObstruction();
+    }
 
-    if (_slots)
+    if (_except_pg_nets) {
+      o->setExceptPGNetsObstruction();
+    }
+
+    if (_slots) {
       o->setSlotObstruction();
-    if (_has_min_spacing)
+    }
+    if (_has_min_spacing) {
       o->setMinSpacing(dbdist(_min_spacing));
+    }
 
-    if (_has_effective_width)
+    if (_has_effective_width) {
       o->setEffectiveWidth(dbdist(_effective_width));
+    }
   }
 }
 
@@ -179,10 +201,11 @@ void definBlockage::blockageRoutingEnd()
 
 void definBlockage::blockagePlacementBegin()
 {
-  _layer = NULL;
-  _inst = NULL;
+  _layer = nullptr;
+  _inst = nullptr;
   _slots = false;
   _fills = false;
+  _except_pg_nets = false;
   _pushdown = false;
   _soft = false;
   _max_density = 0.0;
@@ -192,7 +215,7 @@ void definBlockage::blockagePlacementComponent(const char* comp)
 {
   _inst = _block->findInst(comp);
 
-  if (_inst == NULL) {
+  if (_inst == nullptr) {
     _logger->warn(
         utl::ODB, 90, "error: undefined component ({}) referenced", comp);
     ++_errors;

@@ -30,14 +30,25 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+%module psm_py
+
 %{
 #include "ord/OpenRoad.hh"
 #include "psm/pdnsim.h"
+#include "odb/db.h"
 
 %}
 
 %include <std_string.i>
+%include <std_map.i>
 
+%import "odb.i"
 %include "../../Exception-py.i"
+
+%template(IRDropByPoint) std::map<odb::Point, double>;
+
+// For getIRDropForLayer
+WRAP_OBJECT_RETURN_REF(psm::PDNSim::IRDropByPoint, ir_drop);
 
 %include "psm/pdnsim.h"

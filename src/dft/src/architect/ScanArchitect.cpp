@@ -39,8 +39,8 @@ namespace dft {
 
 namespace {
 
-bool CompareScanCells(const std::shared_ptr<ScanCell>& lhs,
-                      const std::shared_ptr<ScanCell>& rhs)
+bool CompareScanCells(const std::unique_ptr<ScanCell>& lhs,
+                      const std::unique_ptr<ScanCell>& rhs)
 {
   // If they have the same number of bits, then we compare the names of the
   // cells so they are ordered by name
@@ -58,7 +58,7 @@ bool CompareScanCells(const std::shared_ptr<ScanCell>& lhs,
   return lhs->getBits() < rhs->getBits();
 }
 
-void SortScanCells(std::vector<std::shared_ptr<ScanCell>>& scan_cells)
+void SortScanCells(std::vector<std::unique_ptr<ScanCell>>& scan_cells)
 {
   std::sort(scan_cells.begin(), scan_cells.end(), CompareScanCells);
 }
@@ -69,13 +69,13 @@ ScanCellsBucket::ScanCellsBucket(utl::Logger* logger) : logger_(logger)
 {
 }
 
-void ScanCellsBucket::init(
-    const ScanArchitectConfig& config,
-    const std::vector<std::shared_ptr<ScanCell>>& scan_cells)
+void ScanCellsBucket::init(const ScanArchitectConfig& config,
+                           std::vector<std::unique_ptr<ScanCell>>& scan_cells)
 {
   auto hash_fn = GetClockDomainHashFn(config, logger_);
-  for (const std::shared_ptr<ScanCell>& scan_cell : scan_cells) {
-    buckets_[hash_fn(scan_cell->getClockDomain())].push_back(scan_cell);
+  for (std::unique_ptr<ScanCell>& scan_cell : scan_cells) {
+    buckets_[hash_fn(scan_cell->getClockDomain())].push_back(
+        std::move(scan_cell));
   }
 
   // Sort the buckets
@@ -89,17 +89,17 @@ ScanCellsBucket::getTotalBitsPerHashDomain() const
 {
   std::unordered_map<size_t, uint64_t> total_bits;
   for (const auto& [hash_domain, scan_cells] : buckets_) {
-    for (const std::shared_ptr<ScanCell>& scan_cell : scan_cells) {
+    for (const std::unique_ptr<ScanCell>& scan_cell : scan_cells) {
       total_bits[hash_domain] += scan_cell->getBits();
     }
   }
   return total_bits;
 }
 
-std::shared_ptr<ScanCell> ScanCellsBucket::pop(size_t hash_domain)
+std::unique_ptr<ScanCell> ScanCellsBucket::pop(size_t hash_domain)
 {
   auto& bucket = buckets_.find(hash_domain)->second;
-  auto scan_cell = bucket.back();
+  std::unique_ptr<ScanCell> scan_cell = std::move(bucket.back());
   bucket.pop_back();
   return scan_cell;
 }
@@ -111,10 +111,11 @@ uint64_t ScanCellsBucket::numberOfCells(size_t hash_domain) const
 
 std::unique_ptr<ScanArchitect> ScanArchitect::ConstructScanScanArchitect(
     const ScanArchitectConfig& config,
-    std::unique_ptr<ScanCellsBucket> scan_cells_bucket)
+    std::unique_ptr<ScanCellsBucket> scan_cells_bucket,
+    utl::Logger* logger_)
 {
-  return std::make_unique<ScanArchitectHeuristic>(config,
-                                                  std::move(scan_cells_bucket));
+  return std::make_unique<ScanArchitectHeuristic>(
+      config, std::move(scan_cells_bucket), logger_);
 }
 
 ScanArchitect::ScanArchitect(const ScanArchitectConfig& config,
@@ -133,22 +134,22 @@ void ScanArchitect::inferChainCount()
   std::unordered_map<size_t, uint64_t> hash_domains_total_bits
       = scan_cells_bucket_->getTotalBitsPerHashDomain();
 
-  // TODO(fgaray): Handle more options like a specific chain_count
-  if (config_.getMaxLength().has_value()) {
+  if (auto max_length = config_.getMaxLength(); max_length.has_value()) {
     // The user is saying that we should respect this max_length
     hash_domain_to_limits_ = inferChainCountFromMaxLength(
-        hash_domains_total_bits, config_.getMaxLength().value());
+        hash_domains_total_bits, max_length.value(), config_.getMaxChains());
   } else {
     // The user did not specify any max_length, let's use a default of 200
-    hash_domain_to_limits_
-        = inferChainCountFromMaxLength(hash_domains_total_bits, 200);
+    hash_domain_to_limits_ = inferChainCountFromMaxLength(
+        hash_domains_total_bits, 200, config_.getMaxChains());
   }
 }
 
 std::map<size_t, ScanArchitect::HashDomainLimits>
 ScanArchitect::inferChainCountFromMaxLength(
     const std::unordered_map<size_t, uint64_t>& hash_domains_total_bit,
-    uint64_t max_length)
+    uint64_t max_length,
+    const std::optional<uint64_t>& max_chains)
 {
   std::map<size_t, HashDomainLimits> hash_domain_to_limits;
   for (const auto& [hash_domain, bits] : hash_domains_total_bit) {
@@ -158,6 +159,10 @@ ScanArchitect::inferChainCountFromMaxLength(
       domain_chain_count = bits / max_length + 1;
     } else {
       domain_chain_count = bits / max_length;
+    }
+
+    if (max_chains.has_value()) {
+      domain_chain_count = std::min(domain_chain_count, max_chains.value());
     }
 
     uint64_t domain_max_length = 0;

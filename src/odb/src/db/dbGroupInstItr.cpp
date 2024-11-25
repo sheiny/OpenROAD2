@@ -36,8 +36,6 @@
 #include "dbGroup.h"
 #include "dbInst.h"
 #include "dbTable.h"
-// User Code Begin Includes
-// User Code End Includes
 
 namespace odb {
 
@@ -86,8 +84,9 @@ uint dbGroupInstItr::size(dbObject* parent)
   uint cnt = 0;
 
   for (id = dbGroupInstItr::begin(parent); id != dbGroupInstItr::end(parent);
-       id = dbGroupInstItr::next(id))
+       id = dbGroupInstItr::next(id)) {
     ++cnt;
+  }
 
   return cnt;
 }
@@ -117,7 +116,5 @@ dbObject* dbGroupInstItr::getObject(uint id, ...)
 {
   return _inst_tbl->getPtr(id);
 }
-// User Code Begin Methods
-// User Code End Methods
 }  // namespace odb
    // Generator Code End Cpp

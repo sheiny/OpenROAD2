@@ -86,8 +86,9 @@ uint dbGuideItr::size(dbObject* parent)
   uint cnt = 0;
 
   for (id = dbGuideItr::begin(parent); id != dbGuideItr::end(parent);
-       id = dbGuideItr::next(id))
+       id = dbGuideItr::next(id)) {
     ++cnt;
+  }
 
   return cnt;
 }
@@ -117,7 +118,5 @@ dbObject* dbGuideItr::getObject(uint id, ...)
 {
   return _guide_tbl->getPtr(id);
 }
-// User Code Begin Methods
-// User Code End Methods
 }  // namespace odb
    // Generator Code End Cpp

@@ -67,7 +67,10 @@ class ScanCell
   virtual ScanDriver getScanOut() const = 0;
 
   const ClockDomain& getClockDomain() const;
-  const std::string& getName() const;
+  std::string_view getName() const;
+
+  virtual odb::Point getOrigin() const = 0;
+  virtual bool isPlaced() const = 0;
 
  private:
   std::string name_;

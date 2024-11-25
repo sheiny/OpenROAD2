@@ -1,3 +1,4 @@
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // BSD 3-Clause License
@@ -36,7 +37,7 @@
 %{
 
 #include "stt/SteinerTreeBuilder.h"
-#include "stt/LinesRenderer.h"
+#include "LinesRenderer.h"
 #include "stt/pd.h"
 #include "stt/flute.h"
 #include "gui/gui.h"

@@ -94,11 +94,17 @@ void detailed_route_cmd(const char* outputMazeFile,
                         bool singleStepDR,
                         int minAccessPoints,
                         bool saveGuideUpdates,
-                        const char* repairPDNLayerName)
+                        const char* repairPDNLayerName,
+                        int drcReportIterStep)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
+  std::optional<int> drcReportIterStepOpt;
+  if (drcReportIterStep > 0) {
+    drcReportIterStepOpt = drcReportIterStep;
+  }
   router->setParams({outputMazeFile,
                     outputDrcFile,
+                    drcReportIterStepOpt,
                     outputCmapFile,
                     outputGuideCoverageFile,
                     dbProcessNode,
@@ -128,7 +134,7 @@ void pin_access_cmd(const char* dbProcessNode,
                     int minAccessPoints)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
-  triton_route::ParamStruct params;
+  drt::ParamStruct params;
   params.dbProcessNode = dbProcessNode;
   params.bottomRoutingLayer = bottomRoutingLayer;
   params.topRoutingLayer = topRoutingLayer;
@@ -137,13 +143,6 @@ void pin_access_cmd(const char* dbProcessNode,
   router->setParams(params);
   router->pinAccess();
   router->setDistributed(false);
-}
-
-void detailed_route_cmd(const char* param_file)
-{
-  auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
-  router->readParams(param_file);
-  router->main();
 }
 
 void report_constraints()
@@ -159,14 +158,15 @@ set_detailed_route_debug_cmd(const char* net_name,
                              bool dump_dr,
                              bool pa,
                              bool maze,
-                             int x, int y,
+                             int x1, int y1, int x2, int y2,
                              int iter,
                              bool pa_markers,
                              bool pa_edge,
                              bool pa_commit,
                              const char* dumpDir,
                              bool ta,
-                             bool write_net_tracks)
+                             bool write_net_tracks,
+                             bool dump_last_worker)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->setDebugNetName(net_name);
@@ -175,15 +175,14 @@ set_detailed_route_debug_cmd(const char* net_name,
   router->setDebugDumpDR(dump_dr, dumpDir);
   router->setDebugPA(pa);
   router->setDebugMaze(maze);
-  if (x >= 0) {
-    router->setDebugWorker(x, y);
-  }
+  router->setDebugBox(x1, y1, x2, y2);
   router->setDebugIter(iter);
   router->setDebugPaMarkers(pa_markers);
   router->setDebugPaEdge(pa_edge);
   router->setDebugPaCommit(pa_commit);
   router->setDebugTA(ta);
   router->setDebugWriteNetTracks(write_net_tracks);
+  router->setDumpLastWorker(dump_last_worker);
 }
 
 void
@@ -204,11 +203,11 @@ void
 run_worker_cmd(const char* dump_dir, const char* worker_dir, const char* drc_rpt)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
-  router->updateGlobals(fmt::format("{}/init_globals.bin", dump_dir).c_str());
+  router->updateGlobals(fmt::format("{}/init_router_cfg.bin", dump_dir).c_str());
   router->resetDb(fmt::format("{}/design.odb", dump_dir).c_str());
-  router->updateGlobals(fmt::format("{}/{}/globals.bin", dump_dir, worker_dir).c_str());
+  router->updateGlobals(fmt::format("{}/{}/router_cfg.bin", dump_dir, worker_dir).c_str());
   router->updateDesign(fmt::format("{}/{}/updates.bin", dump_dir, worker_dir).c_str());
-  router->updateGlobals(fmt::format("{}/{}/worker_globals.bin", dump_dir, worker_dir).c_str());
+  router->updateGlobals(fmt::format("{}/{}/worker_router_cfg.bin", dump_dir, worker_dir).c_str());
   
   router->debugSingleWorker(fmt::format("{}/{}", dump_dir, worker_dir), drc_rpt);
 }
@@ -228,16 +227,20 @@ void detailed_route_step_drt(int size,
                  workerMarkerCost, workerFixedShapeCost,
                  workerMarkerDecay, ripupMode, followGuide);
 }
-
+void fix_max_spacing_cmd()
+{
+  auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
+  router->fixMaxSpacing();
+}
 void step_end()
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
   router->endFR();
 }
 
-void check_drc_cmd(const char* drc_file, int x1, int y1, int x2, int y2)
+void check_drc_cmd(const char* drc_file, int x1, int y1, int x2, int y2, const char* marker_name)
 {
   auto* router = ord::OpenRoad::openRoad()->getTritonRoute();
-  router->checkDRC(drc_file, x1, y1, x2, y2);
+  router->checkDRC(drc_file, x1, y1, x2, y2, marker_name);
 }
 %} // inline

@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -77,12 +78,12 @@ class dbDiff : public dbObject
 
   // begin comparison of object
   void begin(const char* field, const char* objname, uint oid);
-  void begin(const char side, const char* field, const char* objname, uint oid);
+  void begin(char side, const char* field, const char* objname, uint oid);
   void begin(const char* field,
              const char* objname,
              uint oid,
              const char* name);
-  void begin(const char side,
+  void begin(char side,
              const char* field,
              const char* objname,
              uint oid,
@@ -117,8 +118,8 @@ class dbDiff : public dbObject
   dbDiff& operator<<(bool c);
   dbDiff& operator<<(char c);
   dbDiff& operator<<(unsigned char c);
-  dbDiff& operator<<(short c);
-  dbDiff& operator<<(unsigned short c);
+  dbDiff& operator<<(int16_t c);
+  dbDiff& operator<<(uint16_t c);
   dbDiff& operator<<(int c);
   dbDiff& operator<<(unsigned int c);
   dbDiff& operator<<(float c);
@@ -128,12 +129,14 @@ class dbDiff : public dbObject
   dbDiff& operator<<(const Point& p);
   dbDiff& operator<<(const Rect& r);
   dbDiff& operator<<(const Oct& o);
+  dbDiff& operator<<(const Polygon& p);
+  dbDiff& operator<<(const Line& l);
 
   void diff(const char* field, bool lhs, bool rhs);
   void diff(const char* field, char lhs, char rhs);
   void diff(const char* field, unsigned char lhs, unsigned char rhs);
-  void diff(const char* field, short lhs, short rhs);
-  void diff(const char* field, unsigned short lhs, unsigned short rhs);
+  void diff(const char* field, int16_t lhs, int16_t rhs);
+  void diff(const char* field, uint16_t lhs, uint16_t rhs);
   void diff(const char* field, int lhs, int rhs);
   void diff(const char* field, unsigned int lhs, unsigned int rhs);
   void diff(const char* field, float lhs, float rhs);
@@ -142,6 +145,8 @@ class dbDiff : public dbObject
   void diff(const char* field, Point lhs, Point rhs);
   void diff(const char* field, Rect lhs, Rect rhs);
   void diff(const char* field, Oct lhs, Oct rhs);
+  void diff(const char* field, const Polygon& lhs, const Polygon& rhs);
+  void diff(const char* field, const Line& lhs, const Line& rhs);
 
   void diff(const char* field, const char* lhs, const char* rhs);
   void diff(const char* field, std::string lhs, std::string rhs);
@@ -178,8 +183,8 @@ class dbDiff : public dbObject
   void out(char side, const char* field, bool value);
   void out(char side, const char* field, char value);
   void out(char side, const char* field, unsigned char value);
-  void out(char side, const char* field, short value);
-  void out(char side, const char* field, unsigned short value);
+  void out(char side, const char* field, int16_t value);
+  void out(char side, const char* field, uint16_t value);
   void out(char side, const char* field, int value);
   void out(char side, const char* field, unsigned int value);
   void out(char side, const char* field, float value);
@@ -188,6 +193,8 @@ class dbDiff : public dbObject
   void out(char side, const char* field, Point value);
   void out(char side, const char* field, Rect value);
   void out(char side, const char* field, Oct value);
+  void out(char side, const char* field, const Polygon& value);
+  void out(char side, const char* field, const Line& value);
   void out(char side, const char* field, const char* value);
   void out(char side, const char* field, std::string value);
   void out(char side, const char* field, dbOrientType::Value value);
@@ -209,11 +216,11 @@ class dbDiff : public dbObject
 
 #define DIFF_BEGIN \
   { /* } */        \
-    diff.begin(field, getObjName(), getId());
+    diff.begin(field, getTypeName(), getId());
 
 #define DIFF_OUT_BEGIN \
   { /* } */            \
-    diff.begin(side, field, getObjName(), getId());
+    diff.begin(side, field, getTypeName(), getId());
 
 #define DIFF_END             \
   diff.end_object(); /* { */ \

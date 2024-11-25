@@ -34,6 +34,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 %{
+#include <cstdint>
+
 #include "cts/TritonCTS.h"
 #include "CtsOptions.h"
 #include "TechChar.h"
@@ -51,6 +53,7 @@ using ord::getTritonCts;
 %}
 
 %include "../../Exception.i"
+%include "stdint.i"
 
 %ignore cts::CtsOptions::setObserver;
 %ignore cts::CtsOptions::getObserver;
@@ -96,7 +99,7 @@ set_wire_segment_distance_unit(unsigned unit)
 void
 set_root_buffer(const char* buffer)
 {
-  getTritonCts()->getParms()->setRootBuffer(buffer);
+  getTritonCts()->setRootBuffer(buffer);
 }
 
 void
@@ -136,14 +139,14 @@ set_tree_buf(const char* buffer)
 }
 
 void
-set_distance_between_buffers(double distance)
+set_distance_between_buffers(int distance)
 {
   getTritonCts()->getParms()->setSimpleSegmentsEnabled(true);
   getTritonCts()->getParms()->setBufferDistance(distance);
 }
 
 void
-set_branching_point_buffers_distance(double distance)
+set_branching_point_buffers_distance(int distance)
 {
   getTritonCts()->getParms()->setVertexBuffersEnabled(true);
   getTritonCts()->getParms()->setVertexBufferDistance(distance);
@@ -164,7 +167,7 @@ set_clustering_unbalance_ratio(double ratio)
 void
 set_sink_clustering_size(unsigned size)
 {
-  getTritonCts()->getParms()->setSizeSinkClustering(size);
+  getTritonCts()->getParms()->setSinkClusteringSize(size);
 }
 
 void
@@ -182,7 +185,7 @@ set_num_static_layers(unsigned num)
 void
 set_sink_buffer(const char* buffer)
 {
-  getTritonCts()->getParms()->setSinkBuffer(buffer);
+  getTritonCts()->setSinkBuffer(buffer);
 }
 
 void
@@ -212,7 +215,49 @@ set_clock_nets(const char* names)
 void
 set_buffer_list(const char* buffers)
 {
-	getTritonCts()->setBufferList(buffers);
+  getTritonCts()->setBufferList(buffers);
+}
+
+void
+set_obstruction_aware(bool obs)
+{
+  getTritonCts()->getParms()->setObstructionAware(obs);
+}
+
+void
+set_apply_ndr(bool ndr)
+{
+  getTritonCts()->getParms()->setApplyNDR(ndr);
+}
+
+void
+set_insertion_delay(bool insDelay)
+{
+  getTritonCts()->getParms()->enableInsertionDelay(insDelay);
+}
+
+void
+set_sink_buffer_max_cap_derate(float derate)
+{
+  getTritonCts()->getParms()->setSinkBufferMaxCapDerate(derate);
+}
+
+void
+set_dummy_load(bool dummyLoad)
+{
+  getTritonCts()->getParms()->enableDummyLoad(dummyLoad);
+}
+
+void
+set_delay_buffer_derate(float derate)
+{
+  getTritonCts()->getParms()->setDelayBufferDerate(derate);
+}
+
+void
+set_cts_library(const char* name)
+{
+  getTritonCts()->getParms()->setCtsLibrary(name);
 }
 
 void

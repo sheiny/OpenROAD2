@@ -40,6 +40,7 @@ find_package(Boost 1.78 REQUIRED)
 swig_lib(NAME      utl
          NAMESPACE utl
          I_FILE    src/Logger.i
+         SCRIPTS   src/Utl.tcl
          SWIG_INCLUDES ${PROJECT_SOURCE_DIR}/src
 )
 
@@ -56,6 +57,7 @@ if (Python3_FOUND AND BUILD_PYTHON)
   target_include_directories(utl_py
     PUBLIC
       include
+    PRIVATE
       src
   )
   
@@ -76,6 +78,7 @@ add_library(utl_lib
 target_include_directories(utl_lib
   PUBLIC
     include
+  PRIVATE
     src
     ${Boost_INCLUDE_DIRS}
 )
@@ -94,6 +97,7 @@ target_sources(utl
 target_include_directories(utl
   PUBLIC
     include
+  PRIVATE
     src
     ${Boost_INCLUDE_DIRS}
 )
@@ -106,25 +110,17 @@ target_compile_definitions(utl
 target_link_libraries(utl
   PUBLIC
     utl_lib
+  PRIVATE
+    OpenSTA
+)
+
+messages(
+  TARGET utl
 )
 
 ############################################################
 # Unit testing
 ############################################################\
 if(ENABLE_TESTS)
-  enable_testing()
-
-  add_executable(CFileUtilsTest
-    ${PROJECT_SOURCE_DIR}/src/utl/test/CFileUtilsTest.cpp
-  )
-
-  target_include_directories(CFileUtilsTest
-    PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
-    ${OPENROAD_HOME}/include
-  )
-
-  target_link_libraries(CFileUtilsTest
-    utl
-  )
+  add_subdirectory(test)
 endif()

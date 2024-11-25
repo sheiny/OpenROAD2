@@ -44,7 +44,7 @@ FindObjectDialog::FindObjectDialog(QWidget* parent) : QDialog(parent)
 
 void FindObjectDialog::accept()
 {
-  std::string pattern_to_find = findObjEdit->text().toStdString();
+  std::string pattern_to_find = findObjEdit->text().trimmed().toStdString();
   bool match_case = false;
   if (matchCaseCheckBox->isEnabled()) {
     match_case = matchCaseCheckBox->isChecked();
@@ -53,16 +53,22 @@ void FindObjectDialog::accept()
   if (findObjType->currentText() == "Instance") {
     Gui::get()->select("Inst",
                        pattern_to_find,
+                       "",
+                       0,
                        match_case,
                        addToHighlightCheckBox->isChecked() ? 0 : -1);
   } else if (findObjType->currentText() == "Net") {
     Gui::get()->select("Net",
                        pattern_to_find,
+                       "",
+                       0,
                        match_case,
                        addToHighlightCheckBox->isChecked() ? 0 : -1);
   } else {
     Gui::get()->select("BTerm",
                        pattern_to_find,
+                       "",
+                       0,
                        match_case,
                        addToHighlightCheckBox->isChecked() ? 0 : -1);
   }
@@ -73,6 +79,12 @@ void FindObjectDialog::accept()
 void FindObjectDialog::reject()
 {
   QDialog::reject();
+}
+
+int FindObjectDialog::exec()
+{
+  findObjEdit->setFocus();
+  return QDialog::exec();
 }
 
 }  // namespace gui

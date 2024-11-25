@@ -65,21 +65,21 @@ class TimingBase
   void clearTimingNetWeightOverflow();
   size_t getTimingNetWeightOverflowSize() const;
 
-  void setTimingNetWeightMax(float overflow);
+  void setTimingNetWeightMax(float max);
 
   // updateNetWeight.
   // True: successfully reweighted gnets
   // False: no slacks found
-  bool updateGNetWeights(float overflow);
+  bool updateGNetWeights(bool run_journal_restore);
 
  private:
-  rsz::Resizer* rs_;
-  utl::Logger* log_;
+  rsz::Resizer* rs_ = nullptr;
+  utl::Logger* log_ = nullptr;
   std::shared_ptr<NesterovBaseCommon> nbc_;
 
   std::vector<int> timingNetWeightOverflow_;
   std::vector<int> timingOverflowChk_;
-  float net_weight_max_;
+  float net_weight_max_ = 1.9;
   void initTimingOverflowChk();
 };
 

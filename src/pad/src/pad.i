@@ -77,9 +77,9 @@ void remove_bump(odb::dbInst* inst)
   ord::getICeWall()->removeBump(inst);
 }
 
-void assign_net_to_bump(odb::dbInst* inst, odb::dbNet* net)
+void assign_net_to_bump(odb::dbInst* inst, odb::dbNet* net, odb::dbITerm* terminal, bool dont_route)
 {
-  ord::getICeWall()->assignBump(inst, net);
+  ord::getICeWall()->assignBump(inst, net, terminal, dont_route);
 }
 
 void make_fake_site(const char* name, int width, int height)
@@ -108,6 +108,11 @@ void place_pad(odb::dbMaster* master, const char* name, odb::dbRow* row, int loc
   ord::getICeWall()->placePad(master, name, row, location, mirror);
 }
 
+void place_pads(const std::vector<odb::dbInst*>& insts, odb::dbRow* row)
+{
+  ord::getICeWall()->placePads(insts, row);
+}
+
 void place_corner(odb::dbMaster* master, int ring_index)
 {
   ord::getICeWall()->placeCorner(master, ring_index);
@@ -128,19 +133,36 @@ void place_bondpads(odb::dbMaster* master, const std::vector<odb::dbInst*>& pads
   ord::getICeWall()->placeBondPads(master, pads, rotation, {x_offset, y_offset}, prefix);
 }
 
+void place_terminals(const std::vector<odb::dbITerm*>& iterms,
+                     const bool allow_non_top_layer)
+{
+  ord::getICeWall()->placeTerminals(iterms, allow_non_top_layer);
+}
+
 void connect_by_abutment()
 {
   ord::getICeWall()->connectByAbutment();
 }
 
-void route_rdl(odb::dbTechLayer* layer, odb::dbTechVia* bump_via, odb::dbTechVia* pad_via, const std::vector<odb::dbNet*>& nets, int width = 0, int spacing = 0, bool allow45 = false)
+void route_rdl(odb::dbTechLayer* layer, 
+               odb::dbTechVia* bump_via,
+               odb::dbTechVia* pad_via,
+               const std::vector<odb::dbNet*>& nets,
+               int width = 0, int spacing = 0, bool allow45 = false,
+               float penalty = 2.0,
+               int max_iterations = 10)
 {
-  ord::getICeWall()->routeRDL(layer, bump_via, pad_via, nets, width, spacing, allow45);
+  ord::getICeWall()->routeRDL(layer, bump_via, pad_via, nets, width, spacing, allow45, penalty, max_iterations);
 }
 
 void route_rdl_gui(bool enable)
 {
   ord::getICeWall()->routeRDLDebugGUI(enable);
+}
+
+void route_rdl_debug_net(const char* name)
+{
+  ord::getICeWall()->routeRDLDebugNet(name);
 }
 
 odb::dbRow* get_row(const char* name)

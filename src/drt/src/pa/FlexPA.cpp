@@ -33,6 +33,7 @@
 #include <boost/io/ios_state.hpp>
 #include <boost/serialization/export.hpp>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 
@@ -47,71 +48,72 @@
 #include "gc/FlexGC.h"
 #include "serialization.h"
 
-using namespace std;
-using namespace fr;
-BOOST_CLASS_EXPORT(PinAccessJobDescription)
+BOOST_CLASS_EXPORT(drt::PinAccessJobDescription)
 
-FlexPA::FlexPA(frDesign* in, Logger* logger, dst::Distributed* dist)
+namespace drt {
+
+FlexPA::FlexPA(frDesign* in,
+               Logger* logger,
+               dst::Distributed* dist,
+               RouterConfiguration* router_cfg)
     : design_(in),
       logger_(logger),
       dist_(dist),
-      stdCellPinGenApCnt_(0),
-      stdCellPinValidPlanarApCnt_(0),
-      stdCellPinValidViaApCnt_(0),
-      stdCellPinNoApCnt_(0),
-      macroCellPinGenApCnt_(0),
-      macroCellPinValidPlanarApCnt_(0),
-      macroCellPinValidViaApCnt_(0),
-      macroCellPinNoApCnt_(0)
+      router_cfg_(router_cfg),
+      unique_insts_(design_, target_insts_, logger_, router_cfg)
 {
 }
 
-FlexPA::~FlexPA()
-{
-  // must be out-of-line due to unique_ptr
-}
+// must be out-of-line due to the unique_ptr
+FlexPA::~FlexPA() = default;
 
 void FlexPA::setDebug(frDebugSettings* settings, odb::dbDatabase* db)
 {
-  bool on = settings->debugPA;
-  graphics_
-      = on && FlexPAGraphics::guiActive()
-            ? std::make_unique<FlexPAGraphics>(settings, design_, db, logger_)
-            : nullptr;
+  const bool on = settings->debugPA;
+  graphics_ = on && FlexPAGraphics::guiActive()
+                  ? std::make_unique<FlexPAGraphics>(
+                      settings, design_, db, logger_, router_cfg_)
+                  : nullptr;
 }
 
 void FlexPA::init()
 {
   ProfileTask profile("PA:init");
-  for (auto& master : design_->getMasters())
-    for (auto& term : master->getTerms())
-      for (auto& pin : term->getPins())
+  for (auto& master : design_->getMasters()) {
+    for (auto& term : master->getTerms()) {
+      for (auto& pin : term->getPins()) {
         pin->clearPinAccess();
-  for (auto& term : design_->getTopBlock()->getTerms())
-    for (auto& pin : term->getPins())
+      }
+    }
+  }
+
+  for (auto& term : design_->getTopBlock()->getTerms()) {
+    for (auto& pin : term->getPins()) {
       pin->clearPinAccess();
+    }
+  }
   initViaRawPriority();
   initTrackCoords();
 
-  initUniqueInstance();
-  initPinAccess();
+  unique_insts_.init();
+  initSkipInstTerm();
 }
 
 void FlexPA::applyPatternsFile(const char* file_path)
 {
-  uniqueInstPatterns_.clear();
+  unique_inst_patterns_.clear();
   std::ifstream file(file_path);
   frIArchive ar(file);
   ar.setDesign(design_);
   registerTypes(ar);
-  ar >> uniqueInstPatterns_;
+  ar >> unique_inst_patterns_;
   file.close();
 }
 
 void FlexPA::prep()
 {
   ProfileTask profile("PA:prep");
-  prepPoint();
+  initAllAccessPoints();
   revertAccessPoints();
   if (isDistributed()) {
     std::vector<paUpdate> updates;
@@ -120,6 +122,7 @@ void FlexPA::prep()
       for (const auto& term : master->getTerms()) {
         for (const auto& pin : term->getPins()) {
           std::vector<std::unique_ptr<frPinAccess>> pa;
+          pa.reserve(pin->getNumPinAccess());
           for (int i = 0; i < pin->getNumPinAccess(); i++) {
             pa.push_back(std::make_unique<frPinAccess>(*pin->getPinAccess(i)));
           }
@@ -130,6 +133,7 @@ void FlexPA::prep()
     for (const auto& term : design_->getTopBlock()->getTerms()) {
       for (const auto& pin : term->getPins()) {
         std::vector<std::unique_ptr<frPinAccess>> pa;
+        pa.reserve(pin->getNumPinAccess());
         for (int i = 0; i < pin->getNumPinAccess(); i++) {
           pa.push_back(std::make_unique<frPinAccess>(*pin->getPinAccess(i)));
         }
@@ -147,11 +151,29 @@ void FlexPA::prep()
     uDesc->setPath(updates_file);
     uDesc->setType(PinAccessJobDescription::UPDATE_PA);
     msg.setJobDescription(std::move(uDesc));
-    bool ok = dist_->sendJob(msg, remote_host_.c_str(), remote_port_, result);
-    if (!ok)
+    const bool ok
+        = dist_->sendJob(msg, remote_host_.c_str(), remote_port_, result);
+    if (!ok) {
       logger_->error(utl::DRT, 331, "Error sending UPDATE_PA Job to cloud");
+    }
   }
   prepPattern();
+}
+
+void FlexPA::setTargetInstances(const frCollection<odb::dbInst*>& insts)
+{
+  target_insts_ = insts;
+}
+
+void FlexPA::setDistributed(const std::string& rhost,
+                            const uint16_t rport,
+                            const std::string& shared_vol,
+                            const int cloud_sz)
+{
+  remote_host_ = rhost;
+  remote_port_ = rport;
+  shared_vol_ = shared_vol;
+  cloud_sz_ = cloud_sz;
 }
 
 int FlexPA::main()
@@ -159,45 +181,49 @@ int FlexPA::main()
   ProfileTask profile("PA:main");
 
   frTime t;
-  if (VERBOSE > 0) {
+  if (router_cfg_->VERBOSE > 0) {
     logger_->info(DRT, 165, "Start pin access.");
   }
 
   init();
   prep();
 
-  int stdCellPinCnt = 0;
+  int std_cell_pin_cnt = 0;
   for (auto& inst : getDesign()->getTopBlock()->getInsts()) {
     if (inst->getMaster()->getMasterType() != dbMasterType::CORE) {
       continue;
     }
-    for (auto& instTerm : inst->getInstTerms()) {
-      if (isSkipInstTerm(instTerm.get())) {
+    for (auto& inst_term : inst->getInstTerms()) {
+      if (isSkipInstTerm(inst_term.get())) {
         continue;
       }
-      if (instTerm->hasNet()) {
-        stdCellPinCnt++;
+      if (inst_term->hasNet()) {
+        std_cell_pin_cnt++;
       }
     }
   }
 
-  if (VERBOSE > 0) {
-    logger_->report("#scanned instances     = {}", inst2unique_.size());
-    logger_->report("#unique  instances     = {}", uniqueInstances_.size());
-    logger_->report("#stdCellGenAp          = {}", stdCellPinGenApCnt_);
-    logger_->report("#stdCellValidPlanarAp  = {}", stdCellPinValidPlanarApCnt_);
-    logger_->report("#stdCellValidViaAp     = {}", stdCellPinValidViaApCnt_);
-    logger_->report("#stdCellPinNoAp        = {}", stdCellPinNoApCnt_);
-    logger_->report("#stdCellPinCnt         = {}", stdCellPinCnt);
-    logger_->report("#instTermValidViaApCnt = {}", instTermValidViaApCnt_);
-    logger_->report("#macroGenAp            = {}", macroCellPinGenApCnt_);
+  if (router_cfg_->VERBOSE > 0) {
+    unique_insts_.report();
+    //clang-format off
+    logger_->report("#stdCellGenAp          = {}", std_cell_pin_gen_ap_cnt_);
+    logger_->report("#stdCellValidPlanarAp  = {}",
+                    std_cell_pin_valid_planar_ap_cnt_);
+    logger_->report("#stdCellValidViaAp     = {}",
+                    std_cell_pin_valid_via_ap_cnt_);
+    logger_->report("#stdCellPinNoAp        = {}", std_cell_pin_no_ap_cnt_);
+    logger_->report("#stdCellPinCnt         = {}", std_cell_pin_cnt);
+    logger_->report("#instTermValidViaApCnt = {}", inst_term_valid_via_ap_cnt_);
+    logger_->report("#macroGenAp            = {}", macro_cell_pin_gen_ap_cnt_);
     logger_->report("#macroValidPlanarAp    = {}",
-                    macroCellPinValidPlanarApCnt_);
-    logger_->report("#macroValidViaAp       = {}", macroCellPinValidViaApCnt_);
-    logger_->report("#macroNoAp             = {}", macroCellPinNoApCnt_);
+                    macro_cell_pin_valid_planar_ap_cnt_);
+    logger_->report("#macroValidViaAp       = {}",
+                    macro_cell_pin_valid_via_ap_cnt_);
+    logger_->report("#macroNoAp             = {}", macro_cell_pin_no_ap_cnt_);
+    //clang-format on
   }
 
-  if (VERBOSE > 0) {
+  if (router_cfg_->VERBOSE > 0) {
     logger_->info(DRT, 166, "Complete pin access.");
     t.print(logger_);
   }
@@ -239,3 +265,5 @@ template void FlexPinAccessPattern::serialize<frIArchive>(
 template void FlexPinAccessPattern::serialize<frOArchive>(
     frOArchive& ar,
     const unsigned int file_version);
+
+}  // namespace drt

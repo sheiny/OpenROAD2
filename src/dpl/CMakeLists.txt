@@ -38,14 +38,18 @@
 
 include("openroad")
 find_package(TCL)
+find_package(Boost)
 
 add_library(dpl_lib
   src/Opendp.cpp
   src/dbToOpendp.cpp
   src/Grid.cpp
   src/CheckPlacement.cpp
+  src/Objects.cpp
+  src/Padding.cpp
   src/Place.cpp
   src/FillerPlacement.cpp
+  src/DecapPlacement.cpp
   src/OptMirror.cpp
 )
 
@@ -79,6 +83,7 @@ target_sources(dpl
 target_include_directories(dpl
   PUBLIC
     include
+  PRIVATE
     src
 )
 
@@ -116,6 +121,7 @@ if (Python3_FOUND AND BUILD_PYTHON)
 
   target_link_libraries(dpl_py
     PUBLIC
+      ${Boost_LIBRARIES}
       dpl_lib
       gui
       odb

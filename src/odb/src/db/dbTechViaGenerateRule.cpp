@@ -32,15 +32,15 @@
 
 #include "dbTechViaGenerateRule.h"
 
-#include "db.h"
 #include "dbDatabase.h"
 #include "dbDiff.hpp"
-#include "dbSet.h"
 #include "dbTable.h"
 #include "dbTable.hpp"
 #include "dbTech.h"
 #include "dbTechLayer.h"
 #include "dbTechVia.h"
+#include "odb/db.h"
+#include "odb/dbSet.h"
 
 namespace odb {
 
@@ -54,17 +54,21 @@ template class dbTable<_dbTechViaGenerateRule>;
 
 bool _dbTechViaGenerateRule::operator==(const _dbTechViaGenerateRule& rhs) const
 {
-  if (_flags._default != rhs._flags._default)
+  if (_flags._default != rhs._flags._default) {
     return false;
+  }
 
   if (_name && rhs._name) {
-    if (strcmp(_name, rhs._name) != 0)
+    if (strcmp(_name, rhs._name) != 0) {
       return false;
-  } else if (_name || rhs._name)
+    }
+  } else if (_name || rhs._name) {
     return false;
+  }
 
-  if (_layer_rules != rhs._layer_rules)
+  if (_layer_rules != rhs._layer_rules) {
     return false;
+  }
 
   return true;
 }
@@ -94,7 +98,7 @@ void _dbTechViaGenerateRule::out(dbDiff& diff,
 
 _dbTechViaGenerateRule::_dbTechViaGenerateRule(_dbDatabase*,
                                                const _dbTechViaGenerateRule& v)
-    : _flags(v._flags), _name(NULL), _layer_rules(v._layer_rules)
+    : _flags(v._flags), _name(nullptr), _layer_rules(v._layer_rules)
 {
   if (v._name) {
     _name = strdup(v._name);
@@ -111,8 +115,9 @@ _dbTechViaGenerateRule::_dbTechViaGenerateRule(_dbDatabase*)
 
 _dbTechViaGenerateRule::~_dbTechViaGenerateRule()
 {
-  if (_name)
+  if (_name) {
     free((void*) _name);
+  }
 }
 
 dbOStream& operator<<(dbOStream& stream, const _dbTechViaGenerateRule& v)
@@ -162,8 +167,9 @@ dbTechViaLayerRule* dbTechViaGenerateRule::getViaLayerRule(uint idx)
   _dbTechViaGenerateRule* rule = (_dbTechViaGenerateRule*) this;
   dbTech* tech = (dbTech*) rule->getOwner();
 
-  if (idx >= rule->_layer_rules.size())
-    return NULL;
+  if (idx >= rule->_layer_rules.size()) {
+    return nullptr;
+  }
 
   dbId<dbTechViaLayerRule> id = rule->_layer_rules[idx];
   return dbTechViaLayerRule::getTechViaLayerRule(tech, id);
@@ -173,8 +179,9 @@ dbTechViaGenerateRule* dbTechViaGenerateRule::create(dbTech* tech_,
                                                      const char* name,
                                                      bool is_default)
 {
-  if (tech_->findViaGenerateRule(name))
-    return NULL;
+  if (tech_->findViaGenerateRule(name)) {
+    return nullptr;
+  }
 
   _dbTech* tech = (_dbTech*) tech_;
   _dbTechViaGenerateRule* rule = tech->_via_generate_rule_tbl->create();

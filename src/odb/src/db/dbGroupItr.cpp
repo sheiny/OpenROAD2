@@ -86,8 +86,9 @@ uint dbGroupItr::size(dbObject* parent)
   uint cnt = 0;
 
   for (id = dbGroupItr::begin(parent); id != dbGroupItr::end(parent);
-       id = dbGroupItr::next(id))
+       id = dbGroupItr::next(id)) {
     ++cnt;
+  }
 
   return cnt;
 }
@@ -117,7 +118,5 @@ dbObject* dbGroupItr::getObject(uint id, ...)
 {
   return _group_tbl->getPtr(id);
 }
-// User Code Begin Methods
-// User Code End Methods
 }  // namespace odb
    // Generator Code End Cpp

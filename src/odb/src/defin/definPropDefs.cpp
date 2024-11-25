@@ -32,32 +32,35 @@
 
 #include "definPropDefs.h"
 
-#include "db.h"
+#include "odb/db.h"
 
 namespace odb {
 
 void definPropDefs::beginDefinitions()
 {
-  _defs = NULL;
+  _defs = nullptr;
 }
 
 void definPropDefs::endDefinitions()
 {
-  if (_defs == NULL)
+  if (_defs == nullptr) {
     return;
+  }
 
   dbSet<dbProperty> objects = dbProperty::getProperties(_defs);
 
-  if (objects.orderReversed())
+  if (objects.orderReversed()) {
     objects.reverse();
+  }
 
   dbSet<dbProperty>::iterator itr;
 
   for (itr = objects.begin(); itr != objects.end(); ++itr) {
     dbSet<dbProperty> props = dbProperty::getProperties(*itr);
 
-    if (props.orderReversed())
+    if (props.orderReversed()) {
       props.reverse();
+    }
   }
 }
 
@@ -65,24 +68,26 @@ void definPropDefs::begin(const char* obj_type,
                           const char* name,
                           defPropType prop_type)
 {
-  if (_defs == NULL) {
+  if (_defs == nullptr) {
     _defs = dbProperty::find(_block, "__ADS_DEF_PROPERTY_DEFINITIONS__");
 
-    if (_defs == NULL)
+    if (_defs == nullptr) {
       _defs = dbIntProperty::create(
           _block, "__ADS_DEF_PROPERTY_DEFINITIONS__", 0);
+    }
   }
 
   dbProperty* obj = dbProperty::find(_defs, obj_type);
 
-  if (obj == NULL) {
+  if (obj == nullptr) {
     obj = dbIntProperty::create(_defs, obj_type, 0);
   }
 
   _prop = dbProperty::find(obj, name);
 
-  if (_prop)
+  if (_prop) {
     dbProperty::destroy(_prop);
+  }
 
   switch (prop_type) {
     case DEF_INTEGER:
